@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>textshare · live code &amp; text sharing</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232783DE'/%3E%3Cpath d='M12 11l-5 5 5 5M20 11l5 5-5 5' stroke='white' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#FFFFFF; --surface:#F9F8F7; --surface2:#F0EFED; --border:#E6E5E3;
+  --text:#2C2C2B; --muted:#7D7A75;
+  --accent:#2783DE; --accent-soft:#E5F2FC;
+  --green:#46A171; --orange:#D5803B; --red:#E56458;
+  --t-com:#6B7280; --t-str:#177245; --t-num:#B45309; --t-kw:#8B3DBF;
+  --t-fn:#1D62B8; --t-lit:#B45309; --t-pun:#6B7280; --t-tag:#B03A5B; --t-attr:#8B3DBF;
+  --sel:rgba(39,131,222,.20);
+  --shadow:0 1px 2px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.04);
+  --lh:22px; --fs:13.5px;
+  /* trailing double generic defeats Chrome's monospace font-size quirk, which
+     otherwise renders <textarea> ~1px/char narrower than the <pre> overlay */
+  --mono:"SF Mono","Menlo","Consolas","Liberation Mono","DejaVu Sans Mono",monospace,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+html[data-theme="dark"]{
+  --bg:#191919; --surface:#202020; --surface2:#383836; --border:rgba(255,255,255,.20);
+  --text:#FFFFFF; --muted:rgba(255,255,255,.65);
+  --accent:#5E9FE8; --accent-soft:rgba(94,159,232,.12);
+  --green:#72BC8F; --orange:#DE9255; --red:#E97366;
+  --t-com:rgba(255,255,255,.45); --t-str:#8CD9A9; --t-num:#F0B37E; --t-kw:#C792EA;
+  --t-fn:#7FB7F5; --t-lit:#F0B37E; --t-pun:rgba(255,255,255,.55); --t-tag:#F58EA8; --t-attr:#C792EA;
+  --sel:rgba(94,159,232,.26);
+  --shadow:0 1px 2px rgba(0,0,0,.30), 0 8px 24px rgba(0,0,0,.28);
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}   /* class/id display rules must not defeat hidden */
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font:16px/1.5 var(--sans); -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+button{font:inherit; color:inherit; cursor:pointer}
+
+/* ---------- layout ---------- */
+#app{display:flex; flex-direction:column; height:100dvh}
+
+.bar{
+  display:flex; align-items:center; gap:12px;
+  padding:10px 16px; min-height:56px;
+  border-bottom:1px solid var(--border); background:var(--bg);
+  flex-wrap:wrap;
+}
+.brand{display:flex; align-items:center; gap:8px; flex-shrink:0}
+.logo{display:grid; place-items:center; width:26px; height:26px; border-radius:7px; background:var(--accent); flex-shrink:0}
+.wordmark{font-size:14.5px; font-weight:650; letter-spacing:-.01em}
+.spacer{flex:1 1 auto; min-width:0}
+
+.room{display:flex; align-items:center; gap:6px; padding:4px 4px 4px 10px;
+  background:var(--surface); border:1px solid var(--border); border-radius:8px}
+.room-label{font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+#roomCode{font-family:var(--mono); font-size:13.5px; font-weight:600; letter-spacing:.08em; padding:0 2px}
+
+.tools{display:flex; align-items:center; gap:4px; flex-shrink:0}
+.icon-btn{
+  display:grid; place-items:center; width:34px; height:34px;
+  background:transparent; border:1px solid transparent; border-radius:8px;
+  transition:background .12s, border-color .12s;
+}
+.icon-btn:hover{background:var(--surface2)}
+.icon-btn:active{transform:translateY(.5px)}
+.icon-btn svg{width:17px; height:17px; display:block}
+.ghost-btn{
+  height:26px; padding:0 10px; font-size:12.5px; font-weight:550;
+  background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--muted);
+}
+.ghost-btn:hover{color:var(--text); border-color:var(--muted)}
+:where(button,select,input,textarea):focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+
+.sel-wrap{position:relative; display:flex; align-items:center}
+.sel-wrap svg{position:absolute; right:8px; width:12px; height:12px; pointer-events:none; color:var(--muted)}
+select{
+  appearance:none; height:34px; padding:0 26px 0 10px; min-width:120px;
+  font:13.5px var(--sans); background:var(--bg); color:var(--text);
+  border:1px solid var(--border); border-radius:8px; cursor:pointer;
+}
+select:hover{border-color:var(--muted)}
+
+.people{display:flex; align-items:center; flex-shrink:0}
+.av{
+  width:27px; height:27px; border-radius:50%; margin-left:-7px;
+  display:grid; place-items:center; font-size:11px; font-weight:650; color:#fff;
+  border:2px solid var(--bg); position:relative;
+}
+.av:first-child{margin-left:0}
+.av.me{box-shadow:0 0 0 2px var(--accent-soft)}
+
+/* status strip */
+.status{
+  display:flex; align-items:center; gap:10px; padding:0 18px; height:34px; flex-shrink:0;
+  background:var(--surface); border-bottom:1px solid var(--border);
+  font-size:12.5px; color:var(--muted);
+}
+.conn{display:flex; align-items:center; gap:7px; font-weight:550}
+.dot{width:7px; height:7px; border-radius:50%; background:var(--orange); flex-shrink:0}
+.dot.live{background:var(--green); box-shadow:0 0 0 3px color-mix(in srgb, var(--green) 22%, transparent)}
+.dot.off{background:var(--red)}
+.sep{width:1px; height:13px; background:var(--border)}
+#counts{font-family:var(--mono); font-size:11.5px}
+
+/* editor */
+.editor{flex:1 1 auto; display:flex; min-height:0; background:var(--bg)}
+.gutter{
+  width:54px; flex-shrink:0; overflow:hidden; position:relative;
+  background:var(--bg); border-right:1px solid var(--border);
+  user-select:none;
+}
+.gutter-inner{padding:16px 10px 40vh 0; text-align:right; white-space:pre; font:var(--fs)/var(--lh) var(--mono); color:var(--muted); opacity:.7; will-change:transform}
+.code-area{position:relative; flex:1 1 auto; min-width:0; overflow:hidden}
+.layer{position:absolute; inset:0; overflow:hidden; pointer-events:none}
+.hl, .cur-inner{will-change:transform}
+.hl{
+  margin:0; padding:16px 24px 40vh 18px;
+  font:var(--fs)/var(--lh) var(--mono); white-space:pre; tab-size:2;
+}
+/* the UA sheet forces code{font-family:monospace}, which would render the
+   highlight layer in a different font than the textarea it sits under */
+#hl{
+  font:inherit; letter-spacing:inherit;
+  min-width:max-content;
+}
+#ta{
+  position:absolute; inset:0; width:100%; height:100%;
+  margin:0; padding:16px 24px 40vh 18px; border:0; resize:none;
+  font:var(--fs)/var(--lh) var(--mono); tab-size:2;
+  background:transparent; color:transparent; caret-color:var(--accent);
+  overflow:auto; white-space:pre; outline:none;
+}
+#ta::selection{background:var(--sel)}
+.placeholder{
+  position:absolute; top:16px; left:18px; right:24px;
+  font:var(--fs)/var(--lh) var(--mono); color:var(--muted); opacity:.6; pointer-events:none;
+}
+.t-com{color:var(--t-com); font-style:italic}
+.t-str{color:var(--t-str)}
+.t-num{color:var(--t-num)}
+.t-kw{color:var(--t-kw); font-weight:550}
+.t-fn{color:var(--t-fn)}
+.t-lit{color:var(--t-lit)}
+.t-pun{color:var(--t-pun)}
+.t-tag{color:var(--t-tag)}
+.t-attr{color:var(--t-attr)}
+
+/* remote cursors */
+.caret{position:absolute; width:2px; height:var(--lh); border-radius:1px}
+.caret::after{
+  content:attr(data-name); position:absolute; left:-1px; top:-16px;
+  font:600 10.5px/15px var(--sans); color:#fff; background:inherit;
+  padding:0 5px; border-radius:4px 4px 4px 0; white-space:nowrap;
+}
+.rsel{position:absolute; border-radius:2px; opacity:.22}
+
+/* settings panel */
+.panel{
+  position:absolute; top:58px; right:14px; z-index:30; width:320px; max-width:calc(100vw - 28px);
+  background:var(--bg); border:1px solid var(--border); border-radius:12px;
+  box-shadow:var(--shadow); padding:16px;
+}
+.panel h3{margin:0 0 12px; font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted)}
+.field{margin-bottom:14px}
+.field label{display:block; font-size:12.5px; font-weight:600; margin-bottom:6px}
+.field input, .field textarea{
+  width:100%; padding:8px 10px; font:13.5px var(--sans);
+  background:var(--surface); color:var(--text);
+  border:1px solid var(--border); border-radius:8px; outline:none;
+}
+.field textarea{font-family:var(--mono); font-size:12px; height:70px; resize:vertical}
+.field input:focus, .field textarea:focus{border-color:var(--accent)}
+.hint{font-size:11.5px; color:var(--muted); margin:6px 0 0; line-height:1.45}
+.primary{
+  width:100%; height:38px; font-size:13.5px; font-weight:600;
+  background:var(--accent); color:#fff; border:0; border-radius:8px;
+}
+.primary:hover{filter:brightness(1.06)}
+
+/* toast */
+.toast{
+  position:fixed; left:50%; bottom:26px; transform:translate(-50%,14px);
+  padding:9px 16px; font-size:13px; font-weight:550;
+  background:var(--text); color:var(--bg); border-radius:8px;
+  opacity:0; pointer-events:none; transition:opacity .18s, transform .18s; z-index:60;
+}
+.toast.show{opacity:1; transform:translate(-50%,0)}
+
+/* banner */
+.banner{
+  display:flex; gap:10px; align-items:flex-start; padding:10px 16px;
+  background:var(--accent-soft); border-bottom:1px solid var(--border);
+  font-size:12.5px; line-height:1.45; color:var(--text);
+}
+html[data-theme="dark"] .banner{background:rgba(233,115,102,.10)}
+.banner b{font-weight:650}
+
+/* gate */
+#gate{
+  position:fixed; inset:0; z-index:80; display:grid; place-items:center;
+  background:var(--bg); padding:24px;
+}
+.gate-card{width:100%; max-width:400px; text-align:center}
+.gate-logo{width:44px; height:44px; border-radius:12px; background:var(--accent); display:grid; place-items:center; margin:0 auto 20px}
+.gate-card h1{margin:0 0 8px; font-size:26px; line-height:1.2; letter-spacing:-.02em; font-weight:680}
+.gate-card p.sub{margin:0 0 28px; color:var(--muted); font-size:14.5px; line-height:1.5}
+.or{display:flex; align-items:center; gap:12px; margin:20px 0; color:var(--muted); font-size:11.5px; letter-spacing:.08em; text-transform:uppercase}
+.or::before,.or::after{content:""; flex:1; height:1px; background:var(--border)}
+.join{display:flex; gap:8px}
+.join input{
+  flex:1; min-width:0; height:38px; padding:0 12px; text-align:center;
+  font:600 15px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase;
+  background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px; outline:none;
+}
+.join input:focus{border-color:var(--accent)}
+.join input::placeholder{letter-spacing:.1em; font-weight:400; color:var(--muted)}
+.join button{
+  height:38px; padding:0 18px; font-size:13.5px; font-weight:600;
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+}
+.join button:hover{border-color:var(--muted)}
+.foot{margin-top:26px; font-size:12px; color:var(--muted); line-height:1.5}
+
+@media (max-width:720px){
+  .wordmark{display:none}
+  .room-label{display:none}
+  .bar{gap:8px; padding:8px 12px}
+  .status{padding:0 12px}
+  #peerText,.sep{display:none}
+  select{min-width:0; width:44px; padding-right:22px; text-indent:-1px}
+  .gutter{width:42px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+
+<div id="app" hidden>
+  <header class="bar">
+    <div class="brand">
+      <span class="logo"><svg viewBox="0 0 32 32" width="16" height="16" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11l-5 5 5 5M20 11l5 5-5 5"/></svg></span>
+      <span class="wordmark">textshare</span>
+    </div>
+
+    <div class="room">
+      <span class="room-label">Room</span>
+      <code id="roomCode">····</code>
+      <button class="icon-btn" id="copyLink" title="Copy invite link" aria-label="Copy invite link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l2-2A5 5 0 0 0 12 4l-1 1"/><path d="M14 11a5 5 0 0 0-7.07 0l-2 2A5 5 0 0 0 12 20l1-1"/></svg>
+      </button>
+      <button class="ghost-btn" id="newRoom">New</button>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="people" id="people" aria-label="People in this room"></div>
+
+    <div class="tools">
+      <span class="sel-wrap">
+        <select id="lang" aria-label="Language"></select>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+      </span>
+      <button class="icon-btn" id="copyAll" title="Copy all text" aria-label="Copy all text">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v1"/></svg>
+      </button>
+      <button class="icon-btn" id="download" title="Download as file" aria-label="Download as file">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10m0 0l4-4m-4 4l-4-4"/><path d="M5 18h14"/></svg>
+      </button>
+      <button class="icon-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme"></button>
+      <button class="icon-btn" id="gear" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-2.87 1.2V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 7.17 19.7l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 3 15H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.3 8.17L4.24 8.1a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 10 4.6V4a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 2.83 1.2l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 20.4 11H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <div class="status">
+    <span class="conn"><i class="dot" id="dot"></i><span id="connText">Connecting…</span></span>
+    <span class="sep"></span>
+    <span id="peerText">Waiting for others</span>
+    <span class="spacer"></span>
+    <span id="counts">1 line · 0 chars</span>
+  </div>
+
+  <main class="editor">
+    <div class="gutter"><div class="gutter-inner" id="gutter">1</div></div>
+    <div class="code-area" id="codeArea">
+      <div class="layer"><pre class="hl"><code id="hl"></code></pre></div>
+      <div class="layer"><div class="cur-inner" id="cursors"></div></div>
+      <textarea id="ta" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" aria-label="Shared editor"></textarea>
+      <div class="placeholder" id="ph">Start typing — every keystroke appears on all devices in this room.</div>
+    </div>
+  </main>
+
+  <div class="panel" id="panel" hidden>
+    <h3>Settings</h3>
+    <div class="field">
+      <label for="nameInput">Your display name</label>
+      <input id="nameInput" maxlength="22" placeholder="Guest">
+    </div>
+    <div class="field">
+      <label for="sigInput">Signaling servers</label>
+      <textarea id="sigInput" spellcheck="false"></textarea>
+      <p class="hint">Used only to introduce peers — your text never passes through them. One URL per line. Add your own if a network blocks the public ones.</p>
+    </div>
+    <button class="primary" id="saveSettings">Save &amp; reconnect</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<div id="gate">
+  <div class="gate-card">
+    <div class="gate-logo"><svg viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11l-5 5 5 5M20 11l5 5-5 5"/></svg></div>
+    <h1>Share code &amp; text, live</h1>
+    <p class="sub">Open one room on two or more computers. Everyone types in the same document, in real time.</p>
+    <button class="primary" id="createRoom">Create a room</button>
+    <div class="or">or join</div>
+    <form class="join" id="joinForm">
+      <input id="joinCode" placeholder="Enter code" maxlength="9" autocomplete="off" spellcheck="false" aria-label="Room code">
+      <button type="submit">Join</button>
+    </form>
+    <p class="foot">No sign-up, no database. Devices connect directly to each other, peer-to-peer.</p>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "yjs": "https://esm.sh/yjs@13.6.20",
+    "y-protocols/awareness": "https://esm.sh/y-protocols@1.0.6/awareness?external=yjs",
+    "y-protocols/sync": "https://esm.sh/y-protocols@1.0.6/sync?external=yjs",
+    "y-webrtc": "https://esm.sh/y-webrtc@10.3.0?external=yjs,y-protocols"
+  }
+}
+</script>
+
+<script type="module">
+/* ============================================================
+   textshare — real-time shared text/code over WebRTC + Yjs
+   ============================================================ */
+
+const $ = (id) => document.getElementById(id);
+const LS = {
+  theme: 'textshare.theme',
+  name : 'textshare.name',
+  sig  : 'textshare.signaling',
+};
+// localStorage throws in some sandboxed iframes / private modes — never let it break boot.
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch(_){ return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch(_){} },
+};
+const DEFAULT_SIGNALING = [
+  'wss://y-webrtc-eu.fly.dev',
+  'wss://signaling.yjs.dev',
+];
+const PALETTE = ['#2783DE','#46A171','#D5803B','#BF8EDA','#DF84A8','#4FB9C9','#E56458','#EAC26B'];
+const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+const TAB = 2;
+// Must match the padding on .hl and #ta — the cursor layer has none of its own.
+const PAD_T = 16, PAD_L = 18;
+
+/* ---------- theme ---------- */
+const SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6l1.4 1.4m10 10l1.4 1.4m0-12.8l-1.4 1.4m-10 10l-1.4 1.4"/></svg>';
+const MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a7 7 0 1 0 10.5 10.5z"/></svg>';
+function setTheme(t){
+  document.documentElement.dataset.theme = t;
+  store.set(LS.theme, t);
+  $('themeBtn').innerHTML = t === 'dark' ? SUN : MOON;
+}
+setTheme(store.get(LS.theme)
+  || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+$('themeBtn').onclick = () =>
+  setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+
+/* ---------- toast ---------- */
+let toastTimer;
+function toast(msg){
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+/* ---------- syntax highlighting (self-contained) ---------- */
+const F = {
+  lineC : '\\/\\/[^\\n]*',
+  hashC : '#[^\\n]*',
+  dashC : '--[^\\n]*',
+  blockC: '\\/\\*[\\s\\S]*?(?:\\*\\/|$)',
+  dq    : '"(?:\\\\[\\s\\S]|[^"\\\\\\n])*"?',
+  sq    : "'(?:\\\\[\\s\\S]|[^'\\\\\\n])*'?",
+  bt    : '`(?:\\\\[\\s\\S]|[^`\\\\])*`?',
+  triple: '"""[\\s\\S]*?(?:"""|$)|\'\'\'[\\s\\S]*?(?:\'\'\'|$)',
+  num   : '\\b(?:0[xXbBoO][0-9a-fA-F_]+|\\d[\\d_]*(?:\\.[\\d_]+)?(?:[eE][+-]?\\d+)?)[a-zA-Z%]*\\b',
+  fn    : '\\b[A-Za-z_$][\\w$]*(?=\\s*\\()',
+  pun   : '[{}()\\[\\].,;:?!<>=+\\-*/%&|^~]',
+};
+const kw = (s) => '\\b(?:' + s.trim().split(/\s+/).join('|') + ')\\b';
+
+const W = {
+  js  : 'async await break case catch class const continue debugger default delete do else export extends finally for from function get if import in instanceof let new of return set static super switch this throw try typeof var void while with yield',
+  jsL : 'true false null undefined NaN Infinity console document window',
+  ts  : 'abstract as declare enum implements infer interface is keyof namespace never private protected public readonly satisfies type unknown any string number boolean',
+  py  : 'and as assert async await break class continue def del elif else except finally for from global if import in is lambda match nonlocal not or pass raise return try while with yield case',
+  pyL : 'True False None self cls print len range str int float dict list set tuple',
+  java: 'abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public record return sealed short static strictfp super switch synchronized this throw throws transient try var void volatile while',
+  cpp : 'alignas alignof auto bool break case catch char class const constexpr continue decltype default delete do double else enum explicit extern float for friend goto if include define ifdef ifndef endif pragma inline int long mutable namespace new noexcept nullptr operator private protected public return short signed sizeof static struct switch template this throw try typedef typename union unsigned using virtual void volatile while',
+  go  : 'break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var nil true false make new len cap append string int bool error',
+  rust: 'as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self static struct super trait true type unsafe use where while String Vec Option Result Some None Ok Err',
+  sh  : 'if then else elif fi for while until do done case esac function in return exit local export source echo cd mkdir rm cp mv cat grep sed awk curl git npm node python pip sudo',
+  sql : 'select from where insert into values update set delete create table alter drop add index view join inner left right outer full on group by order having limit offset union all as distinct and or not null is like in between case when then else end asc desc count sum avg min max primary key foreign references default constraint unique cascade with returning exists',
+};
+
+const RULES = {
+  text: null,
+  javascript: [['com',F.blockC],['com',F.lineC],['str',F.bt],['str',F.dq],['str',F.sq],['num',F.num],['kw',kw(W.js)],['lit',kw(W.jsL)],['fn',F.fn],['pun',F.pun]],
+  typescript: [['com',F.blockC],['com',F.lineC],['str',F.bt],['str',F.dq],['str',F.sq],['num',F.num],['kw',kw(W.js+' '+W.ts)],['lit',kw(W.jsL)],['fn',F.fn],['pun',F.pun]],
+  python    : [['com',F.hashC],['str',F.triple],['str',F.dq],['str',F.sq],['num',F.num],['kw',kw(W.py)],['lit',kw(W.pyL)],['fn',F.fn],['pun',F.pun]],
+  java      : [['com',F.blockC],['com',F.lineC],['str',F.dq],['str',F.sq],['num',F.num],['kw',kw(W.java)],['lit','\\b(?:true|false|null|String|System)\\b'],['fn',F.fn],['pun',F.pun]],
+  cpp       : [['com',F.blockC],['com',F.lineC],['str',F.dq],['str',F.sq],['num',F.num],['kw',kw(W.cpp)],['lit','\\b(?:true|false|NULL|std|cout|cin|endl)\\b'],['fn',F.fn],['pun',F.pun]],
+  go        : [['com',F.blockC],['com',F.lineC],['str',F.bt],['str',F.dq],['str',F.sq],['num',F.num],['kw',kw(W.go)],['fn',F.fn],['pun',F.pun]],
+  rust      : [['com',F.blockC],['com',F.lineC],['str',F.dq],['str',F.sq],['num',F.num],['kw',kw(W.rust)],['fn',F.fn],['pun',F.pun]],
+  shell     : [['com',F.hashC],['str',F.dq],['str',F.sq],['lit','\\$\\{[^}\\n]*\\}|\\$[\\w@*#?]+'],['num',F.num],['kw',kw(W.sh)],['attr','(?<=\\s)--?[A-Za-z][\\w-]*'],['pun',F.pun]],
+  sql       : [['com',F.dashC],['com',F.blockC],['str',F.sq],['str',F.dq],['num',F.num],['kw','(?<![\\w])(?:'+W.sql.trim().split(/\s+/).join('|')+')(?![\\w])'],['fn',F.fn],['pun',F.pun]],
+  json      : [['attr','"(?:\\\\.|[^"\\\\])*"(?=\\s*:)'],['str',F.dq],['num',F.num],['lit','\\b(?:true|false|null)\\b'],['pun',F.pun]],
+  yaml      : [['com',F.hashC],['attr','^[ \\t-]*[\\w.$-]+(?=\\s*:)'],['str',F.dq],['str',F.sq],['num',F.num],['lit','\\b(?:true|false|null|yes|no|on|off)\\b'],['pun','[:\\-|>&*\\[\\]{},]']],
+  html      : [['com','<!--[\\s\\S]*?(?:-->|$)'],['tag','<\\/?[a-zA-Z][\\w:-]*|\\/?>'],['attr','[a-zA-Z_:][\\w:.-]*(?=\\s*=)'],['str',F.dq],['str',F.sq],['pun','[=]']],
+  css       : [['com',F.blockC],['kw','@[\\w-]+'],['attr','[-a-zA-Z]+(?=\\s*:)'],['str',F.dq],['str',F.sq],['lit','#[0-9a-fA-F]{3,8}\\b'],['num',F.num],['fn',F.fn],['tag','\\.[-\\w]+|:{1,2}[-\\w]+'],['pun','[{}();:,>+~*]']],
+  markdown  : [['kw','^#{1,6}[^\\n]*'],['com','^\\s*>[^\\n]*'],['str','```[\\s\\S]*?(?:```|$)|`[^`\\n]*`?'],['fn','\\*\\*[^*\\n]+\\*\\*|__[^_\\n]+__'],['attr','\\[[^\\]\\n]*\\]\\([^)\\n]*\\)'],['lit','^\\s*(?:[-*+]|\\d+\\.)\\s'],['pun','^\\s*(?:---|\\*\\*\\*)\\s*$']],
+};
+const LANGS = [
+  ['text','Plain text','txt'], ['javascript','JavaScript','js'], ['typescript','TypeScript','ts'],
+  ['python','Python','py'], ['html','HTML','html'], ['css','CSS','css'], ['json','JSON','json'],
+  ['yaml','YAML','yml'], ['sql','SQL','sql'], ['java','Java','java'], ['cpp','C / C++','cpp'],
+  ['go','Go','go'], ['rust','Rust','rs'], ['shell','Shell','sh'], ['markdown','Markdown','md'],
+];
+const reCache = new Map();
+function rulesRe(lang){
+  if (reCache.has(lang)) return reCache.get(lang);
+  const rules = RULES[lang];
+  const re = rules
+    ? new RegExp(rules.map((r,i) => '(?<g'+i+'>'+r[1]+')').join('|'), 'gm')
+    : null;
+  reCache.set(lang, re);
+  return re;
+}
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function highlight(code, lang){
+  const rules = RULES[lang], re = rulesRe(lang);
+  if (!re || code.length > 200000) return esc(code);
+  let out = '', last = 0, m;
+  re.lastIndex = 0;
+  while ((m = re.exec(code)) !== null){
+    if (m[0] === ''){ re.lastIndex++; continue; }
+    if (m.index > last) out += esc(code.slice(last, m.index));
+    let cls = 'pun';
+    for (let i = 0; i < rules.length; i++){
+      if (m.groups['g'+i] !== undefined){ cls = rules[i][0]; break; }
+    }
+    out += '<span class="t-'+cls+'">' + esc(m[0]) + '</span>';
+    last = m.index + m[0].length;
+  }
+  return out + esc(code.slice(last));
+}
+
+/* ---------- room code ---------- */
+function randomCode(){
+  const b = crypto.getRandomValues(new Uint8Array(8));
+  let s = '';
+  for (let i = 0; i < 8; i++){
+    if (i === 4) s += '-';
+    s += ALPHABET[b[i] % ALPHABET.length];
+  }
+  return s;
+}
+function normalizeCode(raw){
+  const clean = (raw || '').toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 8);
+  return clean.length > 4 ? clean.slice(0,4) + '-' + clean.slice(4) : clean;
+}
+function currentCode(){ return normalizeCode(decodeURIComponent(location.hash.replace(/^#\/?/, ''))); }
+
+/* ---------- gate ---------- */
+$('createRoom').onclick = () => { location.hash = '#' + randomCode(); location.reload(); };
+$('joinCode').addEventListener('input', (e) => { e.target.value = normalizeCode(e.target.value); });
+$('joinForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const c = normalizeCode($('joinCode').value);
+  if (c.replace('-','').length < 8){ toast('Enter the full 8-character code'); return; }
+  location.hash = '#' + c; location.reload();
+});
+
+const CODE = currentCode();
+if (CODE.replace('-','').length !== 8){
+  $('gate').hidden = false;
+} else {
+  $('gate').remove();
+  $('app').hidden = false;
+  boot(CODE);
+}
+
+/* ============================================================
+   Editor + sync
+   ============================================================ */
+async function boot(code){
+  const ta = $('ta'), hl = $('hl'), gutter = $('gutter'), cursors = $('cursors');
+  const hlPre = document.querySelector('.hl');
+  $('roomCode').textContent = code;
+  document.title = 'textshare · ' + code;
+
+  /* language picker */
+  const sel = $('lang');
+  sel.innerHTML = LANGS.map(([id,label]) => '<option value="'+id+'">'+label+'</option>').join('');
+
+  /* metrics */
+  let charW = 8.1, LH = 22;
+  function measure(){
+    LH = parseFloat(getComputedStyle(hl).lineHeight) || 22;
+    // Probe inside the highlight layer so it inherits the exact code font.
+    // A detached probe can resolve a different monospace size and throw every
+    // remote cursor off by ~1px per character.
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font:inherit;letter-spacing:inherit';
+    probe.textContent = 'M'.repeat(80);
+    hl.appendChild(probe);
+    const w = probe.getBoundingClientRect().width / 80;
+    probe.remove();
+    if (w > 0) charW = w;
+  }
+  measure();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measure(); renderCursors(); });
+
+  /* ---------- sync layer ---------- */
+  let Y = null, ytext = null, awareness = null, provider = null, undoMgr = null, ymeta = null;
+  const signaling = (store.get(LS.sig) || DEFAULT_SIGNALING.join('\n'))
+    .split('\n').map(s => s.trim()).filter(Boolean);
+
+  try {
+    Y = await import('yjs');
+    const { WebrtcProvider } = await import('y-webrtc');
+    const ydoc = new Y.Doc();
+    ytext = ydoc.getText('content');
+    ymeta = ydoc.getMap('meta');
+    provider = new WebrtcProvider('textshare-v1-' + code, ydoc, {
+      signaling,
+      password: 'sp-' + code,   // messages between peers are encrypted with the room code
+      maxConns: 24,
+    });
+    awareness = provider.awareness;
+    undoMgr = new Y.UndoManager(ytext, { trackedOrigins: new Set(['local']) });
+
+    const myName = store.get(LS.name) || ('Guest ' + (1 + (awareness.clientID % 89)));
+    const myColor = PALETTE[awareness.clientID % PALETTE.length];
+    awareness.setLocalStateField('user', { name: myName, color: myColor });
+    $('nameInput').value = myName;
+
+    ytext.observe(onRemoteText);
+    ymeta.observe(() => {
+      const l = ymeta.get('lang');
+      if (l && RULES[l] !== undefined && l !== sel.value){ sel.value = l; paint(); }
+    });
+    awareness.on('change', () => { renderPeople(); renderCursors(); });
+    provider.on('status', setConn);
+    provider.on('peers', () => { setConn(); renderPeople(); });
+    setConn();
+    setTimeout(setConn, 4000);
+  } catch (err){
+    console.error('[textshare] sync unavailable:', err);
+    banner('<b>Offline mode.</b> The sync engine could not load (no internet access, or a network/extension blocked the CDN). The editor still works locally — reload once you are online to share this room.');
+    $('dot').className = 'dot off';
+    $('connText').textContent = 'Offline';
+    $('peerText').textContent = 'Not sharing';
+  }
+
+  function banner(html){ const b = $('banner'); b.innerHTML = html; b.hidden = false; }
+
+  function setConn(){
+    const n = provider ? provider.room ? provider.room.webrtcConns.size : 0 : 0;
+    const connected = provider && provider.connected;
+    const dot = $('dot');
+    if (!provider){ return; }
+    if (n > 0){
+      dot.className = 'dot live';
+      $('connText').textContent = 'Live';
+      $('peerText').textContent = n === 1 ? '1 device connected' : n + ' devices connected';
+    } else if (connected){
+      dot.className = 'dot';
+      $('connText').textContent = 'Waiting for peers';
+      $('peerText').textContent = 'Share the code to start';
+    } else {
+      dot.className = 'dot off';
+      $('connText').textContent = 'Reconnecting…';
+      $('peerText').textContent = 'Signaling unreachable';
+    }
+  }
+
+  /* ---------- text binding ---------- */
+  let composing = false, pendingRemote = false;
+
+  function pushLocal(){
+    if (!ytext || composing) return;
+    const nv = ta.value, ov = ytext.toString();
+    if (nv === ov) return;
+    let s = 0;
+    const minLen = Math.min(nv.length, ov.length);
+    while (s < minLen && ov[s] === nv[s]) s++;
+    let eo = ov.length, en = nv.length;
+    while (eo > s && en > s && ov[eo-1] === nv[en-1]){ eo--; en--; }
+    ytext.doc.transact(() => {
+      if (eo > s) ytext.delete(s, eo - s);
+      if (en > s) ytext.insert(s, nv.slice(s, en));
+    }, 'local');
+  }
+
+  function xform(idx, delta){
+    let pos = 0, res = idx;
+    for (const d of delta){
+      if (d.retain != null) pos += d.retain;
+      else if (typeof d.insert === 'string'){
+        if (pos <= res) res += d.insert.length;
+        pos += d.insert.length;
+      } else if (d.delete != null){
+        if (pos < res) res -= Math.min(d.delete, res - pos);
+      }
+    }
+    return res;
+  }
+
+  function onRemoteText(ev){
+    if (ev.transaction.local && ta.value === ytext.toString()) return;
+    if (composing){ pendingRemote = true; return; }
+    const st = ta.scrollTop, sl = ta.scrollLeft;
+    const a = xform(ta.selectionStart, ev.delta), b = xform(ta.selectionEnd, ev.delta);
+    ta.value = ytext.toString();
+    try { ta.setSelectionRange(a, b); } catch(_){}
+    ta.scrollTop = st; ta.scrollLeft = sl;
+    paint();
+    publishCursor();
+  }
+
+  ta.addEventListener('input', () => { pushLocal(); paint(); });
+  ta.addEventListener('compositionstart', () => { composing = true; });
+  ta.addEventListener('compositionend', () => {
+    composing = false; pushLocal();
+    if (pendingRemote){ pendingRemote = false; ta.value = ytext ? ytext.toString() : ta.value; }
+    paint();
+  });
+
+  /* ---------- paint ---------- */
+  let lineCount = -1;
+  function paint(){
+    const v = ta.value;
+    hl.innerHTML = highlight(v, sel.value);
+    $('ph').style.display = v.length ? 'none' : '';
+    const lines = v.split('\n').length;
+    if (lines !== lineCount){
+      lineCount = lines;
+      let g = '';
+      for (let i = 1; i <= lines; i++) g += i + '\n';
+      gutter.textContent = g;
+    }
+    $('counts').textContent = lines.toLocaleString() + (lines === 1 ? ' line · ' : ' lines · ')
+      + v.length.toLocaleString() + (v.length === 1 ? ' char' : ' chars');
+    syncScroll();
+    renderCursors();
+  }
+
+  function syncScroll(){
+    const x = -ta.scrollLeft, y = -ta.scrollTop;
+    hlPre.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+    cursors.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+    gutter.style.transform = 'translateY(' + y + 'px)';
+  }
+  ta.addEventListener('scroll', syncScroll, { passive: true });
+  addEventListener('resize', () => { measure(); renderCursors(); });
+
+  /* ---------- cursors & presence ---------- */
+  function coords(idx){
+    const t = ta.value;
+    const before = t.slice(0, idx);
+    const nl = before.lastIndexOf('\n');
+    const line = nl === -1 ? 0 : before.split('\n').length - 1;
+    let col = 0;
+    for (let i = nl + 1; i < idx; i++) col = t[i] === '\t' ? col + (TAB - col % TAB) : col + 1;
+    return { x: PAD_L + col * charW, y: PAD_T + line * LH };
+  }
+
+  let cursorTimer;
+  function publishCursor(){
+    if (!awareness) return;
+    clearTimeout(cursorTimer);
+    cursorTimer = setTimeout(() => {
+      awareness.setLocalStateField('cursor', { anchor: ta.selectionStart, head: ta.selectionEnd });
+    }, 40);
+  }
+  ['keyup','click','select','focus'].forEach(e => ta.addEventListener(e, publishCursor));
+  document.addEventListener('selectionchange', () => { if (document.activeElement === ta) publishCursor(); });
+
+  function renderCursors(){
+    if (!awareness) return;
+    const len = ta.value.length;
+    let html = '';
+    awareness.getStates().forEach((state, id) => {
+      if (id === awareness.clientID || !state.user || !state.cursor) return;
+      const color = state.user.color || PALETTE[id % PALETTE.length];
+      const a = Math.min(Math.max(state.cursor.anchor ?? 0, 0), len);
+      const b = Math.min(Math.max(state.cursor.head ?? 0, 0), len);
+      if (a !== b){
+        const from = Math.min(a,b), to = Math.max(a,b), t = ta.value;
+        let i = from;
+        while (i <= to){
+          const nl = t.indexOf('\n', i);
+          const end = (nl === -1 || nl > to) ? to : nl;
+          const c1 = coords(i), c2 = coords(end);
+          const wide = nl !== -1 && nl <= to;
+          html += '<div class="rsel" style="left:' + c1.x + 'px;top:' + c1.y + 'px;width:'
+            + Math.max(c2.x - c1.x, wide ? charW * 0.6 : 2) + 'px;height:' + LH
+            + 'px;background:' + color + '"></div>';
+          if (nl === -1 || nl > to) break;
+          i = nl + 1;
+        }
+      }
+      const c = coords(b);
+      html += '<div class="caret" data-name="' + esc(state.user.name || 'Guest')
+        + '" style="left:' + c.x + 'px;top:' + c.y + 'px;background:' + color + '"></div>';
+    });
+    cursors.innerHTML = html;
+  }
+
+  function renderPeople(){
+    if (!awareness) return;
+    const me = awareness.clientID;
+    let html = '';
+    const states = [...awareness.getStates().entries()]
+      .filter(([,s]) => s.user)
+      .sort((a,b) => (a[0] === me ? -1 : b[0] === me ? 1 : a[0] - b[0]))
+      .slice(0, 6);
+    for (const [id, s] of states){
+      const name = s.user.name || 'Guest';
+      const color = s.user.color || PALETTE[id % PALETTE.length];
+      html += '<span class="av' + (id === me ? ' me' : '') + '" style="background:' + color
+        + '" title="' + esc(name) + (id === me ? ' (you)' : '') + '">'
+        + esc(name.trim().charAt(0).toUpperCase() || '?') + '</span>';
+    }
+    $('people').innerHTML = html;
+  }
+
+  /* ---------- keyboard ---------- */
+  ta.addEventListener('keydown', (e) => {
+    const mod = e.metaKey || e.ctrlKey;
+    if (e.key === 'Tab'){
+      e.preventDefault();
+      const s = ta.selectionStart, en = ta.selectionEnd, v = ta.value;
+      if (s === en && !e.shiftKey){
+        ta.value = v.slice(0, s) + ' '.repeat(TAB) + v.slice(en);
+        ta.setSelectionRange(s + TAB, s + TAB);
+      } else {
+        const ls = v.lastIndexOf('\n', s - 1) + 1;
+        const block = v.slice(ls, en);
+        const out = e.shiftKey
+          ? block.replace(/^ {1,2}/gm, '')
+          : block.replace(/^/gm, ' '.repeat(TAB));
+        ta.value = v.slice(0, ls) + out + v.slice(en);
+        ta.setSelectionRange(ls, ls + out.length);
+      }
+      pushLocal(); paint(); publishCursor(); return;
+    }
+    if (mod && e.key.toLowerCase() === 'z' && undoMgr){
+      e.preventDefault();
+      e.shiftKey ? undoMgr.redo() : undoMgr.undo();
+      if (ytext){ ta.value = ytext.toString(); paint(); }
+      return;
+    }
+    if (mod && e.key.toLowerCase() === 's'){ e.preventDefault(); download(); }
+  });
+
+  /* ---------- toolbar ---------- */
+  sel.onchange = () => { if (ymeta) ymeta.set('lang', sel.value); paint(); };
+
+  $('copyLink').onclick = async () => {
+    try { await navigator.clipboard.writeText(location.href); toast('Invite link copied'); }
+    catch(_){ toast('Copy failed — link: ' + location.href); }
+  };
+  $('copyAll').onclick = async () => {
+    try { await navigator.clipboard.writeText(ta.value); toast('Copied ' + ta.value.length + ' characters'); }
+    catch(_){ ta.select(); document.execCommand('copy'); toast('Copied'); }
+  };
+  function download(){
+    const ext = (LANGS.find(l => l[0] === sel.value) || [,,'txt'])[2];
+    const blob = new Blob([ta.value], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'textshare-' + code.toLowerCase() + '.' + ext;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast('Downloaded ' + a.download);
+  }
+  $('download').onclick = download;
+  $('newRoom').onclick = () => {
+    if (ta.value.trim() && !confirm('Leave this room and create a new empty one?')) return;
+    location.hash = '#' + randomCode(); location.reload();
+  };
+
+  /* settings */
+  const panel = $('panel');
+  $('sigInput').value = signaling.join('\n');
+  $('gear').onclick = () => { panel.hidden = !panel.hidden; if (!panel.hidden) $('nameInput').focus(); };
+  document.addEventListener('click', (e) => {
+    if (!panel.hidden && !panel.contains(e.target) && e.target.closest('#gear') === null) panel.hidden = true;
+  });
+  $('saveSettings').onclick = () => {
+    const name = $('nameInput').value.trim().slice(0,22) || 'Guest';
+    store.set(LS.name, name);
+    store.set(LS.sig, $('sigInput').value);
+    if (awareness){
+      const cur = awareness.getLocalState().user || {};
+      awareness.setLocalStateField('user', { name, color: cur.color });
+    }
+    panel.hidden = true;
+    toast('Saved — reconnecting');
+    setTimeout(() => location.reload(), 500);
+  };
+
+  addEventListener('hashchange', () => location.reload());
+  addEventListener('beforeunload', () => { if (provider) provider.destroy(); });
+
+  paint();
+  ta.focus();
+}
+</script>
+</body>
+</html>
