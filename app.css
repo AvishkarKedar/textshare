@@ -157,8 +157,8 @@ select.in{-webkit-appearance:none;appearance:none;font-family:var(--mono);font-s
 
 /* ---- site footer ---- */
 #siteFoot{
-  display:grid;gap:32px;grid-template-columns:repeat(3,1fr);
-  max-width:1120px;width:100%;margin:0 auto;padding:34px 28px 44px;
+  display:grid;gap:32px;grid-template-columns:1.4fr 1fr 1fr 1.1fr;
+  max-width:1120px;width:100%;margin:0 auto;padding:34px 28px 26px;
 }
 #siteFoot b{display:block;font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:12px}
 #siteFoot p{margin:0 0 8px;color:var(--mut);font-size:12px;line-height:1.65;max-width:32ch}
@@ -166,11 +166,18 @@ select.in{-webkit-appearance:none;appearance:none;font-family:var(--mono);font-s
 #siteFoot a:hover{text-decoration:underline;text-underline-offset:2px}
 #siteFoot .by{color:var(--fg)}
 #siteFoot .by a{display:inline}
-.stars{color:var(--mut)}
 .relayLine{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px}
 .rdot{width:6px;height:6px;border-radius:50%;background:var(--warn);flex:none}
 .rdot.on{background:var(--ok)}
 .rdot.off{background:var(--danger)}
+
+/* ---- legal bar, the last line of the page ---- */
+#footbar{
+  display:flex;align-items:center;gap:12px;
+  max-width:1120px;width:100%;margin:0 auto;padding:14px 28px 30px;
+  border-top:1px solid var(--line);
+  font:10px/1.6 var(--mono);letter-spacing:.06em;color:var(--dim);
+}
 
 .shake{animation:shake .34s}
 @keyframes shake{
@@ -329,6 +336,7 @@ aside{width:300px;flex:none;background:var(--panel);border-left:1px solid var(--
 .rowu .fbtn{font:10px/1 var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:.1em}
 #panel .btn{width:100%;margin-top:8px}
 #panel .mrow .btn{margin-top:0}
+.plinks{display:flex;flex-direction:column;gap:8px;margin-top:12px;align-items:flex-start}
 
 /* colour swatches */
 #swatches{display:flex;gap:7px;flex-wrap:wrap}
@@ -384,6 +392,26 @@ aside{width:300px;flex:none;background:var(--panel);border-left:1px solid var(--
 }
 #toast.show{opacity:1;transform:translate(-50%,0)}
 
+/* ================================================== standalone docs */
+/* privacy.html, terms.html and security.html share the app shell but
+   scroll like ordinary documents. */
+body.doc-page{overflow:auto}
+.doc{max-width:660px;margin:0 auto;padding:56px 24px 80px}
+.doc h1{font:600 24px/1.25 var(--sans);letter-spacing:-.02em;margin:20px 0 6px}
+.doc .updated{color:var(--dim);font:10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;margin:0 0 8px}
+.doc h2{font:600 13px/1 var(--mono);letter-spacing:.02em;margin:40px 0 12px;padding-top:18px;border-top:1px solid var(--line)}
+.doc p,.doc li{color:var(--mut);font-size:13px;line-height:1.75}
+.doc strong{color:var(--fg);font-weight:600}
+.doc code{font-family:var(--mono);font-size:12px;color:var(--fg);background:var(--panel);padding:1px 5px}
+.doc pre{background:var(--panel);border:1px solid var(--line);padding:14px;overflow:auto;font:12px/1.6 var(--mono);color:var(--fg)}
+.doc ul{padding-left:18px}
+.doc a{color:var(--accent)}
+.doc .back{display:inline-block;font:11px/1 var(--mono);color:var(--mut);text-decoration:none}
+.doc .back:hover{color:var(--accent)}
+.doc .warn{border-left:2px solid var(--warn);padding-left:14px}
+.doc .warn strong{color:var(--warn)}
+.doc .foot{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);color:var(--dim);font:10px/1.7 var(--mono);letter-spacing:.06em}
+
 /* ======================================================= responsive */
 @media(max-width:1080px){
   aside{position:absolute;top:0;right:0;bottom:0}
@@ -405,6 +433,7 @@ aside{width:300px;flex:none;background:var(--panel);border-left:1px solid var(--
   .htitle{font-size:23px}
   .demoWrap{height:230px}
   .strip{padding:20px}
-  #siteFoot{grid-template-columns:1fr;gap:26px;padding:26px 18px 40px}
+  #siteFoot{grid-template-columns:1fr;gap:26px;padding:26px 18px 20px}
+  #footbar{padding:14px 18px 30px}
   #pal{padding:8vh 14px 14px}
 }
