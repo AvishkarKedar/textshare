@@ -1,5 +1,5 @@
 /**
- * textshare sync relay, v3.
+ * anonshare sync relay, v4.
  *
  * Threat model, stated plainly:
  *
@@ -18,18 +18,23 @@
  *   The client derives two independent values from the same PBKDF2 material -
  *   an encryption key (never transmitted) and an auth token (transmitted).
  *   Different salts, so possession of the auth token does not help anyone
- *   derive the encryption key. On create we store only SHA-256(auth token);
- *   on connect the client presents the token and we compare hashes. Wrong
+ *   derive the encryption key. The client sends the raw token; we store only
+ *   SHA-256 of it, and compare hashes on every subsequent connect. Wrong
  *   password therefore means "connection refused", not merely "you see
  *   gibberish" - which is what v2 did, and which let an unauthorised peer sit
  *   in a locked room and corrupt its log.
  *
+ *   Hashing happens here, never on the client. v3 accepted a pre-hashed value
+ *   at create time and then hashed it a second time when authenticating the
+ *   same request, so no room could ever be created. Doing it in one place
+ *   makes that class of mistake impossible.
+ *
  * Ownership:
  *
  *   Whoever creates a room mints a 32-byte owner token in their browser and
- *   registers only its hash. That token is the sole proof of ownership, so it
- *   can suspend, lock, re-key the lifetime of, or destroy the room. We cannot
- *   recover it for them, by design.
+ *   we register only its hash. That token is the sole proof of ownership, so
+ *   it can suspend, lock, re-key the lifetime of, or destroy the room. We
+ *   cannot recover it for them, by design.
  */
 
 /* ------------------------------------------------------------ protocol */
@@ -292,11 +297,16 @@ export class Room {
       // other. Now the client is told to pick again.
       if (meta && q.get('excl') === '1') return json({ error: 'taken' }, 409)
       if (!meta) {
+        const rawAuth = q.get('a')
+        const rawOwner = q.get('o')
         meta = {
           c: Date.now(),
           p: q.get('p') === '1',
-          a: q.get('a') || null,
-          o: q.get('o') || null,
+          // Hash here, not on the client. v3 took a pre-hashed value and then
+          // hashed it again a few lines below to authenticate this very same
+          // request, so every create answered 403 and no room could exist.
+          a: rawAuth ? await sha256(rawAuth) : null,
+          o: rawOwner ? await sha256(rawOwner) : null,
           s: false,
           r: false,
           ttl: TTLS[q.get('ttl')] || DEFAULT_TTL,
@@ -478,7 +488,7 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
 
     if (url.pathname === '/' || url.pathname === '/health') {
-      return json({ ok: true, service: 'textshare-sync', version: 3 })
+      return json({ ok: true, service: 'anonshare-sync', version: 4 })
     }
 
     const match = url.pathname.match(/^\/room\/([A-Za-z0-9]{4,12})(?:\/(exists|admin))?$/)
