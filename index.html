@@ -3,46 +3,115 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Anonshare - live encrypted text &amp; code</title>
-<meta name="description" content="Share text and code live with anyone in the world. End-to-end encrypted, 6-character room codes, no account.">
+
+<title>textshare - live end-to-end encrypted text &amp; code</title>
+<meta name="description" content="Share text and code live with anyone in the world. End-to-end encrypted in your browser, 6-character room codes, no account, erased when everyone leaves.">
 <meta name="theme-color" content="#000000">
+<link rel="canonical" href="https://tx.avishkark.in/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="textshare">
+<meta property="og:title" content="textshare - live end-to-end encrypted text &amp; code">
+<meta property="og:description" content="Open a room, share six characters, write together. Encrypted in your browser. No account. Erased when everyone leaves.">
+<meta property="og:url" content="https://tx.avishkark.in/">
+<meta property="og:image" content="https://tx.avishkark.in/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="textshare - live end-to-end encrypted text &amp; code">
+<meta name="twitter:description" content="Open a room, share six characters, write together. Encrypted in your browser.">
+<meta name="twitter:image" content="https://tx.avishkark.in/og.png">
+
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><text x=%2250%22 y=%2256%22 font-size=%2264%22 font-family=%22monospace%22 fill=%22%234c8dff%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22>&gt;</text></svg>">
+<link rel="preconnect" href="https://esm.sh" crossorigin>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 
-<!-- ---------------------------------------------------------- step one -->
+<!-- ============================================================ step one -->
 <section id="gate">
-  <div class="gwrap">
-    <div class="logo"><span class="caret">&gt;</span> textshare</div>
-    <p class="tag">Live, end-to-end encrypted text and code. No account.</p>
 
-    <button id="gCreate" class="btn primary block">Create a room</button>
+  <div class="hero">
+    <div class="gwrap">
+      <div class="logo"><span class="caret">&gt;</span> textshare</div>
+      <h1 class="htitle">Write together, in the open, with nothing stored.</h1>
+      <p class="tag">A room is six characters. Everything in it is encrypted in your browser before it leaves. When the last person goes, it is erased.</p>
 
-    <div class="rule"><span>or join with a code</span></div>
+      <button id="gCreate" class="btn primary block">Create a room</button>
 
-    <form id="gJoin" class="codebox">
-      <input id="gCode" class="code-in" placeholder="ABC123" maxlength="6" spellcheck="false"
-             autocapitalize="characters" autocomplete="off" inputmode="text" aria-label="Room code">
-      <button id="gGo" class="btn go" type="submit" aria-label="Join">&#8594;</button>
-    </form>
+      <div class="rule"><span>or join with a code</span></div>
 
-    <p class="errline" id="gErr" hidden></p>
+      <form id="gJoin" class="codebox">
+        <input id="gCode" class="code-in" placeholder="ABC123" maxlength="6" spellcheck="false"
+               autocapitalize="characters" autocomplete="off" inputmode="text" aria-label="Room code">
+        <button id="gGo" class="btn go" type="submit" aria-label="Join room">&#8594;</button>
+      </form>
 
-    <div class="gfoot">
-      <span class="k">relay</span>
-      <span id="gRelayName" class="v"></span>
-      <button type="button" id="gRelayToggle" class="lnk">change</button>
-      <input id="gRelayInput" class="in mono-in" spellcheck="false" autocapitalize="off" hidden>
+      <p class="errline" id="gErr" hidden role="alert"></p>
     </div>
-    <p class="fineprint">Rooms are erased 10 minutes after everyone leaves.</p>
+
+    <!-- the product demonstrating itself, driven by app.js -->
+    <div class="demoWrap" aria-hidden="true">
+      <div class="demoBar">
+        <span class="dcode">DEMO01</span>
+        <span class="grow"></span>
+        <span class="dav" style="background:#4c8dff">AK</span>
+        <span class="dav" style="background:#3ddc84">PR</span>
+        <span class="dav" style="background:#c792ea">SM</span>
+      </div>
+      <div id="demo"></div>
+      <div class="demoFoot"><span class="ddot"></span> live &middot; 3 online &middot; e2e</div>
+    </div>
   </div>
+
+  <div class="strips">
+    <div class="strip">
+      <span class="si">&#128274;</span>
+      <b>End-to-end encrypted</b>
+      <p>AES-GCM under a key derived from your room code and password. The relay only ever sees sealed bytes.</p>
+    </div>
+    <div class="strip">
+      <span class="si">&#9201;</span>
+      <b>Erased on the way out</b>
+      <p>Rooms are destroyed once everyone has left. Choose 10 minutes, an hour, or a day.</p>
+    </div>
+    <div class="strip">
+      <span class="si">&#8709;</span>
+      <b>No account, ever</b>
+      <p>No sign-up, no email, no analytics, no cookies. Pick a display name and start typing.</p>
+    </div>
+  </div>
+
+  <footer id="siteFoot">
+    <div class="fcol">
+      <b>textshare</b>
+      <p>A live, end-to-end encrypted scratchpad for text and code.</p>
+      <p class="by">Built by <a href="https://avishkark.in" target="_blank" rel="noopener">Avishkar Kedar</a></p>
+    </div>
+    <div class="fcol">
+      <b>Source</b>
+      <a href="https://github.com/AvishkarKedar/textshare" target="_blank" rel="noopener">
+        github.com/AvishkarKedar/textshare <span id="ghStars" class="stars"></span>
+      </a>
+      <a href="https://github.com/AvishkarKedar/textshare/issues/new" target="_blank" rel="noopener">Report a bug</a>
+      <a href="security.html">How the encryption works</a>
+      <a href="https://github.com/AvishkarKedar/textshare/blob/main/LICENSE" target="_blank" rel="noopener">MIT licensed</a>
+    </div>
+    <div class="fcol">
+      <b>Relay</b>
+      <p class="relayLine"><span id="relayDot" class="rdot"></span> <span id="gRelayName"></span></p>
+      <button type="button" id="gRelayToggle" class="lnk">use a different relay</button>
+      <input id="gRelayInput" class="in mono-in" spellcheck="false" autocapitalize="off" hidden>
+      <p class="fineprint" id="verStamp"></p>
+    </div>
+  </footer>
 </section>
 
-<!-- ---------------------------------------------------------- step two -->
+<!-- ============================================================ step two -->
 <div id="modal" hidden>
-  <div class="sheet" role="dialog" aria-modal="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
     <div class="lockmark" id="mLock" hidden>&#128274;</div>
     <h2 id="mTitle">Join room</h2>
     <p class="msub" id="mSub"></p>
@@ -52,12 +121,21 @@
 
     <div id="mPassWrap" hidden>
       <label class="lbl" for="mPass"><span id="mPassLbl">Password</span></label>
-      <input id="mPass" class="in" type="password" autocomplete="off" placeholder="••••••••">
+      <input id="mPass" class="in" type="password" autocomplete="off" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
     </div>
 
     <button type="button" id="mAddPass" class="lnk addpass" hidden>+ protect this room with a password</button>
 
-    <p class="errline" id="mErr" hidden></p>
+    <div id="mTtlRow" hidden>
+      <label class="lbl" for="mTtl">Erase the room after everyone leaves</label>
+      <select id="mTtl" class="in sel">
+        <option value="10m">10 minutes</option>
+        <option value="1h">1 hour</option>
+        <option value="24h">24 hours</option>
+      </select>
+    </div>
+
+    <p class="errline" id="mErr" hidden role="alert"></p>
 
     <div class="mrow">
       <button id="mBack" class="btn">Back</button>
@@ -66,7 +144,16 @@
   </div>
 </div>
 
-<!-- ------------------------------------------------------------- app -->
+<!-- ============================================================== boot -->
+<div id="boot" hidden>
+  <div class="bootIn">
+    <div class="spin"></div>
+    <p id="bootMsg">Deriving your key</p>
+    <p class="fineprint">This happens in your browser and never leaves it.</p>
+  </div>
+</div>
+
+<!-- =============================================================== app -->
 <main id="app" hidden>
   <header id="topbar">
     <span class="logo sm hideS"><span class="caret">&gt;</span></span>
@@ -78,22 +165,26 @@
 
     <div class="stack" id="people"></div>
 
-    <select id="lang" class="btn sel" title="Language"></select>
+    <select id="lang" class="btn sel" title="Language" aria-label="Language"></select>
     <button class="btn ico" id="undoBtn" title="Undo">&#8630;</button>
     <button class="btn ico" id="redoBtn" title="Redo">&#8631;</button>
     <button class="btn ico" id="chatBtn" title="Chat">&#9647;<span class="nd" id="chatDot" hidden></span></button>
     <button class="btn ico" id="moreBtn" title="More">&#8943;</button>
 
     <div id="menu" hidden>
+      <button data-a="palette">Command palette <kbd>Ctrl K</kbd></button>
+      <div class="msep"></div>
       <button data-a="newfile">New file</button>
       <button data-a="rename">Rename file</button>
       <button data-a="download">Download file</button>
+      <button data-a="exportzip">Export all files</button>
       <div class="msep"></div>
       <button data-a="invite">Copy invite link</button>
       <button data-a="viewlink">Copy view-only link</button>
       <div class="msep"></div>
       <button data-a="theme">Theme: <span id="themeVal">system</span></button>
       <button data-a="settings">Settings</button>
+      <button data-a="leave">Leave room</button>
     </div>
   </header>
 
@@ -108,28 +199,45 @@
     <div id="editorWrap">
       <div id="editor"></div>
       <div id="overlay"></div>
+      <div id="jump" hidden></div>
     </div>
 
     <aside id="chat" hidden>
-      <div class="phead"><span>Chat</span><button class="btn ico flat" id="chatClose">&times;</button></div>
+      <div class="phead"><span>Chat</span><button class="btn ico flat" id="chatClose" aria-label="Close chat">&times;</button></div>
       <div id="chatList"></div>
       <form id="chatForm"><input id="chatInput" class="in" placeholder="Message the room" maxlength="500" autocomplete="off"></form>
     </aside>
 
     <aside id="panel" hidden>
-      <div class="phead"><span>Settings</span><button class="btn ico flat" id="panelClose">&times;</button></div>
+      <div class="phead"><span>Settings</span><button class="btn ico flat" id="panelClose" aria-label="Close settings">&times;</button></div>
+
       <div class="sec">In this room</div>
       <div id="roster"></div>
+
+      <div class="sec">You</div>
       <label class="lbl" for="nameInput">Display name</label>
       <input id="nameInput" class="in" maxlength="24">
+      <label class="lbl">Your colour</label>
+      <div id="swatches"></div>
       <label class="lbl" for="sigInput">Relay</label>
       <input id="sigInput" class="in mono-in" spellcheck="false" autocapitalize="off">
       <div class="mrow"><button class="btn primary" id="saveSettings">Save</button></div>
+
       <div class="sec">This device</div>
       <p class="fineprint">An offline copy of this room lives in this browser so you can keep working without a connection.</p>
       <button class="btn danger" id="forgetRoom">Delete offline copy</button>
+
+      <div id="ownerOnly" hidden>
+        <div class="sec danger">Danger zone</div>
+        <p class="fineprint">You created this room, so only you can do this. Proof lives in this browser alone and cannot be recovered.</p>
+        <button class="btn" id="btnLock">Make read-only for everyone else</button>
+        <button class="btn" id="btnSuspend">Suspend room</button>
+        <button class="btn danger" id="btnDelete">Delete room permanently</button>
+      </div>
+
       <div class="sec">Privacy</div>
       <p class="fineprint" id="privacyNote"></p>
+      <a class="lnk" href="security.html" target="_blank" rel="noopener">How the encryption works</a>
     </aside>
   </div>
 
@@ -138,9 +246,10 @@
     <span class="sep"></span>
     <span id="userCount">1 online</span>
     <span class="sep"></span>
-    <span id="encBadge" title="End-to-end encrypted">e2e</span>
+    <span id="encBadge" title="End-to-end encrypted in your browser">e2e</span>
     <span class="pill" id="offlineBadge" hidden>offline</span>
     <span class="pill" id="roBadge" hidden>view only</span>
+    <span class="pill" id="lockBadge" hidden>locked</span>
     <button class="pill act" id="followBadge" hidden></button>
     <span class="grow"></span>
     <span id="counts"></span>
@@ -155,7 +264,16 @@
   </nav>
 </main>
 
-<div id="toast"></div>
+<!-- ==================================================== command palette -->
+<div id="pal" hidden>
+  <div class="palBox" role="dialog" aria-modal="true" aria-label="Command palette">
+    <input id="palInput" class="palIn" placeholder="Type a command" autocomplete="off" spellcheck="false">
+    <div id="palList"></div>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+<noscript><p style="color:#e7e7e7;font-family:monospace;padding:24px">textshare encrypts in the browser, so it needs JavaScript enabled.</p></noscript>
 
 <script type="importmap">
 {"imports":{
@@ -187,5 +305,17 @@
 }}
 </script>
 <script type="module" src="app.js"></script>
+<script>
+// If the module graph never executes, say so instead of showing black nothing.
+setTimeout(function () {
+  if (!window.__ts_booted) {
+    var e = document.getElementById('gErr')
+    if (e) {
+      e.textContent = 'Could not load the editor from esm.sh. Check your connection or any content blocker, then reload.'
+      e.hidden = false
+    }
+  }
+}, 12000)
+</script>
 </body>
 </html>
