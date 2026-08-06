@@ -1,197 +1,157 @@
 # textshare
 
-Share text and code between two or more computers, live. One person creates a room, everyone
-else opens the same **6-character code**, and from then on every keystroke shows up on every
-screen - with names, live cursors, typing indicators, syntax highlighting, and no sign-up.
+Live, end-to-end encrypted text and code sharing. Open the site, create a room, send
+someone the 6-character code, and you are both editing the same document - from
+anywhere in the world, on any network, with no account and no install.
 
-```
-  PC 1  --------------+                              +---------- PC 2
-  types               |   direct WebRTC data channel |           types
-  "const x = 1"       +------------------------------+   "// hello"
-                        (encrypted with the room code)
-```
-
-**Zero backend.** There is no server storing your text, no database, no account. `index.html`
-is the whole app - the browsers talk straight to each other.
+**Live at [tx.avishkark.in](https://tx.avishkark.in)**
 
 ---
 
-## Features
+## What it does
 
-| | |
-|---|---|
-| **6-character room codes** | Short, easy to read out loud or type on a phone. About 1.07 billion combinations. |
-| **Name before you join** | Everyone enters a display name first, so the room always shows who is present. |
-| **Live typing indicators** | A pulsing dot on the avatar and a "Ravi is typing..." line in the status bar. |
-| **Who's online** | A live count badge, avatar stack, and a full roster in the side panel. |
-| **Real-time editing** | Character-level sync. Two people can type on the same line at the same time and nothing is overwritten. |
-| **Live cursors & selections** | See where everyone is and what they have selected, labelled with their name. |
-| **View-only invite links** | Share `?view=1#CODE` so someone can watch the room live without editing it. |
-| **Copy code / copy link** | Separate buttons for the bare room code and the full invite link. |
-| **Local autosave & recovery** | Your text is saved on your device; if you reopen an empty room, you can restore the last copy. |
-| **Clear the room** | Wipe the document for everyone, with a confirmation. |
-| **Connection health** | If signaling or peer-to-peer traffic is blocked, the app explains exactly what to try. |
-| **Syntax highlighting** | 15 languages (JS, TS, Python, HTML, CSS, JSON, YAML, SQL, Java, C/C++, Go, Rust, Shell, Markdown, plain text). The language picker is synced too. |
-| **Dark + light theme** | Follows your system by default, toggle with one click, remembered per device. |
-| **Mobile friendly** | Compact toolbar, bottom-sheet settings panel, and a tuned editor layout on small screens. |
-| **Copy & download** | Copy the whole document, or save it with the right file extension (`Ctrl/Cmd + S`). |
-| **Undo/redo that respects others** | `Ctrl/Cmd + Z` undoes *your* edits, not your teammate's. |
-| **Tab / Shift+Tab indent** | Works on a selection, like a real editor. |
+- **6-character room codes.** `ABC123` is enough for anyone to join. The link works too.
+- **Real-time collaborative editing** with live cursors, names, and colours for everyone in the room.
+- **End-to-end encrypted.** Your text is sealed in your browser before it leaves. The server
+  relays ciphertext it has no key for.
+- **Optional room password**, verified without the server ever seeing it.
+- **Multiple files per room** with tabs, so you can share a whole snippet set rather than one blob.
+- **Real syntax highlighting** for 16 languages, courtesy of CodeMirror 6 - the same editor
+  engine behind many online IDEs. Brackets match, code folds, `Ctrl+F` searches.
+- **Undo and redo** that respect other people's edits: undo only ever reverses *your* changes.
+- **Chat panel** so you can talk about the document without typing into it.
+- **Follow mode.** Click someone's avatar and your view tracks their cursor, across files.
+- **Works offline.** Install it to your home screen; edits made with no connection merge
+  automatically when you come back.
+- **Rooms self-destruct** 10 minutes after the last person disconnects. Nothing lingers.
+- **View-only links** for sharing something people should read but not change.
 
 ---
 
-## How joining works
+## How the encryption works
 
-1. Open the app and enter your name.
-2. Click **Create a room** - you get a code like `K7Q2XM`.
-3. Send the code or the invite link to anyone, anywhere in the world.
+The key is derived in your browser with PBKDF2 (150,000 iterations, SHA-256) from the room
+code plus the optional password, and it never leaves the device. Every document update and
+every presence message is AES-GCM sealed before it hits the socket.
 
-```
-Invite link:     https://your-site.com/#K7Q2XM
-View-only link:  https://your-site.com/?view=1#K7Q2XM
-```
+This has an interesting consequence: **the server cannot merge edits, because it cannot read
+them.** So it does not try. It keeps an append-only log of opaque blobs and replays them to
+whoever joins next. That works because Yjs updates are a CRDT - commutative and idempotent -
+so replaying the log in any order converges to the same document on every client.
 
-Anyone who opens the link enters their name once, then lands directly in the live document.
-The name is remembered on that device, so returning users skip the prompt.
+Passwords are never sent, not even hashed. When a room is created, the creator stores an
+encrypted probe string. A joiner fetches that probe and tries to decrypt it. If it comes back
+as the expected value, the password was right. The server just holds a blob it cannot read.
 
----
-
-## Quick start (local)
-
-The app loads ES modules, so open it through a server rather than double-clicking the file:
-
-```bash
-git clone https://github.com/AvishkarKedar/textshare.git
-cd textshare
-python3 -m http.server 8080
-```
-
-Open `http://localhost:8080`, enter a name, click **Create a room**, and open the same URL
-(including the `#CODE` part) on the other machine. On a different computer, use your LAN IP
-or deploy it.
+> **One honest caveat:** the offline copy stored in your browser's IndexedDB is plaintext, since
+> it has to be readable without the network. Use **Settings -> Delete offline copy** on a shared
+> machine.
 
 ---
 
-## Deploy on Cloudflare Pages (with your own domain)
+## Architecture
 
-No build step, no environment variables, no server.
+```
+  Browser A  <--- AES-GCM ciphertext --->  Cloudflare Worker  <--- ... --->  Browser B
+  CodeMirror 6                             Durable Object per room
+  Yjs CRDT                                 append-only encrypted log
+  IndexedDB (offline)                      alarm-based 10-minute purge
+```
 
-1. In the Cloudflare dashboard go to **Workers & Pages -> Create -> Pages -> Connect to Git**.
-2. Authorize GitHub and pick the **`textshare`** repository.
-3. Build settings:
-   - Framework preset: **None**
-   - Build command: *(leave empty)*
-   - Build output directory: **`/`**
-   - Root directory: *(leave empty)*
-4. **Save and Deploy.** You get `https://textshare-xxx.pages.dev` in under a minute.
-5. Custom domain: open the project -> **Custom domains -> Set up a domain** -> enter
-   `share.yourdomain.com` (or the apex `yourdomain.com`).
-6. Every `git push` to `main` redeploys automatically.
+| Piece | What it is |
+| --- | --- |
+| `index.html`, `app.css`, `app.js` | The whole client. Static files, served by Cloudflare Pages. |
+| `sw.js`, `manifest.webmanifest` | Service worker and PWA manifest for offline and install. |
+| `worker/src/index.js` | The sync relay. One Durable Object per room code. |
 
-HTTPS matters here: WebRTC and the clipboard API only work on secure origins, and Pages gives
-you a certificate by default.
+An earlier version used peer-to-peer WebRTC. It was dropped: without a TURN server, P2P fails
+behind mobile carrier NAT and corporate firewalls, and a pure mesh has no way to answer the
+question *"does room ABC123 exist?"* - so typos silently created empty rooms instead of saying
+so. The Worker fixes both.
 
-<details>
-<summary>Other hosts</summary>
+### The relay protocol
 
-| Host | What to do |
-|---|---|
-| GitHub Pages | Settings -> Pages -> Deploy from branch -> `main` / root |
-| Netlify | Drag the folder in, or connect the repo - no build command |
-| Vercel | Import the repo, framework preset "Other" |
-| Any web server | Copy `index.html` into the web root |
+Binary frames, one type byte then a sealed payload:
 
-</details>
+| Byte | Direction | Meaning |
+| --- | --- | --- |
+| `0` | both | Document update. Broadcast and appended to the log. |
+| `1` | both | Presence. Broadcast only, never stored. |
+| `2` | client to server | Snapshot. Replaces the entire log. |
+| `3` | server to client | Backlog replay finished. |
+| `4` | server to client | Error, followed by a reason string. |
+| `5` | server to client | Please send a snapshot so the log can be folded down. |
+
+HTTP endpoints:
+
+- `GET /health` - liveness check.
+- `GET /room/:code/exists` - does this room exist, how many people are in it, is it locked.
+  This is what produces *"No room exists with code ABC123"* instead of silently creating one.
+- `GET /room/:code` (WebSocket upgrade) - join. `?create=1` creates.
+
+### Limits
+
+Enforced in the Durable Object: 256 KB per message, 5 MB per room, 30 connections per room,
+120 messages per second per connection, and the 10-minute idle purge. The purge timer starts
+when the last person disconnects and resets the moment anyone reconnects, so a room does not
+vanish while you are sitting there reading it.
 
 ---
 
-## How it works
+## Deploying your own
 
-```
-     textarea  --input-->  diff  -->  Y.Text (CRDT)  -->  y-webrtc  -->  peers
-        ^                                 |                              |
-        +---------- remote delta <--------+-------- awareness <----------+
-                                            (name, colour, cursor, typing)
-```
+Both halves deploy from this one repository.
 
-- **[Yjs](https://github.com/yjs/yjs)** holds the document as a CRDT, so concurrent edits merge
-  deterministically instead of clobbering each other. Every keystroke is diffed against the
-  shared state and sent as a tiny insert/delete operation.
-- **[y-webrtc](https://github.com/yjs/y-webrtc)** connects the browsers directly. A signaling
-  server is used **only** to introduce peers to each other - the document never passes through
-  it, and traffic between peers is encrypted with the room code as the shared secret.
-- **Awareness** carries the ephemeral state: display name, colour, cursor/selection offsets,
-  and whether that person is currently typing. Offsets are transformed through incoming deltas,
-  so remote carets stay put while you type.
-- The editor is a transparent `<textarea>` sitting exactly on top of a highlighted `<pre>`,
-  plus a cursor layer and a gutter. All three are moved together on scroll.
+**The site (Cloudflare Pages)** - connect the repo, framework preset `None`, build command
+empty, output directory `/`. Static files, nothing to build.
 
-Two gotchas that are already handled, in case you fork this:
+**The relay (Cloudflare Workers)** - create a Worker, connect the same repo, and set:
 
-1. `code { font-family: monospace }` in the browser's default stylesheet overrides inheritance,
-   so the highlight layer must re-declare `font: inherit` or it drifts ~1px per character away
-   from the textarea.
-2. Character width must be measured with a probe **inside** the highlight layer, not on
-   `document.body`, or remote cursors land in the wrong column.
+| Setting | Value |
+| --- | --- |
+| Root directory | `worker` |
+| Build command | `npm install` |
+| Deploy command | `npx wrangler deploy` |
 
----
+The root directory matters. Leave it empty and Wrangler runs at the repo root, finds no
+`wrangler.toml`, assumes you meant a static site, and tries to upload `node_modules` - which
+fails on a 122 MB binary.
 
-## Rooms & privacy
+Then point the client at your relay: change `DEFAULT_RELAY` at the top of `app.js`. Users can
+also override it per visit with `?relay=your-worker.workers.dev`, or in Settings.
 
-- Codes are 6 characters from a 32-symbol alphabet with look-alikes removed - about
-  1.07 billion combinations, generated with `crypto.getRandomValues`.
-- The code is the password: it is used to encrypt peer traffic, and it stays in the URL hash,
-  which browsers never send to a server.
-- Nothing is persisted on any server. Only your display name, theme, signaling preference, and
-  a local draft of each room are stored in `localStorage`, on your own device.
-- Because a 6-character code is shorter than an 8-character one, treat rooms as casual and
-  temporary. Do not put secrets in a room you have shared publicly.
+> Keep the custom domain on the **Pages** project only. If you attach it to the Worker as well,
+> the Worker wins and every visitor gets `{"ok":true,"service":"textshare-sync"}` instead of the app.
+
+Durable Objects with SQLite storage are available on the free plan; the migration in
+`worker/wrangler.toml` is already configured for it.
 
 ---
 
-## Networking notes
+## Keyboard shortcuts
 
-Default signaling servers are the public Yjs ones:
+| Keys | Action |
+| --- | --- |
+| `Ctrl/Cmd + Z` / `Shift + Ctrl/Cmd + Z` | Undo / redo your own edits |
+| `Ctrl/Cmd + F` | Find, with replace |
+| `Tab` | Indent, or accept a completion |
+| `Ctrl/Cmd + /` | Toggle comment |
 
-```
-wss://y-webrtc-eu.fly.dev
-wss://signaling.yjs.dev
-```
+## URL options
 
-You can replace them in **Settings -> Signaling servers** (one URL per line). To run your own:
-
-```bash
-npm i y-webrtc
-PORT=4444 node ./node_modules/y-webrtc/bin/server.js
-# then use ws://localhost:4444 (or wss://... behind TLS)
-```
-
-Strict corporate or campus networks sometimes block direct peer connections. WebRTC then needs
-a TURN relay; add one in the `WebrtcProvider` options via `peerOpts.config.iceServers` if you
-hit that. The app detects both failure modes and tells you which one happened.
+| URL | Effect |
+| --- | --- |
+| `#ABC123` | Join room `ABC123` |
+| `?view=1#ABC123` | Join read-only |
+| `?relay=host` | Use a different sync server |
 
 ---
 
-## Repo layout
+## Built with
 
-```
-index.html   the entire application - markup, styles, editor, sync, highlighter
-404.html     redirect fallback for static hosts
-_headers     security headers for Cloudflare Pages / Netlify
-robots.txt   crawler rules
-sitemap.xml  single-page sitemap
-package.json project metadata and a local serve script
-README.md    this file
-LICENSE      MIT
-```
+[Yjs](https://github.com/yjs/yjs) - [CodeMirror 6](https://codemirror.net/) -
+[y-codemirror.next](https://github.com/yjs/y-codemirror.next) -
+[Cloudflare Workers + Durable Objects](https://developers.cloudflare.com/durable-objects/) -
+Web Crypto API
 
-No dependencies are vendored; Yjs and y-webrtc are pulled from esm.sh through an import map,
-which means the first load needs internet access even though the sharing itself is peer-to-peer.
-
-## Browser support
-
-Chrome, Edge, Firefox, Safari 16.4+, and mobile equivalents. Requires HTTPS (or localhost).
-
-## License
-
-MIT - see [LICENSE](LICENSE).
+MIT licensed.
