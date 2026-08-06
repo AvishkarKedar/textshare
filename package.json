@@ -1,20 +1,16 @@
 {
-  "name": "textshare",
-  "version": "1.0.0",
-  "description": "Real-time peer-to-peer text and code sharing over WebRTC.",
+  "name": "anonshare",
+  "version": "5.0.0",
   "private": true,
-  "type": "module",
-  "scripts": {
-    "start": "python3 -m http.server 8080",
-    "serve": "python3 -m http.server 8080"
+  "description": "Live, end-to-end encrypted text and code sharing in the browser.",
+  "license": "MIT",
+  "homepage": "https://tx.avishkark.in",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AvishkarKedar/textshare.git"
   },
-  "keywords": [
-    "webrtc",
-    "yjs",
-    "collaboration",
-    "text-editor",
-    "peer-to-peer"
-  ],
-  "author": "AvishkarKedar",
-  "license": "MIT"
+  "comment": "The front end is plain static files with no build step. The relay has its own package.json in worker/.",
+  "scripts": {
+    "start": "python3 -m http.server 8000"
+  }
 }

@@ -7,7 +7,7 @@
  * cache-first because those URLs are version-pinned and immutable.
  */
 
-const VERSION = 'textshare-v5'
+const VERSION = 'anonshare-v6'
 const SHELL = [
   './',
   './index.html',
