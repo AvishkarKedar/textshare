@@ -25,7 +25,6 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><text x=%2250%22 y=%2256%22 font-size=%2264%22 font-family=%22monospace%22 fill=%22%234c8dff%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22>&gt;</text></svg>">
-<link rel="preconnect" href="https://esm.sh" crossorigin>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -300,35 +299,6 @@
 <div id="toast" role="status" aria-live="polite"></div>
 <noscript><p style="color:#e7e7e7;font-family:monospace;padding:24px">anonshare encrypts in the browser, so it needs JavaScript enabled.</p></noscript>
 
-<script type="importmap">
-{"imports":{
-"yjs":"https://esm.sh/yjs@13.6.20",
-"y-protocols/awareness":"https://esm.sh/y-protocols@1.0.6/awareness?external=yjs",
-"y-indexeddb":"https://esm.sh/y-indexeddb@9.0.12?external=yjs",
-"y-codemirror.next":"https://esm.sh/y-codemirror.next@0.3.5?external=yjs,@codemirror/state,@codemirror/view,y-protocols",
-"@codemirror/state":"https://esm.sh/@codemirror/state@6.5.0",
-"@codemirror/view":"https://esm.sh/@codemirror/view@6.35.0?external=@codemirror/state",
-"@codemirror/language":"https://esm.sh/@codemirror/language@6.10.6?external=@codemirror/state,@codemirror/view",
-"@codemirror/commands":"https://esm.sh/@codemirror/commands@6.7.1?external=@codemirror/state,@codemirror/view,@codemirror/language",
-"@codemirror/search":"https://esm.sh/@codemirror/search@6.5.8?external=@codemirror/state,@codemirror/view",
-"@codemirror/autocomplete":"https://esm.sh/@codemirror/autocomplete@6.18.3?external=@codemirror/state,@codemirror/view,@codemirror/language",
-"@codemirror/lint":"https://esm.sh/@codemirror/lint@6.8.4?external=@codemirror/state,@codemirror/view",
-"@lezer/highlight":"https://esm.sh/@lezer/highlight@1.2.1",
-"@codemirror/lang-javascript":"https://esm.sh/@codemirror/lang-javascript@6.2.2?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete,@codemirror/lint",
-"@codemirror/lang-python":"https://esm.sh/@codemirror/lang-python@6.1.6?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
-"@codemirror/lang-html":"https://esm.sh/@codemirror/lang-html@6.4.9?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
-"@codemirror/lang-css":"https://esm.sh/@codemirror/lang-css@6.3.1?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
-"@codemirror/lang-json":"https://esm.sh/@codemirror/lang-json@6.0.1?external=@codemirror/state,@codemirror/view,@codemirror/language",
-"@codemirror/lang-sql":"https://esm.sh/@codemirror/lang-sql@6.8.0?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
-"@codemirror/lang-java":"https://esm.sh/@codemirror/lang-java@6.0.1?external=@codemirror/state,@codemirror/view,@codemirror/language",
-"@codemirror/lang-cpp":"https://esm.sh/@codemirror/lang-cpp@6.0.2?external=@codemirror/state,@codemirror/view,@codemirror/language",
-"@codemirror/lang-rust":"https://esm.sh/@codemirror/lang-rust@6.0.1?external=@codemirror/state,@codemirror/view,@codemirror/language",
-"@codemirror/lang-go":"https://esm.sh/@codemirror/lang-go@6.0.1?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
-"@codemirror/lang-markdown":"https://esm.sh/@codemirror/lang-markdown@6.3.1?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
-"@codemirror/legacy-modes/mode/shell":"https://esm.sh/@codemirror/legacy-modes@6.4.2/mode/shell",
-"@codemirror/legacy-modes/mode/yaml":"https://esm.sh/@codemirror/legacy-modes@6.4.2/mode/yaml"
-}}
-</script>
 <script type="module" src="app.js"></script>
 <script>
 // If the module graph never executes, say so instead of showing black nothing.
@@ -336,7 +306,7 @@ setTimeout(function () {
   if (!window.__ts_booted) {
     var e = document.getElementById('gErr')
     if (e) {
-      e.textContent = 'Could not load the editor from esm.sh. Check your connection or any content blocker, then reload.'
+      e.textContent = 'Could not load the editor. Check your connection or any content blocker, then reload.'
       e.hidden = false
     }
   }
