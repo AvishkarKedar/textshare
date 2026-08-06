@@ -35,6 +35,18 @@
  *   we register only its hash. That token is the sole proof of ownership, so
  *   it can suspend, lock, re-key the lifetime of, or destroy the room. We
  *   cannot recover it for them, by design.
+ *
+ * Scaling under concurrent load:
+ *
+ *   Each room is its own Durable Object, so hundreds of separate rooms
+ *   already run fully in parallel with no shared bottleneck between them -
+ *   that isolation is the whole point of using one DO per room. The only
+ *   caps below are deliberate abuse guards, not capacity limits: MAX_CONNS
+ *   bounds one single room's peer count, and the per-IP Limiter throttles a
+ *   single address hammering the API (e.g. scanning for live room codes).
+ *   Both are set generously so ordinary bursts of traffic - many people
+ *   joining rooms at once, or a shared office/campus network - are never
+ *   mistaken for abuse.
  */
 
 /* ------------------------------------------------------------ protocol */
@@ -59,12 +71,12 @@ const TTLS = {
 const DEFAULT_TTL = TTLS['10m']
 const MAX_FRAME = 256 * 1024
 const MAX_LOG_BYTES = 5 * 1024 * 1024
-const MAX_CONNS = 30
+const MAX_CONNS = 60
 const RATE_PER_SEC = 120
 const COMPACT_EVERY = 150
 const SNAPSHOT_WINDOW = 45000   // how long a compaction invitation stays valid
 const DEL_CHUNK = 100           // storage.delete() caps out at 128 keys
-const IP_PER_MIN = 120
+const IP_PER_MIN = 300
 const CODE_RE = /^[A-Z0-9]{4,12}$/
 
 /* -------------------------------------------------------------- helpers */
