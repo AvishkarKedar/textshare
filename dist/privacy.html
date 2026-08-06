@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Privacy policy - anonshare</title>
+<meta name="description" content="What anonshare collects, which is almost nothing, and exactly what the relay can see.">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark light">
+<link rel="canonical" href="https://tx.avishkark.in/privacy.html">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><text x=%2250%22 y=%2256%22 font-size=%2264%22 font-family=%22monospace%22 fill=%22%234c8dff%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22>&gt;</text></svg>">
+  <link rel="stylesheet" crossorigin href="/assets/app-DDHAW9gV.css">
+</head>
+<body class="doc-page">
+<main class="doc">
+
+  <a class="back" href="./">&larr; anonshare</a>
+  <h1>Privacy policy</h1>
+  <p class="updated">Last updated 6 August 2026</p>
+  <p>anonshare is a live, end-to-end encrypted scratchpad. It has no accounts, no cookies, and no analytics. This page describes precisely what happens to your data, including the parts that are less flattering.</p>
+
+  <h2>What is never collected</h2>
+  <ul>
+    <li>No account, email address, or phone number.</li>
+    <li>No cookies, and no advertising or analytics scripts of any kind.</li>
+    <li>No tracking pixels, fingerprinting, or third-party embeds on the site.</li>
+    <li>No profile of you, and nothing sold or shared with anyone.</li>
+  </ul>
+
+  <h2>What you type</h2>
+  <p>Everything in a room - the text, the file names, the chat, and your display name - is encrypted <strong>in your browser</strong> with AES-GCM before it is sent anywhere. The key is derived from the room code and the room password using PBKDF2, and it never leaves your device.</p>
+  <p>The relay server stores and forwards <strong>sealed bytes it cannot read</strong>. It has no key, so it cannot decrypt your content, and neither can I.</p>
+  <p class="warn"><strong>Important:</strong> anyone who has the room code, and the password if one is set, can read the room. Encryption protects the content in transit and at rest on the relay. It cannot protect you from someone you handed the code to.</p>
+
+  <h2>What the relay unavoidably sees</h2>
+  <p>To route messages at all, the relay necessarily processes some metadata:</p>
+  <ul>
+    <li>The <strong>room code</strong>, and whether that room has a password.</li>
+    <li>A <strong>hash</strong> of the room password token and of the owner token. The tokens themselves are not stored.</li>
+    <li>The <strong>size and timing</strong> of encrypted messages, and how many people are connected.</li>
+    <li>Your <strong>IP address</strong>, transiently, as part of the network connection and to rate-limit abuse. It is not written into any room record or long-term log.</li>
+  </ul>
+
+  <h2>How long anything is kept</h2>
+  <p>A room and everything in it is destroyed when it expires. You choose the lifetime when you create it: <strong>10 minutes</strong>, <strong>1 hour</strong>, or <strong>24 hours</strong> after everyone has left. The owner can also delete a room immediately, which erases it from the relay for everybody.</p>
+
+  <h2>What stays on your own device</h2>
+  <p>anonshare stores a few things locally in your browser, not on any server:</p>
+  <ul>
+    <li><code>localStorage</code>: your display name, colour, theme, chosen relay, and an owner token for any room you created.</li>
+    <li><code>IndexedDB</code>: an offline copy of rooms you have opened, so you can keep working without a connection.</li>
+  </ul>
+  <p>You can erase these at any time with <strong>Settings &rarr; Delete offline copy</strong>, or by clearing site data in your browser. Losing the owner token means losing owner control of that room; it cannot be recovered or reissued.</p>
+
+  <h2>Third parties</h2>
+  <ul>
+    <li><strong>Cloudflare</strong> hosts the site and runs the relay, and processes traffic on my behalf, including standard network-level logs and abuse protection.</li>
+    <li><strong>esm.sh</strong> serves the editor JavaScript modules. Loading the page makes a request to that CDN, which means it sees your IP address, as any CDN would.</li>
+  </ul>
+  <p>No other third party receives anything. The site deliberately makes no calls to social networks, code hosts, font services, or analytics providers.</p>
+
+  <h2>Children</h2>
+  <p>anonshare is not directed at children under 13, and no age information is collected because no personal information is collected.</p>
+
+  <h2>Your rights</h2>
+  <p>Because no account exists and content is encrypted and short-lived, there is generally no personal data held about you that could be exported or deleted on request. You can delete everything you control yourself: delete the room, and clear the site data in your browser.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the date at the top of this page changes with it. Material changes will be reflected on the site itself rather than announced by email, since there is no email list.</p>
+
+  <h2>Contact</h2>
+  <p>Questions, corrections, or privacy concerns: <a href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20privacy">avishkarkedar+text@gmail.com</a></p>
+  <p>See also: <a href="security.html">how the encryption works</a> and the <a href="terms.html">terms &amp; conditions</a>.</p>
+
+  <p class="foot">&copy; 2026 Avishkar Kedar. All rights reserved.</p>
+</main>
+</body>
+</html>

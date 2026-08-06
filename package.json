@@ -11,6 +11,36 @@
   },
   "comment": "The front end is plain static files with no build step. The relay has its own package.json in worker/.",
   "scripts": {
-    "start": "python3 -m http.server 8000"
+    "start": "python3 -m http.server 8000",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "yjs": "13.6.20",
+    "y-protocols": "1.0.6",
+    "y-indexeddb": "9.0.12",
+    "y-codemirror.next": "0.3.5",
+    "@codemirror/state": "6.5.0",
+    "@codemirror/view": "6.35.0",
+    "@codemirror/language": "6.10.6",
+    "@codemirror/commands": "6.7.1",
+    "@codemirror/search": "6.5.8",
+    "@codemirror/autocomplete": "6.18.3",
+    "@codemirror/lint": "6.8.4",
+    "@lezer/highlight": "1.2.1",
+    "@codemirror/lang-javascript": "6.2.2",
+    "@codemirror/lang-python": "6.1.6",
+    "@codemirror/lang-html": "6.4.9",
+    "@codemirror/lang-css": "6.3.1",
+    "@codemirror/lang-json": "6.0.1",
+    "@codemirror/lang-sql": "6.8.0",
+    "@codemirror/lang-java": "6.0.1",
+    "@codemirror/lang-cpp": "6.0.2",
+    "@codemirror/lang-rust": "6.0.1",
+    "@codemirror/lang-go": "6.0.1",
+    "@codemirror/lang-markdown": "6.3.1",
+    "@codemirror/legacy-modes": "6.4.2"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
   }
 }
