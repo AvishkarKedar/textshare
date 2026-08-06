@@ -1,6 +1,11 @@
 name = "textshare-sync"
 main = "src/index.js"
 compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# This Worker serves no static files - it is a WebSocket relay only.
+# Declaring an empty assets block is not needed; omitting it keeps Wrangler
+# from ever treating the repo as a static site.
 
 [[durable_objects.bindings]]
 name = "ROOM"
