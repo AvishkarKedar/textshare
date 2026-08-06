@@ -1,10 +1,10 @@
 /**
  * The landing page demo.
  *
- * A real CodeMirror instance typing itself out with two fake collaborators,
- * so the front page shows what the product does instead of describing it.
- * Entirely self-contained: no shared state with app.js, and if it throws,
- * the gate still works.
+ * A real CodeMirror instance typing itself out with two collaborators, so the
+ * front page shows what the product does instead of describing it. Entirely
+ * self-contained: no shared state with app.js, and if it throws, the gate
+ * still works.
  */
 
 import { EditorState } from '@codemirror/state'
@@ -31,10 +31,10 @@ const SCRIPT = [
   '}',
 ]
 
-// Two imaginary people, their cursors parked on given lines.
+// The cast, with their cursors parked on given lines.
 const CAST = [
-  { name: 'Priya', color: '#3ddc84', line: 1, at: 0.62 },
-  { name: 'Sam', color: '#c792ea', line: 3, at: 0.30 },
+  { name: 'Avishkar', color: '#3ddc84', line: 1, at: 0.62 },
+  { name: 'Lazarus', color: '#c792ea', line: 3, at: 0.30 },
 ]
 
 export function runDemo(parent) {
