@@ -1,14 +1,30 @@
-import * as Y from 'yjs'
-import * as syncProtocol from 'y-protocols/sync'
-import * as awarenessProtocol from 'y-protocols/awareness'
-import * as encoding from 'lib0/encoding'
-import * as decoding from 'lib0/decoding'
+/**
+ * textshare sync relay.
+ *
+ * The server is deliberately blind. Every payload it handles is AES-GCM
+ * ciphertext produced in the browser from a key derived from the room code
+ * plus an optional password. This Worker never sees the key, the plaintext,
+ * or the password - it stores an append-only log of opaque blobs and replays
+ * them to whoever joins next.
+ *
+ * Because it cannot decrypt, it cannot merge either. That is fine: Yjs updates
+ * are commutative and idempotent, so replaying the log in any order converges
+ * to the same document on every client.
+ */
 
-const MSG_SYNC = 0
-const MSG_AWARENESS = 1
+const T_UPDATE = 0    // client -> server -> everyone, persisted
+const T_AWARE = 1     // presence, broadcast only, never stored
+const T_SNAPSHOT = 2  // client -> server, replaces the whole log
+const T_SYNCED = 3    // server -> client, backlog replay finished
+const T_ERROR = 4     // server -> client, followed by a reason string
+const T_COMPACT = 5   // server -> client, please send a snapshot
 
-// Rooms with no activity for this long are deleted.
-const TTL_MS = 1000 * 60 * 60 * 24 * 7
+const IDLE_MS = 10 * 60 * 1000      // purge 10 min after the room empties
+const MAX_FRAME = 256 * 1024        // per message
+const MAX_LOG_BYTES = 5 * 1024 * 1024
+const MAX_CONNS = 30
+const RATE_PER_SEC = 120
+const COMPACT_EVERY = 150
 
 const CORS = {
   'access-control-allow-origin': '*',
@@ -16,202 +32,186 @@ const CORS = {
   'access-control-allow-headers': '*',
 }
 
-function json(body, status) {
-  return new Response(JSON.stringify(body), {
-    status: status || 200,
-    headers: { 'content-type': 'application/json', ...CORS },
-  })
+const json = (body, status) => new Response(JSON.stringify(body), {
+  status: status || 200,
+  headers: { 'content-type': 'application/json', ...CORS },
+})
+
+function frame(type, payload) {
+  const len = payload ? payload.byteLength : 0
+  const out = new Uint8Array(1 + len)
+  out[0] = type
+  if (len) out.set(new Uint8Array(payload), 1)
+  return out.buffer
+}
+
+function errorFrame(reason) {
+  return frame(T_ERROR, new TextEncoder().encode(reason).buffer)
 }
 
 export class Room {
   constructor(state, env) {
     this.state = state
     this.env = env
-    this.sessions = new Set()
-    this.controlled = new Map()
-    this.saveTimer = null
-
-    this.doc = new Y.Doc()
-    this.awareness = new awarenessProtocol.Awareness(this.doc)
-    this.awareness.setLocalState(null)
-
-    this.ready = state.blockConcurrencyWhile(async () => {
-      const stored = await state.storage.get('doc')
-      if (stored) Y.applyUpdate(this.doc, new Uint8Array(stored), 'storage')
-    })
-
-    this.doc.on('update', (update, origin) => {
-      const enc = encoding.createEncoder()
-      encoding.writeVarUint(enc, MSG_SYNC)
-      syncProtocol.writeUpdate(enc, update)
-      this.broadcast(encoding.toUint8Array(enc), origin)
-      this.schedulePersist()
-    })
-
-    this.awareness.on('update', ({ added, updated, removed }, origin) => {
-      const changed = added.concat(updated, removed)
-      if (origin && this.controlled.has(origin)) {
-        const ids = this.controlled.get(origin)
-        added.forEach((id) => ids.add(id))
-        removed.forEach((id) => ids.delete(id))
-      }
-      const enc = encoding.createEncoder()
-      encoding.writeVarUint(enc, MSG_AWARENESS)
-      encoding.writeVarUint8Array(
-        enc,
-        awarenessProtocol.encodeAwarenessUpdate(this.awareness, changed)
-      )
-      this.broadcast(encoding.toUint8Array(enc), null)
-    })
+    this.sessions = new Map() // ws -> { n, t }
   }
 
-  broadcast(payload, exclude) {
-    for (const ws of this.sessions) {
-      if (ws === exclude) continue
-      try {
-        ws.send(payload)
-      } catch (err) {
-        this.sessions.delete(ws)
-        this.controlled.delete(ws)
-      }
+  broadcast(buf, except) {
+    for (const ws of this.sessions.keys()) {
+      if (ws === except) continue
+      try { ws.send(buf) } catch (e) { this.sessions.delete(ws) }
     }
   }
 
-  schedulePersist() {
-    if (this.saveTimer) return
-    this.saveTimer = setTimeout(() => {
-      this.saveTimer = null
-      this.persist()
-    }, 2000)
+  async touch() {
+    await this.state.storage.put('active', Date.now())
   }
 
-  async persist() {
-    try {
-      await this.state.storage.put('doc', Y.encodeStateAsUpdate(this.doc))
-      await this.state.storage.put('updated', Date.now())
-      await this.state.storage.setAlarm(Date.now() + TTL_MS)
-    } catch (err) {
-      // storage is best effort; live peers keep working regardless
+  async append(payload, isSnapshot) {
+    const st = this.state.storage
+    if (isSnapshot) {
+      const old = await st.list({ prefix: 'l:' })
+      if (old.size) await st.delete([...old.keys()])
+      await st.put('seq', 0)
+      await st.put('bytes', 0)
     }
-  }
+    let seq = (await st.get('seq')) || 0
+    let bytes = (await st.get('bytes')) || 0
+    if (bytes + payload.byteLength > MAX_LOG_BYTES) return false
+    seq++
+    bytes += payload.byteLength
+    await st.put('l:' + String(seq).padStart(12, '0'), payload.buffer)
+    await st.put('seq', seq)
+    await st.put('bytes', bytes)
 
-  async alarm() {
-    const updated = (await this.state.storage.get('updated')) || 0
-    if (this.sessions.size === 0 && Date.now() - updated >= TTL_MS) {
-      await this.state.storage.deleteAll()
-    } else {
-      await this.state.storage.setAlarm(Date.now() + TTL_MS)
+    // Ask somebody to fold the log down so replays stay quick.
+    if (!isSnapshot && seq % COMPACT_EVERY === 0) {
+      const first = this.sessions.keys().next().value
+      if (first) { try { first.send(frame(T_COMPACT)) } catch (e) {} }
     }
+    return true
   }
 
   async fetch(request) {
-    await this.ready
     const url = new URL(request.url)
-    const wantsInfo = url.pathname.endsWith('/exists')
-    const wantsCreate = !wantsInfo && url.searchParams.get('create') === '1'
-    let created = await this.state.storage.get('created')
+    const st = this.state.storage
+    let meta = await st.get('meta')
 
-    if (wantsCreate && !created) {
-      created = Date.now()
-      await this.state.storage.put('created', created)
-      await this.state.storage.put('updated', created)
-      await this.state.storage.setAlarm(Date.now() + TTL_MS)
+    if (url.pathname.endsWith('/exists')) {
+      return json({
+        exists: !!meta,
+        peers: this.sessions.size,
+        hasPassword: meta ? !!meta.p : false,
+        verifier: meta ? meta.v : null,
+      })
     }
 
-    if (wantsInfo) {
-      return json({ exists: !!created, peers: this.sessions.size, created: created || null })
+    if (url.searchParams.get('create') === '1' && !meta) {
+      meta = {
+        c: Date.now(),
+        v: url.searchParams.get('v') || null,   // encrypted probe string
+        p: url.searchParams.get('p') === '1',   // password required?
+      }
+      await st.put('meta', meta)
+      await this.touch()
+      await st.setAlarm(Date.now() + IDLE_MS)
     }
 
-    if (!created) {
-      return json({ error: 'no_room' }, 404)
-    }
-
-    if (request.headers.get('Upgrade') !== 'websocket') {
-      return json({ error: 'expected_websocket' }, 426)
-    }
+    if (!meta) return json({ error: 'no_room' }, 404)
+    if (request.headers.get('Upgrade') !== 'websocket') return json({ error: 'expected_websocket' }, 426)
+    if (this.sessions.size >= MAX_CONNS) return json({ error: 'room_full' }, 429)
 
     const pair = new WebSocketPair()
-    const client = pair[0]
-    const server = pair[1]
+    const client = pair[0], server = pair[1]
     server.accept()
-    this.sessions.add(server)
-    this.controlled.set(server, new Set())
+    this.sessions.set(server, { n: 0, t: Date.now() })
+    await this.touch()
 
-    // Step 1: ask the newcomer what it already has.
-    const sync = encoding.createEncoder()
-    encoding.writeVarUint(sync, MSG_SYNC)
-    syncProtocol.writeSyncStep1(sync, this.doc)
-    server.send(encoding.toUint8Array(sync))
-
-    // Step 2: hand it everyone who is currently present.
-    const states = this.awareness.getStates()
-    if (states.size > 0) {
-      const aw = encoding.createEncoder()
-      encoding.writeVarUint(aw, MSG_AWARENESS)
-      encoding.writeVarUint8Array(
-        aw,
-        awarenessProtocol.encodeAwarenessUpdate(this.awareness, Array.from(states.keys()))
-      )
-      server.send(encoding.toUint8Array(aw))
+    // Replay the backlog, then tell the client it is caught up.
+    try {
+      const log = await st.list({ prefix: 'l:' })
+      for (const [, blob] of log) server.send(frame(T_UPDATE, blob))
+      server.send(frame(T_SYNCED))
+    } catch (e) {
+      try { server.send(errorFrame('replay_failed')) } catch (x) {}
     }
 
-    server.addEventListener('message', (event) => {
-      let data
-      if (typeof event.data === 'string') return
-      data = new Uint8Array(event.data)
+    server.addEventListener('message', async ev => {
       try {
-        const decoder = decoding.createDecoder(data)
-        const enc = encoding.createEncoder()
-        const type = decoding.readVarUint(decoder)
-        if (type === MSG_SYNC) {
-          encoding.writeVarUint(enc, MSG_SYNC)
-          syncProtocol.readSyncMessage(decoder, enc, this.doc, server)
-          if (encoding.length(enc) > 1) server.send(encoding.toUint8Array(enc))
-        } else if (type === MSG_AWARENESS) {
-          awarenessProtocol.applyAwarenessUpdate(
-            this.awareness,
-            decoding.readVarUint8Array(decoder),
-            server
-          )
+        if (typeof ev.data === 'string') return
+        const buf = new Uint8Array(ev.data)
+        if (buf.byteLength === 0) return
+        if (buf.byteLength > MAX_FRAME) {
+          server.send(errorFrame('frame_too_large'))
+          return
+        }
+
+        const s = this.sessions.get(server)
+        if (!s) return
+        const now = Date.now()
+        if (now - s.t > 1000) { s.t = now; s.n = 0 }
+        if (++s.n > RATE_PER_SEC) {
+          server.send(errorFrame('rate_limited'))
+          return
+        }
+
+        const type = buf[0]
+        const payload = buf.slice(1)
+
+        if (type === T_AWARE) {
+          this.broadcast(frame(T_AWARE, payload.buffer), server)
+          return
+        }
+        if (type === T_UPDATE || type === T_SNAPSHOT) {
+          this.broadcast(frame(T_UPDATE, payload.buffer), server)
+          const ok = await this.append(payload, type === T_SNAPSHOT)
+          if (!ok) server.send(errorFrame('room_full_bytes'))
+          await this.touch()
         }
       } catch (err) {
-        // ignore malformed frames rather than dropping the whole room
+        // A bad frame from one client must never take down the room.
       }
     })
 
-    const close = () => {
+    const close = async () => {
       this.sessions.delete(server)
-      const ids = this.controlled.get(server)
-      this.controlled.delete(server)
-      if (ids && ids.size) {
-        awarenessProtocol.removeAwarenessStates(this.awareness, Array.from(ids), null)
+      if (this.sessions.size === 0) {
+        await this.touch()
+        try { await st.setAlarm(Date.now() + IDLE_MS) } catch (e) {}
       }
-      this.persist()
     }
     server.addEventListener('close', close)
     server.addEventListener('error', close)
 
     return new Response(null, { status: 101, webSocket: client })
   }
+
+  async alarm() {
+    const st = this.state.storage
+    if (this.sessions.size > 0) {
+      await st.setAlarm(Date.now() + IDLE_MS)
+      return
+    }
+    const active = (await st.get('active')) || 0
+    if (Date.now() - active >= IDLE_MS - 2000) {
+      // Nobody has been here for ten minutes. Erase everything.
+      await st.deleteAll()
+    } else {
+      await st.setAlarm(active + IDLE_MS)
+    }
+  }
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url)
-
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: CORS })
-    }
-
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
     if (url.pathname === '/' || url.pathname === '/health') {
       return json({ ok: true, service: 'textshare-sync' })
     }
-
     const match = url.pathname.match(/^\/room\/([A-Za-z0-9]{4,12})(?:\/exists)?$/)
     if (!match) return json({ error: 'not_found' }, 404)
-
-    const code = match[1].toUpperCase()
-    const id = env.ROOM.idFromName(code)
+    const id = env.ROOM.idFromName(match[1].toUpperCase())
     return env.ROOM.get(id).fetch(request)
   },
 }
