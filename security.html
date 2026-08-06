@@ -6,24 +6,12 @@
 <title>anonshare - how the encryption works</title>
 <meta name="description" content="The anonshare threat model: what is encrypted, what the relay can see, and what this does not protect against.">
 <meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark light">
+<link rel="canonical" href="https://tx.avishkark.in/security.html">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><text x=%2250%22 y=%2256%22 font-size=%2264%22 font-family=%22monospace%22 fill=%22%234c8dff%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22>&gt;</text></svg>">
 <link rel="stylesheet" href="app.css">
-<style>
-  body{overflow:auto}
-  .doc{max-width:660px;margin:0 auto;padding:56px 24px 80px}
-  .doc h1{font:600 24px/1.25 var(--sans);letter-spacing:-.02em;margin:20px 0 10px}
-  .doc h2{font:600 13px/1 var(--mono);letter-spacing:.02em;margin:40px 0 12px;padding-top:18px;border-top:1px solid var(--line)}
-  .doc p,.doc li{color:var(--mut);font-size:13px;line-height:1.75}
-  .doc strong{color:var(--fg);font-weight:600}
-  .doc code{font-family:var(--mono);font-size:12px;color:var(--fg);background:var(--panel);padding:1px 5px}
-  .doc pre{background:var(--panel);border:1px solid var(--line);padding:14px;overflow:auto;font:12px/1.6 var(--mono);color:var(--fg)}
-  .doc ul{padding-left:18px}
-  .doc a{color:var(--accent)}
-  .back{font:11px/1 var(--mono);color:var(--mut);text-decoration:none}
-  .warn{border-left:2px solid var(--warn);padding-left:14px}
-  .warn strong{color:var(--warn)}
-</style>
 </head>
-<body>
+<body class="doc-page">
 <main class="doc">
   <a class="back" href="./">&larr; back to anonshare</a>
   <h1>How the encryption works</h1>
@@ -46,8 +34,8 @@ auth = PBKDF2(code + ":" + password, salt = "textshare-auth|CODE")</pre>
   <p>The <strong>key</strong> never leaves your browser. The <strong>auth</strong>
   token is sent to the relay to prove you know the password. Because the salts
   differ, handing over the auth token tells an attacker nothing useful about the
-  key. The relay stores only <code>SHA-256(auth)</code>, so even a full dump of
-  its storage contains nothing that can be replayed.</p>
+  key. The relay hashes it on arrival and stores only <code>SHA-256(auth)</code>,
+  so even a full dump of its storage contains nothing that can be replayed.</p>
   <p>The salt strings still say <code>textshare</code>. Those are cryptographic
   constants rather than branding, and changing them would lock every existing
   room out of its own data.</p>
@@ -96,8 +84,7 @@ auth = PBKDF2(code + ":" + password, salt = "textshare-auth|CODE")</pre>
     cannot help if the machine itself is not trustworthy.</p>
     <p><strong>A hostile version of this site.</strong> The code is served to you
     at load time, so whoever controls the hosting could serve something that
-    leaks your key. This is an inherent limit of browser-delivered cryptography.
-    The source is public so you can read it, and you can host it yourself.</p>
+    leaks your key. This is an inherent limit of browser-delivered cryptography.</p>
     <p><strong>Inline scripts are still permitted by the CSP.</strong> The ES
     module import map has to be inline on static hosting, and there is no server
     here to mint a nonce. Everything else is locked down:
@@ -108,11 +95,16 @@ auth = PBKDF2(code + ":" + password, salt = "textshare-auth|CODE")</pre>
   </div>
 
   <h2>Reporting something</h2>
-  <p>If you find a flaw, please open an issue at
-  <a href="https://github.com/AvishkarKedar/textshare/issues" target="_blank" rel="noopener">github.com/AvishkarKedar/textshare</a>.
-  Corrections to this page are just as welcome as code.</p>
+  <p>If you find a flaw, please email
+  <a href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20security">avishkarkedar+text@gmail.com</a>.
+  Please give me a reasonable window to fix it before publishing. Corrections to
+  this page are just as welcome as code.</p>
 
-  <p style="margin-top:44px"><a class="back" href="./">&larr; back to anonshare</a></p>
+  <p>See also the <a href="privacy.html">privacy policy</a> and
+  <a href="terms.html">terms &amp; conditions</a>.</p>
+
+  <p class="foot">&copy; 2026 Avishkar Kedar. All rights reserved.</p>
+  <p style="margin-top:24px"><a class="back" href="./">&larr; back to anonshare</a></p>
 </main>
 </body>
 </html>
