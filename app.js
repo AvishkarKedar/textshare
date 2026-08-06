@@ -551,7 +551,7 @@ async function tryJoin(code, btn) {
   if (!res.info.exists) {
     gErr('No room exists with code ' + code + '. Rooms are erased once everyone leaves.')
     shake($('gCode')); $('gCode').classList.add('bad')
-    if (location.hash) history.replaceState(null, '', location.pathname + location.search)
+    if (location.hash) window.history.replaceState(null, '', location.pathname + location.search)
     return
   }
   if (res.info.suspended && !LS.get('ts.own.' + code, '')) {
@@ -786,7 +786,7 @@ async function enterRoom(code, locked) {
   booted = true
   if (stopDemo) { try { stopDemo() } catch (e) {} stopDemo = null }
 
-  history.replaceState(null, '', location.pathname + location.search + '#' + code)
+  window.history.replaceState(null, '', location.pathname + location.search + '#' + code)
   $('gate').hidden = true
   $('modal').hidden = true
   $('app').hidden = false

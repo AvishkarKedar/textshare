@@ -9,14 +9,9 @@ const VERSION = 'anonshare-v7'
 const SHELL = [
   './',
   './index.html',
-  './app.css',
-  './app.js',
-  './demo.js',
-  './zip.js',
   './security.html',
   './privacy.html',
   './terms.html',
-  './manifest.webmanifest',
 ]
 
 self.addEventListener('install', e => {
