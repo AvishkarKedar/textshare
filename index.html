@@ -3,163 +3,110 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>textshare - live text &amp; code sharing</title>
-<meta name="description" content="Share text and code live with anyone in the world using a 6-character room code.">
+<title>textshare - live, encrypted text &amp; code sharing</title>
+<meta name="description" content="Share text and code live with anyone in the world. End-to-end encrypted, 6-character room codes, no account.">
+<meta name="theme-color" content="#191919">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#128221;</text></svg>">
-<style>
-:root{--bg:#fff;--fg:#1d1c1a;--mut:#7c746a;--line:#e9e6e1;--panel:#faf9f7;--accent:#2783de;--mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace,monospace;--fs:14px;--lh:22px}
-[data-theme=dark]{--bg:#191919;--fg:#e6e4e1;--mut:#8d8880;--line:#2e2e2e;--panel:#212121;--accent:#5aa9f0}
-*{box-sizing:border-box}
-[hidden]{display:none!important}
-html,body{height:100%;margin:0}
-body{background:var(--bg);color:var(--fg);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
-button,input,select{font:inherit;color:inherit}
-button{cursor:pointer;background:none;border:0}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--fg);white-space:nowrap;font-size:13px}
-.btn:hover{background:var(--panel)}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-.btn.primary:hover{filter:brightness(1.08)}
-.btn:disabled{opacity:.5;cursor:default}
-.lnk{color:var(--accent);text-decoration:underline;padding:0;font-size:11px}
-.in{height:38px;width:100%;padding:0 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
-.in:focus{outline:2px solid var(--accent);outline-offset:-1px}
-.grow{flex:1}
-#gate{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);z-index:40;padding:24px;overflow:auto}
-.card{width:100%;max-width:380px}
-.wm{font:600 20px/1.2 inherit;letter-spacing:-.02em;margin:0 0 6px}
-.sub{color:var(--mut);margin:0 0 18px;font-size:13px}
-.lbl{display:block;font-size:12px;color:var(--mut);margin:14px 0 6px}
-.hint{font-size:11px;color:var(--mut);margin:8px 0 0}
-.or{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:12px;margin:18px 0}
-.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
-.chip{display:inline-block;font-size:12px;padding:3px 9px;border-radius:999px;background:var(--panel);border:1px solid var(--line);margin-bottom:14px}
-#joinForm{display:flex;gap:8px}
-#joinCode,#roomCode{font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase}
-#gateErr{color:#e0574c}
-#app{display:flex;flex-direction:column;height:100%}
-header{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line)}
-#roomCode{font-weight:600;cursor:pointer}
-.people{display:flex;align-items:center}
-.av{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:600;color:#fff;border:2px solid var(--bg);margin-left:-6px;position:relative}
-.av:first-child{margin-left:0}
-.av.typing::after{content:"";position:absolute;right:-2px;bottom:-2px;width:8px;height:8px;border-radius:50%;background:#34c759;border:1.5px solid var(--bg);animation:pulse 1s infinite}
-@keyframes pulse{50%{opacity:.3}}
-#banner{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);font-size:13px;flex-wrap:wrap}
-#wrap{flex:1;position:relative;overflow:hidden;display:flex;min-height:0}
-#gutter{width:52px;flex:none;overflow:hidden;border-right:1px solid var(--line);background:var(--panel);color:var(--mut);font:var(--fs)/var(--lh) var(--mono);text-align:right;padding:16px 8px 0 0;margin:0;white-space:pre}
-#ed{position:relative;flex:1;min-width:0}
-#hl,#ta,#cursors{position:absolute;inset:0;margin:0;border:0;font:var(--fs)/var(--lh) var(--mono);white-space:pre;padding:16px 18px}
-#hl{overflow:hidden;pointer-events:none;color:var(--fg)}
-#ta{background:transparent;color:transparent;caret-color:var(--accent);resize:none;outline:0;overflow:auto}
-#cursors{pointer-events:none;overflow:hidden;padding:0}
-.caret{position:absolute;width:2px}
-.caret .nm{position:absolute;top:-15px;left:-1px;font:500 10px/14px ui-sans-serif,system-ui,sans-serif;color:#fff;padding:0 5px;border-radius:4px 4px 4px 0;white-space:nowrap;background:inherit}
-.sel{position:absolute;opacity:.22;border-radius:2px}
-#ph{position:absolute;top:16px;left:18px;color:var(--mut);pointer-events:none;font:var(--fs)/var(--lh) var(--mono)}
-footer{display:flex;align-items:center;gap:10px;padding:6px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--mut);flex-wrap:wrap}
-#dot{width:8px;height:8px;border-radius:50%;background:#e0a030;flex:none}
-#dot.on{background:#34c759}
-#dot.off{background:#e0574c}
-.badge{padding:2px 8px;border-radius:999px;background:var(--panel);border:1px solid var(--line)}
-#panel{position:absolute;top:0;right:0;bottom:0;width:320px;background:var(--panel);border-left:1px solid var(--line);padding:18px;overflow:auto;z-index:20}
-.rowu{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px}
-.sw{width:9px;height:9px;border-radius:50%;flex:none}
-.tag{margin-left:auto;font-size:11px;color:var(--mut)}
-#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(8px);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:.18s;pointer-events:none;z-index:60}
-#toast.show{opacity:1;transform:translateX(-50%)}
-.t-cmt{color:#7f8c7f;font-style:italic}
-.t-str{color:#c47b3f}
-.t-kw{color:#a06ec9}
-.t-num{color:#3e8c7a}
-.t-fn{color:#3a7bd5}
-.t-pun{color:var(--mut)}
-.t-tag{color:#c5564a}
-.t-attr{color:#b98a2e}
-.t-head{color:#3a7bd5;font-weight:600}
-.t-bold{font-weight:700}
-[data-theme=dark] .t-cmt{color:#6b7a6b}
-[data-theme=dark] .t-str{color:#e0a061}
-[data-theme=dark] .t-kw{color:#c39aec}
-[data-theme=dark] .t-num{color:#5fc2aa}
-[data-theme=dark] .t-fn{color:#6fb3f5}
-[data-theme=dark] .t-tag{color:#ef7f72}
-[data-theme=dark] .t-attr{color:#dcb45e}
-@media(max-width:820px){#panel{top:auto;left:0;width:auto;max-height:72%;border-left:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0}#gutter{width:40px}.hideM{display:none!important}}
-@media(max-width:480px){#gutter{display:none}.hideS{display:none!important}header{gap:6px;padding:8px}}
-</style>
+<link rel="stylesheet" href="app.css">
 </head>
 <body>
 
 <div id="gate">
   <div class="card">
     <div id="invited" class="chip" hidden></div>
-    <h1 class="wm" id="gateTitle">textshare</h1>
-    <p class="sub" id="gateSub">Live text and code sharing. No account needed.</p>
+    <h1 class="wm">textshare</h1>
+    <p class="sub" id="gateSub">Live text and code sharing, end-to-end encrypted. No account needed.</p>
 
     <label class="lbl" for="gateName">Your name</label>
     <input id="gateName" class="in" placeholder="e.g. Avishkar" maxlength="24" autocomplete="nickname">
+
+    <div id="passRow">
+      <label class="lbl" for="gatePass">Password <span class="dim" id="passHint">(optional)</span></label>
+      <input id="gatePass" class="in" type="password" placeholder="Leave empty for none" autocomplete="off">
+    </div>
 
     <div id="relayRow" hidden>
       <label class="lbl" for="relayInput">Sync server</label>
       <input id="relayInput" class="in" spellcheck="false" autocapitalize="off">
     </div>
 
-    <div style="margin-top:18px"><button id="createRoom" class="btn primary" style="width:100%;height:40px">Create a room</button></div>
+    <button id="createRoom" class="btn primary big">Create a room</button>
 
     <div class="or">or join one</div>
     <form id="joinForm">
-      <input id="joinCode" class="in" placeholder="ABC123" maxlength="6" spellcheck="false" autocapitalize="characters">
-      <button class="btn" type="submit" id="joinBtn" style="height:38px;padding:0 16px">Join</button>
+      <input id="joinCode" class="in mono" placeholder="ABC123" maxlength="6" spellcheck="false" autocapitalize="characters">
+      <button class="btn" type="submit" id="joinBtn">Join</button>
     </form>
-    <p class="sub" id="gateErr" style="margin-top:12px" hidden></p>
-    <p class="hint">Syncing via <span id="relayName"></span> <button type="button" id="relayToggle" class="lnk">change</button></p>
+
+    <p class="err" id="gateErr" hidden></p>
+    <p class="hint">Rooms are erased 10 minutes after everyone leaves. Syncing via <span id="relayName"></span> <button type="button" id="relayToggle" class="lnk">change</button></p>
   </div>
 </div>
 
 <div id="app" hidden>
   <header>
-    <span class="wm hideM" style="font-size:15px;margin:0">textshare</span>
+    <span class="brand hideM">textshare</span>
     <span id="roomCode" title="Click to copy">------</span>
+    <span id="lockIcon" title="Password protected" hidden>&#128274;</span>
     <button class="btn hideS" id="copyCode">Copy code</button>
     <button class="btn hideS" id="copyLink">Invite link</button>
     <span class="grow"></span>
-    <div class="people" id="people"></div>
-    <select id="lang" class="btn" style="padding:0 4px;max-width:120px"></select>
-    <button class="btn hideM" id="copyAll">Copy</button>
-    <button class="btn hideM" id="download">Save</button>
-    <button class="btn hideS" id="clearAll">Clear</button>
-    <button class="btn" id="themeBtn" title="Theme">&#9788;</button>
-    <button class="btn" id="gear" title="Settings">&#9881;</button>
+    <div class="people" id="people" title="Click someone to follow their cursor"></div>
+    <select id="lang" class="btn sel"></select>
+    <button class="btn ico" id="undoBtn" title="Undo">&#8630;</button>
+    <button class="btn ico" id="redoBtn" title="Redo">&#8631;</button>
+    <button class="btn ico" id="chatBtn" title="Chat">&#128172;<span class="dotb" id="chatDot" hidden></span></button>
+    <button class="btn ico hideM" id="download" title="Download">&#8595;</button>
+    <button class="btn ico" id="themeBtn" title="Theme">&#9788;</button>
+    <button class="btn ico" id="gear" title="Settings">&#9881;</button>
   </header>
 
   <div id="banner" hidden></div>
 
+  <div id="tabbar">
+    <div id="tabs"></div>
+    <button class="btn ico" id="newFile" title="New file">+</button>
+  </div>
+
   <div id="wrap">
-    <pre id="gutter"></pre>
-    <div id="ed">
-      <pre id="hl"></pre>
-      <div id="cursors"></div>
-      <textarea id="ta" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
-      <div id="ph">Start typing. Everyone in this room sees it instantly.</div>
-    </div>
+    <div id="editor"></div>
+
+    <aside id="chat" hidden>
+      <div class="phead">Chat <button class="btn ico" id="chatClose">&times;</button></div>
+      <div id="chatList"></div>
+      <form id="chatForm">
+        <input id="chatInput" class="in" placeholder="Message the room" maxlength="500" autocomplete="off">
+      </form>
+    </aside>
+
     <aside id="panel" hidden>
-      <strong style="font-size:13px">In this room</strong>
+      <div class="phead">Settings <button class="btn ico" id="panelClose">&times;</button></div>
+      <strong class="sec">In this room</strong>
       <div id="roster"></div>
       <label class="lbl" for="nameInput">Your name</label>
       <input id="nameInput" class="in" maxlength="24">
       <label class="lbl" for="sigInput">Sync server</label>
       <input id="sigInput" class="in" spellcheck="false" autocapitalize="off">
-      <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+      <div class="prow">
         <button class="btn primary" id="saveSettings">Save</button>
         <button class="btn" id="copyViewLink">Copy view-only link</button>
       </div>
+      <strong class="sec">This device</strong>
+      <p class="hint">An offline copy of this room is kept on this device so you can keep editing without a connection.</p>
+      <button class="btn danger" id="forgetRoom">Delete offline copy</button>
+      <strong class="sec">Privacy</strong>
+      <p class="hint" id="privacyNote"></p>
     </aside>
   </div>
 
   <footer>
     <span id="dot"></span><span id="connText">Connecting...</span>
     <span class="badge" id="userCount">1 online</span>
+    <span class="badge" id="encBadge" title="End-to-end encrypted">&#128274; E2E</span>
+    <span class="badge" id="offlineBadge" hidden>Offline</span>
     <span class="badge" id="roBadge" hidden>View only</span>
+    <span class="badge follow" id="followBadge" hidden></span>
     <span id="typing"></span>
     <span class="grow"></span>
     <span id="counts"></span>
@@ -171,546 +118,33 @@ footer{display:flex;align-items:center;gap:10px;padding:6px 12px;border-top:1px 
 <script type="importmap">
 {"imports":{
 "yjs":"https://esm.sh/yjs@13.6.20",
-"y-protocols/sync":"https://esm.sh/y-protocols@1.0.6/sync?external=yjs",
 "y-protocols/awareness":"https://esm.sh/y-protocols@1.0.6/awareness?external=yjs",
-"lib0/encoding":"https://esm.sh/lib0@0.2.98/encoding",
-"lib0/decoding":"https://esm.sh/lib0@0.2.98/decoding"
+"y-indexeddb":"https://esm.sh/y-indexeddb@9.0.12?external=yjs",
+"y-codemirror.next":"https://esm.sh/y-codemirror.next@0.3.5?external=yjs,@codemirror/state,@codemirror/view,y-protocols",
+"@codemirror/state":"https://esm.sh/@codemirror/state@6.5.0",
+"@codemirror/view":"https://esm.sh/@codemirror/view@6.35.0?external=@codemirror/state",
+"@codemirror/language":"https://esm.sh/@codemirror/language@6.10.6?external=@codemirror/state,@codemirror/view",
+"@codemirror/commands":"https://esm.sh/@codemirror/commands@6.7.1?external=@codemirror/state,@codemirror/view,@codemirror/language",
+"@codemirror/search":"https://esm.sh/@codemirror/search@6.5.8?external=@codemirror/state,@codemirror/view",
+"@codemirror/autocomplete":"https://esm.sh/@codemirror/autocomplete@6.18.3?external=@codemirror/state,@codemirror/view,@codemirror/language",
+"@codemirror/lint":"https://esm.sh/@codemirror/lint@6.8.4?external=@codemirror/state,@codemirror/view",
+"@codemirror/theme-one-dark":"https://esm.sh/@codemirror/theme-one-dark@6.1.2?external=@codemirror/state,@codemirror/view,@codemirror/language",
+"codemirror":"https://esm.sh/codemirror@6.0.1?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/commands,@codemirror/search,@codemirror/autocomplete,@codemirror/lint",
+"@codemirror/lang-javascript":"https://esm.sh/@codemirror/lang-javascript@6.2.2?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete,@codemirror/lint",
+"@codemirror/lang-python":"https://esm.sh/@codemirror/lang-python@6.1.6?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
+"@codemirror/lang-html":"https://esm.sh/@codemirror/lang-html@6.4.9?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
+"@codemirror/lang-css":"https://esm.sh/@codemirror/lang-css@6.3.1?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
+"@codemirror/lang-json":"https://esm.sh/@codemirror/lang-json@6.0.1?external=@codemirror/state,@codemirror/view,@codemirror/language",
+"@codemirror/lang-sql":"https://esm.sh/@codemirror/lang-sql@6.8.0?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
+"@codemirror/lang-java":"https://esm.sh/@codemirror/lang-java@6.0.1?external=@codemirror/state,@codemirror/view,@codemirror/language",
+"@codemirror/lang-cpp":"https://esm.sh/@codemirror/lang-cpp@6.0.2?external=@codemirror/state,@codemirror/view,@codemirror/language",
+"@codemirror/lang-rust":"https://esm.sh/@codemirror/lang-rust@6.0.1?external=@codemirror/state,@codemirror/view,@codemirror/language",
+"@codemirror/lang-go":"https://esm.sh/@codemirror/lang-go@6.0.1?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
+"@codemirror/lang-markdown":"https://esm.sh/@codemirror/lang-markdown@6.3.1?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
+"@codemirror/legacy-modes/mode/shell":"https://esm.sh/@codemirror/legacy-modes@6.4.2/mode/shell",
+"@codemirror/legacy-modes/mode/yaml":"https://esm.sh/@codemirror/legacy-modes@6.4.2/mode/yaml"
 }}
 </script>
-
-<script type="module">
-import * as Y from 'yjs'
-import * as sync from 'y-protocols/sync'
-import { Awareness, encodeAwarenessUpdate, applyAwarenessUpdate, removeAwarenessStates } from 'y-protocols/awareness'
-import * as enc from 'lib0/encoding'
-import * as dec from 'lib0/decoding'
-
-/* The deployed relay. Override per-device in Settings, or per-link with ?relay= */
-const DEFAULT_RELAY = 'textshare-sync.avishkarkedar.workers.dev'
-
-const $ = id => document.getElementById(id)
-const LS = {
-  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v } catch (e) { return d } },
-  set(k, v) { try { localStorage.setItem(k, v) } catch (e) {} },
-  del(k) { try { localStorage.removeItem(k) } catch (e) {} }
-}
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-
-/* ---------- theme ---------- */
-const prefersDark = matchMedia('(prefers-color-scheme: dark)').matches
-let theme = LS.get('ts.theme', prefersDark ? 'dark' : 'light')
-const applyTheme = () => { document.documentElement.dataset.theme = theme; if ($('themeBtn')) $('themeBtn').innerHTML = theme === 'dark' ? '&#9788;' : '&#9789;' }
-applyTheme()
-
-/* ---------- room codes ---------- */
-const AL = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ', LEN = 6
-function newCode() {
-  const a = new Uint32Array(LEN); crypto.getRandomValues(a)
-  let s = ''; for (let i = 0; i < LEN; i++) s += AL[a[i] % AL.length]
-  return s
-}
-const norm = v => (v || '').toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, LEN)
-
-/* ---------- relay ---------- */
-const QS = new URLSearchParams(location.search)
-const VIEW_ONLY = QS.get('view') === '1'
-function cleanHost(v) {
-  return (v || '').trim().replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/+$/, '')
-}
-function relayHost() { return cleanHost(QS.get('relay') || LS.get('ts.relay', '') || DEFAULT_RELAY) }
-async function roomInfo(host, code) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 8000)
-  try {
-    const r = await fetch('https://' + host + '/room/' + code + '/exists', { cache: 'no-store', signal: ctrl.signal })
-    if (!r.ok) throw new Error('bad status')
-    return await r.json()
-  } finally { clearTimeout(t) }
-}
-
-class Relay {
-  constructor(host, code, doc, aw, create) {
-    this.url = 'wss://' + host + '/room/' + code + (create ? '?create=1' : '')
-    this.doc = doc; this.aw = aw
-    this.connected = false; this.tries = 0; this.dead = false
-    this.onstatus = () => {}
-    doc.on('update', (u, o) => {
-      if (o === this) return
-      const e = enc.createEncoder(); enc.writeVarUint(e, 0); sync.writeUpdate(e, u)
-      this.send(enc.toUint8Array(e))
-    })
-    aw.on('update', ({ added, updated, removed }, o) => {
-      if (o === this) return
-      const ids = added.concat(updated, removed)
-      const e = enc.createEncoder(); enc.writeVarUint(e, 1)
-      enc.writeVarUint8Array(e, encodeAwarenessUpdate(aw, ids))
-      this.send(enc.toUint8Array(e))
-    })
-    addEventListener('beforeunload', () => removeAwarenessStates(aw, [doc.clientID], 'unload'))
-    this.open()
-  }
-  send(b) { if (this.ws && this.ws.readyState === 1) { try { this.ws.send(b) } catch (e) {} } }
-  open() {
-    if (this.dead) return
-    const ws = this.ws = new WebSocket(this.url)
-    ws.binaryType = 'arraybuffer'
-    ws.onopen = () => {
-      this.connected = true; this.tries = 0; this.onstatus()
-      const e = enc.createEncoder(); enc.writeVarUint(e, 0); sync.writeSyncStep1(e, this.doc)
-      this.send(enc.toUint8Array(e))
-      const a = enc.createEncoder(); enc.writeVarUint(a, 1)
-      enc.writeVarUint8Array(a, encodeAwarenessUpdate(this.aw, [this.doc.clientID]))
-      this.send(enc.toUint8Array(a))
-    }
-    ws.onmessage = ev => {
-      try {
-        const d = dec.createDecoder(new Uint8Array(ev.data))
-        const t = dec.readVarUint(d)
-        if (t === 0) {
-          const e = enc.createEncoder(); enc.writeVarUint(e, 0)
-          sync.readSyncMessage(d, e, this.doc, this)
-          if (enc.length(e) > 1) this.send(enc.toUint8Array(e))
-        } else if (t === 1) {
-          applyAwarenessUpdate(this.aw, dec.readVarUint8Array(d), this)
-        }
-      } catch (err) {}
-    }
-    ws.onclose = () => {
-      this.connected = false; this.onstatus()
-      if (this.dead) return
-      this.tries++
-      setTimeout(() => this.open(), Math.min(15000, 600 * Math.pow(1.6, this.tries)))
-    }
-    ws.onerror = () => {}
-  }
-}
-
-/* ---------- syntax highlighting ---------- */
-const kw = w => new RegExp('\\b(?:' + w + ')\\b')
-const C = {
-  lc: /\/\/.*/, hc: /#.*/, dc: /--.*/, bc: /\/\*[\s\S]*?\*\//,
-  dq: /"(?:[^"\\\n]|\\.)*"/, sq: /'(?:[^'\\\n]|\\.)*'/, bt: /`(?:[^`\\]|\\.)*`/,
-  tri: /"""[\s\S]*?"""|'''[\s\S]*?'''/,
-  num: /\b\d[\w.]*\b/, fn: /\b[A-Za-z_$][\w$]*(?=\()/,
-  pun: /[{}()[\].,;:+\-*\/%=<>!&|^~?]/
-}
-const KJS = 'const|let|var|function|return|if|else|for|while|do|break|continue|class|extends|new|this|super|import|export|from|as|default|async|await|try|catch|finally|throw|typeof|instanceof|in|of|delete|void|yield|switch|case|null|undefined|true|false'
-const KTS = KJS + '|interface|type|enum|implements|public|private|protected|readonly|namespace|declare|abstract|satisfies|keyof|infer'
-const KPY = 'def|class|return|if|elif|else|for|while|break|continue|import|from|as|pass|raise|try|except|finally|with|lambda|yield|global|nonlocal|assert|del|and|or|not|in|is|None|True|False|async|await|match|case|self'
-const KJV = 'public|private|protected|class|interface|extends|implements|static|final|void|int|long|double|float|boolean|char|String|new|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|throws|package|import|this|super|null|true|false|abstract|enum'
-const KCP = 'int|long|short|char|float|double|void|bool|auto|const|static|struct|class|public|private|protected|template|typename|namespace|using|new|delete|return|if|else|for|while|do|switch|case|break|continue|try|catch|throw|nullptr|true|false|sizeof|virtual|override|inline|enum|union|unsigned|signed'
-const KGO = 'package|import|func|var|const|type|struct|interface|map|chan|go|defer|return|if|else|for|range|switch|case|default|break|continue|select|nil|true|false|make|new|len|cap|append|string|int|int64|float64|bool|error'
-const KRS = 'fn|let|mut|const|static|struct|enum|impl|trait|pub|use|mod|match|if|else|loop|while|for|in|return|break|continue|self|Self|where|as|dyn|ref|move|async|await|unsafe|true|false|Some|None|Ok|Err|String|Vec|Option|Result'
-const KSH = 'if|then|else|elif|fi|for|while|do|done|case|esac|function|return|export|local|echo|cd|source|set|unset|read|exit|sudo|npm|npx|git'
-const KSQ = 'select|from|where|insert|into|values|update|set|delete|create|table|alter|drop|join|left|right|inner|outer|on|group|by|order|having|limit|offset|as|and|or|not|null|distinct|union|index|primary|key|foreign|references|default|case|when|then|end'
-
-const CODE_RULES = k => [['cmt', C.bc], ['cmt', C.lc], ['str', C.dq], ['str', C.sq], ['str', C.bt], ['kw', kw(k)], ['num', C.num], ['fn', C.fn], ['pun', C.pun]]
-const L = {
-  javascript: CODE_RULES(KJS),
-  typescript: CODE_RULES(KTS),
-  java: CODE_RULES(KJV),
-  cpp: CODE_RULES(KCP),
-  go: CODE_RULES(KGO),
-  rust: CODE_RULES(KRS),
-  python: [['cmt', C.hc], ['str', C.tri], ['str', C.dq], ['str', C.sq], ['kw', kw(KPY)], ['num', C.num], ['fn', C.fn], ['pun', C.pun]],
-  shell: [['cmt', C.hc], ['str', C.dq], ['str', C.sq], ['kw', kw(KSH)], ['num', C.num], ['pun', C.pun]],
-  sql: [['cmt', C.dc], ['cmt', C.bc], ['str', C.sq], ['str', C.dq], ['kw', kw(KSQ)], ['num', C.num], ['pun', C.pun]],
-  html: [['cmt', /<!--[\s\S]*?-->/], ['str', C.dq], ['str', C.sq], ['tag', /<\/?[\w-]+|\/?>/], ['attr', /[\w-]+(?=\s*=)/]],
-  css: [['cmt', C.bc], ['str', C.dq], ['str', C.sq], ['attr', /[a-z-]+(?=\s*:)/], ['num', /\b[\d.]+[a-z%]*\b/], ['pun', C.pun]],
-  json: [['attr', /"(?:[^"\\]|\\.)*"(?=\s*:)/], ['str', C.dq], ['kw', /\b(?:true|false|null)\b/], ['num', C.num], ['pun', C.pun]],
-  yaml: [['cmt', C.hc], ['attr', /^[ \t]*[\w.-]+(?=\s*:)/], ['str', C.dq], ['str', C.sq], ['num', C.num]],
-  markdown: [['head', /^#{1,6} .*/], ['bold', /\*\*[^*]+\*\*/], ['str', /`[^`]*`/], ['fn', /^[ \t]*[-*+] /]]
-}
-const RE = {}, CLS = {}
-for (const k in L) {
-  RE[k] = new RegExp(L[k].map((r, i) => '(?<g' + i + '>' + r[1].source + ')').join('|'), k === 'sql' ? 'gmi' : 'gm')
-  CLS[k] = L[k].map(r => r[0])
-}
-
-const LANGS = [['text', 'Plain text', 'txt'], ['javascript', 'JavaScript', 'js'], ['typescript', 'TypeScript', 'ts'], ['python', 'Python', 'py'], ['html', 'HTML', 'html'], ['css', 'CSS', 'css'], ['json', 'JSON', 'json'], ['yaml', 'YAML', 'yml'], ['sql', 'SQL', 'sql'], ['java', 'Java', 'java'], ['cpp', 'C / C++', 'cpp'], ['go', 'Go', 'go'], ['rust', 'Rust', 'rs'], ['shell', 'Shell', 'sh'], ['markdown', 'Markdown', 'md']]
-
-/* ---------- gate ---------- */
-const gate = $('gate'), gateErr = $('gateErr')
-const showErr = m => { gateErr.textContent = m || ''; gateErr.hidden = !m }
-
-$('gateName').value = LS.get('ts.name', '')
-$('relayInput').value = relayHost()
-$('relayName').textContent = relayHost()
-$('relayToggle').onclick = () => { $('relayRow').hidden = !$('relayRow').hidden; if (!$('relayRow').hidden) $('relayInput').focus() }
-if (QS.get('relay')) LS.set('ts.relay', cleanHost(QS.get('relay')))
-
-const hashCode = norm(location.hash.slice(1))
-if (hashCode.length === LEN) {
-  $('invited').hidden = false
-  $('invited').textContent = 'You were invited to room ' + hashCode
-  $('gateSub').textContent = VIEW_ONLY ? 'Enter your name to watch this room live.' : 'Enter your name so the others know who joined.'
-  $('joinCode').value = hashCode
-}
-
-function readName() {
-  const n = $('gateName').value.trim()
-  if (!n) { showErr('Enter your name first so others know who joined.'); $('gateName').focus(); return null }
-  LS.set('ts.name', n)
-  return n
-}
-function readRelay() {
-  const h = cleanHost($('relayInput').value) || DEFAULT_RELAY
-  LS.set('ts.relay', h)
-  $('relayName').textContent = h
-  return h
-}
-
-$('createRoom').onclick = () => {
-  showErr('')
-  const n = readName(); if (!n) return
-  start(newCode(), readRelay(), n, true)
-}
-
-$('joinForm').onsubmit = async e => {
-  e.preventDefault(); showErr('')
-  const n = readName(); if (!n) return
-  const h = readRelay()
-  const code = norm($('joinCode').value)
-  if (code.length !== LEN) return showErr('Room codes are 6 characters, like K7Q2XM.')
-  const btn = $('joinBtn'); btn.disabled = true; btn.textContent = 'Checking...'
-  try {
-    const info = await roomInfo(h, code)
-    if (!info.exists) {
-      showErr('No room exists with code ' + code + '. Ask for a fresh invite link, or create your own room.')
-      return
-    }
-    start(code, h, n, false)
-  } catch (err) {
-    showErr('Cannot reach the sync server at ' + h + '. Check your connection and try again.')
-  } finally { btn.disabled = false; btn.textContent = 'Join' }
-}
-
-// Known person, known room: skip the gate entirely.
-const savedName = LS.get('ts.name', '')
-if (hashCode.length === LEN && savedName) {
-  const h = relayHost()
-  roomInfo(h, hashCode)
-    .then(info => { if (info.exists) start(hashCode, h, savedName, false) })
-    .catch(() => {})
-}
-
-/* ---------- app ---------- */
-function start(CODE, HOST, NAME, create) {
-  gate.hidden = true
-  $('app').hidden = false
-  location.hash = CODE
-
-  const ta = $('ta'), hl = $('hl'), gutter = $('gutter'), cursors = $('cursors')
-  const langSel = $('lang'), roster = $('roster'), people = $('people')
-  const typingEl = $('typing'), counts = $('counts'), bannerEl = $('banner')
-  const PALETTE = ['#2783DE', '#46A171', '#D5803B', '#BF8EDA', '#DF84A8', '#4FB9C9', '#E56458', '#EAC26B']
-  const DRAFT = 'ts.draft.' + CODE
-
-  langSel.innerHTML = LANGS.map(l => '<option value="' + l[0] + '">' + l[1] + '</option>').join('')
-  $('roomCode').textContent = CODE
-  $('nameInput').value = NAME
-  $('sigInput').value = HOST
-
-  const ydoc = new Y.Doc()
-  const ytext = ydoc.getText('content')
-  const ymeta = ydoc.getMap('meta')
-  const aw = new Awareness(ydoc)
-  const color = PALETTE[ydoc.clientID % PALETTE.length]
-  aw.setLocalState({ user: { name: NAME, color, view: VIEW_ONLY }, typing: false, sel: null })
-
-  const provider = new Relay(HOST, CODE, ydoc, aw, create)
-  const um = new Y.UndoManager(ytext, { trackedOrigins: new Set(['local']) })
-
-  if (VIEW_ONLY) { ta.readOnly = true; $('roBadge').hidden = false; $('clearAll').hidden = true; $('ph').textContent = 'Waiting for the room to fill in...' }
-
-  let toastT
-  function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1900) }
-  function banner(msg, actions) {
-    bannerEl.innerHTML = '<span>' + esc(msg) + '</span>'
-    ;(actions || []).forEach(a => {
-      const b = document.createElement('button'); b.className = 'btn'; b.textContent = a[0]
-      b.onclick = () => { a[1](); bannerEl.hidden = true }
-      bannerEl.appendChild(b)
-    })
-    const d = document.createElement('button'); d.className = 'btn'; d.textContent = 'Dismiss'
-    d.onclick = () => { bannerEl.hidden = true }
-    bannerEl.appendChild(d)
-    bannerEl.hidden = false
-  }
-
-  let CW = 8.4, LH = 22
-  function metrics() {
-    const p = document.createElement('span')
-    p.textContent = '0'.repeat(50)
-    p.style.cssText = 'position:absolute;visibility:hidden;white-space:pre'
-    hl.appendChild(p)
-    const w = p.getBoundingClientRect().width
-    if (w > 0) CW = w / 50
-    p.remove()
-    LH = parseFloat(getComputedStyle(hl).lineHeight) || 22
-  }
-
-  let lastLines = -1
-  function paint() {
-    const txt = ta.value, lang = langSel.value, re = RE[lang]
-    let out = ''
-    if (!re) out = esc(txt)
-    else {
-      let last = 0, m
-      re.lastIndex = 0
-      while ((m = re.exec(txt)) !== null) {
-        if (m[0] === '') { re.lastIndex++; continue }
-        out += esc(txt.slice(last, m.index))
-        let c = 'pun'
-        const g = CLS[lang]
-        for (let i = 0; i < g.length; i++) { if (m.groups['g' + i] !== undefined) { c = g[i]; break } }
-        out += '<span class="t-' + c + '">' + esc(m[0]) + '</span>'
-        last = re.lastIndex
-      }
-      out += esc(txt.slice(last))
-    }
-    hl.innerHTML = out + '\n'
-    const n = txt.split('\n').length
-    if (n !== lastLines) {
-      lastLines = n
-      let s = ''
-      for (let i = 1; i <= n; i++) s += i + '\n'
-      gutter.textContent = s
-    }
-    counts.textContent = txt.length + ' chars, ' + n + ' lines'
-    $('ph').hidden = txt.length > 0
-    syncScroll()
-  }
-  function syncScroll() {
-    hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft
-    gutter.scrollTop = ta.scrollTop
-    drawCursors()
-  }
-
-  const relPos = off => Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(ytext, off))
-  function absPos(j) {
-    try {
-      const p = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(j), ydoc)
-      return p ? p.index : null
-    } catch (e) { return null }
-  }
-  function xy(off) {
-    const rows = ta.value.slice(0, off).split('\n')
-    return { x: 18 + rows[rows.length - 1].length * CW, y: 16 + (rows.length - 1) * LH }
-  }
-  function drawCursors() {
-    const out = [], txt = ta.value
-    aw.getStates().forEach((st, id) => {
-      if (id === ydoc.clientID || !st.user || !st.sel) return
-      const a = absPos(st.sel.a), b = absPos(st.sel.b)
-      if (a === null || b === null) return
-      const s = Math.min(a, b), e = Math.max(a, b)
-      let i = s
-      while (i < e) {
-        const nl = txt.indexOf('\n', i)
-        const end = (nl === -1 || nl > e) ? e : nl
-        const p1 = xy(i), p2 = xy(end)
-        out.push('<div class="sel" style="left:' + p1.x + 'px;top:' + p1.y + 'px;width:' + Math.max(2, p2.x - p1.x) + 'px;height:' + LH + 'px;background:' + st.user.color + '"></div>')
-        i = end + 1
-      }
-      const c = xy(b)
-      out.push('<div class="caret" style="left:' + c.x + 'px;top:' + c.y + 'px;height:' + LH + 'px;background:' + st.user.color + '"><span class="nm" style="background:' + st.user.color + '">' + esc(st.user.name) + '</span></div>')
-    })
-    cursors.innerHTML = out.join('')
-    cursors.style.transform = 'translate(' + (-ta.scrollLeft) + 'px,' + (-ta.scrollTop) + 'px)'
-  }
-
-  function renderPeople() {
-    const list = []
-    aw.getStates().forEach((st, id) => { if (st.user) list.push({ id, name: st.user.name, color: st.user.color, view: st.user.view, typing: !!st.typing }) })
-    list.sort((x, y2) => x.id - y2.id)
-    people.innerHTML = list.slice(0, 6).map(u =>
-      '<div class="av' + (u.typing ? ' typing' : '') + '" style="background:' + u.color + '" title="' + esc(u.name) + '">' + esc((u.name.trim()[0] || '?').toUpperCase()) + '</div>'
-    ).join('')
-    $('userCount').textContent = list.length + ' online'
-    const t = list.filter(u => u.typing && u.id !== ydoc.clientID).map(u => u.name)
-    typingEl.textContent = t.length === 0 ? ''
-      : t.length === 1 ? t[0] + ' is typing...'
-      : t.length === 2 ? t[0] + ' and ' + t[1] + ' are typing...'
-      : t.length + ' people are typing...'
-    roster.innerHTML = list.map(u =>
-      '<div class="rowu"><span class="sw" style="background:' + u.color + '"></span>' + esc(u.name) + (u.id === ydoc.clientID ? ' (you)' : '') +
-      '<span class="tag">' + (u.view ? 'view only' : u.typing ? 'typing' : 'idle') + '</span></div>'
-    ).join('')
-    drawCursors()
-  }
-  aw.on('change', renderPeople)
-
-  let typingT
-  function markTyping() {
-    const st = aw.getLocalState()
-    if (st && !st.typing) aw.setLocalStateField('typing', true)
-    clearTimeout(typingT)
-    typingT = setTimeout(() => aw.setLocalStateField('typing', false), 1400)
-  }
-
-  function localEdit() {
-    const cur = ytext.toString(), next = ta.value
-    if (cur === next) return
-    let s = 0
-    const min = Math.min(cur.length, next.length)
-    while (s < min && cur[s] === next[s]) s++
-    let e = 0
-    while (e < min - s && cur[cur.length - 1 - e] === next[next.length - 1 - e]) e++
-    ydoc.transact(() => {
-      if (cur.length - s - e > 0) ytext.delete(s, cur.length - s - e)
-      if (next.length - s - e > 0) ytext.insert(s, next.slice(s, next.length - e))
-    }, 'local')
-  }
-
-  let draftT
-  function saveDraft() {
-    clearTimeout(draftT)
-    draftT = setTimeout(() => { const v = ytext.toString(); if (v) LS.set(DRAFT, v); else LS.del(DRAFT) }, 800)
-  }
-
-  ytext.observe(ev => {
-    if (ev.transaction.local) { paint(); saveDraft(); return }
-    const sel = [ta.selectionStart, ta.selectionEnd]
-    const adj = [sel[0], sel[1]]
-    let idx = 0
-    ev.delta.forEach(d => {
-      if (d.retain) idx += d.retain
-      else if (d.insert) {
-        const l = d.insert.length
-        for (let i = 0; i < 2; i++) if (idx <= sel[i]) adj[i] += l
-        idx += l
-      } else if (d.delete) {
-        for (let i = 0; i < 2; i++) if (idx < sel[i]) adj[i] -= Math.min(d.delete, sel[i] - idx)
-      }
-    })
-    ta.value = ytext.toString()
-    try { ta.setSelectionRange(adj[0], adj[1]) } catch (err) {}
-    paint(); saveDraft()
-  })
-
-  ymeta.observe(() => {
-    const l = ymeta.get('lang')
-    if (l && l !== langSel.value) { langSel.value = l; paint() }
-  })
-
-  const pushSel = () => aw.setLocalStateField('sel', { a: relPos(ta.selectionStart), b: relPos(ta.selectionEnd) })
-  ta.addEventListener('input', () => { localEdit(); markTyping(); paint(); pushSel() })
-  ta.addEventListener('scroll', syncScroll)
-  ;['keyup', 'click', 'select', 'focus'].forEach(ev => ta.addEventListener(ev, pushSel))
-
-  ta.addEventListener('keydown', e => {
-    const mod = e.metaKey || e.ctrlKey
-    if (mod && e.key.toLowerCase() === 'z') {
-      e.preventDefault()
-      e.shiftKey ? um.redo() : um.undo()
-      ta.value = ytext.toString(); paint()
-      return
-    }
-    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); download(); return }
-    if (e.key === 'Tab') {
-      e.preventDefault()
-      const s = ta.selectionStart, en = ta.selectionEnd, v = ta.value
-      if (s === en && !e.shiftKey) {
-        ta.value = v.slice(0, s) + '  ' + v.slice(s)
-        ta.setSelectionRange(s + 2, s + 2)
-      } else {
-        const ls = v.lastIndexOf('\n', s - 1) + 1
-        const block = v.slice(ls, en)
-        const shifted = e.shiftKey ? block.replace(/^ {1,2}/gm, '') : block.replace(/^/gm, '  ')
-        ta.value = v.slice(0, ls) + shifted + v.slice(en)
-        ta.setSelectionRange(ls, ls + shifted.length)
-      }
-      localEdit(); paint(); markTyping()
-    }
-  })
-
-  const link = () => location.origin + location.pathname + '#' + CODE
-  const viewLink = () => location.origin + location.pathname + '?view=1#' + CODE
-  async function copy(text, msg) {
-    try { await navigator.clipboard.writeText(text); toast(msg) }
-    catch (e) {
-      const t = document.createElement('textarea'); t.value = text
-      document.body.appendChild(t); t.select()
-      try { document.execCommand('copy'); toast(msg) } catch (x) { toast('Copy failed') }
-      t.remove()
-    }
-  }
-  function download() {
-    const row = LANGS.find(l => l[0] === langSel.value)
-    const ext = row ? row[2] : 'txt'
-    const blob = new Blob([ta.value], { type: 'text/plain' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = 'textshare-' + CODE + '.' + ext
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
-  }
-
-  $('copyCode').onclick = () => copy(CODE, 'Room code copied')
-  $('roomCode').onclick = () => copy(CODE, 'Room code copied')
-  $('copyLink').onclick = () => copy(link(), 'Invite link copied')
-  $('copyViewLink').onclick = () => copy(viewLink(), 'View-only link copied')
-  $('copyAll').onclick = () => copy(ta.value, 'Document copied')
-  $('download').onclick = download
-  $('themeBtn').onclick = () => { theme = theme === 'dark' ? 'light' : 'dark'; LS.set('ts.theme', theme); applyTheme(); metrics(); paint() }
-  $('gear').onclick = () => { $('panel').hidden = !$('panel').hidden }
-  $('clearAll').onclick = () => {
-    if (!confirm('Clear this room for everyone? This cannot be undone.')) return
-    ydoc.transact(() => ytext.delete(0, ytext.length), 'local')
-    LS.del(DRAFT)
-    ta.value = ''; paint()
-    toast('Room cleared')
-  }
-  $('saveSettings').onclick = () => {
-    const n = $('nameInput').value.trim()
-    if (n) { LS.set('ts.name', n); aw.setLocalStateField('user', { name: n, color, view: VIEW_ONLY }) }
-    const h = cleanHost($('sigInput').value)
-    if (h && h !== HOST) { LS.set('ts.relay', h); toast('Sync server saved, reloading'); setTimeout(() => location.reload(), 700); return }
-    $('panel').hidden = true
-    toast('Saved')
-  }
-  langSel.onchange = () => { ymeta.set('lang', langSel.value); paint() }
-
-  function status() {
-    const dot = $('dot'), txt = $('connText')
-    const peers = aw.getStates().size - 1
-    if (provider.connected) {
-      dot.className = 'on'
-      txt.textContent = peers > 0 ? 'Live' : 'Connected, waiting for others'
-    } else {
-      dot.className = 'off'
-      txt.textContent = 'Reconnecting...'
-    }
-  }
-  provider.onstatus = status
-  aw.on('change', status)
-  setInterval(status, 4000)
-
-  setTimeout(() => {
-    if (!provider.connected) {
-      banner('Cannot reach the sync server at ' + HOST + '. Check your connection.', [['Settings', () => { $('panel').hidden = false }]])
-    }
-  }, 9000)
-
-  setTimeout(() => {
-    const draft = LS.get(DRAFT, '')
-    if (draft && ytext.length === 0 && aw.getStates().size <= 1) {
-      banner('You have an unsaved local copy of this room.', [['Restore it', () => {
-        ydoc.transact(() => ytext.insert(0, draft), 'local')
-        ta.value = ytext.toString(); paint()
-      }]])
-    }
-  }, 2600)
-
-  metrics()
-  addEventListener('resize', () => { metrics(); drawCursors() })
-  ta.value = ytext.toString()
-  if (ymeta.get('lang')) langSel.value = ymeta.get('lang')
-  paint(); renderPeople(); status()
-  if (!VIEW_ONLY) ta.focus()
-  if (create) toast('Room ' + CODE + ' created')
-}
-</script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
