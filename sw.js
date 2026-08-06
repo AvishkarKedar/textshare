@@ -5,7 +5,7 @@
  * cached the first time they load, so a second visit works with no network
  * at all - Yjs merges whatever you typed offline when you reconnect.
  */
-const VERSION = 'textshare-v3'
+const VERSION = 'textshare-v4'
 const SHELL = ['./', './index.html', './app.css', './app.js', './manifest.webmanifest']
 
 self.addEventListener('install', e => {
