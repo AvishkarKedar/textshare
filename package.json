@@ -9,7 +9,7 @@
     "type": "git",
     "url": "https://github.com/AvishkarKedar/textshare.git"
   },
-  "comment": "The front end is plain static files with no build step. The relay has its own package.json in worker/.",
+  "comment": "The front end is built with Vite (npm run build outputs to dist/). The relay has its own package.json in worker/.",
   "scripts": {
     "start": "python3 -m http.server 8000",
     "build": "vite build"
