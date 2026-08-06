@@ -20,6 +20,7 @@ button{cursor:pointer;background:none;border:0}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn.primary:hover{filter:brightness(1.08)}
 .btn:disabled{opacity:.5;cursor:default}
+.lnk{color:var(--accent);text-decoration:underline;padding:0;font-size:11px}
 .in{height:38px;width:100%;padding:0 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
 .in:focus{outline:2px solid var(--accent);outline-offset:-1px}
 .grow{flex:1}
@@ -28,7 +29,7 @@ button{cursor:pointer;background:none;border:0}
 .wm{font:600 20px/1.2 inherit;letter-spacing:-.02em;margin:0 0 6px}
 .sub{color:var(--mut);margin:0 0 18px;font-size:13px}
 .lbl{display:block;font-size:12px;color:var(--mut);margin:14px 0 6px}
-.hint{font-size:11px;color:var(--mut);margin:6px 0 0}
+.hint{font-size:11px;color:var(--mut);margin:8px 0 0}
 .or{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:12px;margin:18px 0}
 .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
 .chip{display:inline-block;font-size:12px;padding:3px 9px;border-radius:999px;background:var(--panel);border:1px solid var(--line);margin-bottom:14px}
@@ -98,9 +99,10 @@ footer{display:flex;align-items:center;gap:10px;padding:6px 12px;border-top:1px 
     <label class="lbl" for="gateName">Your name</label>
     <input id="gateName" class="in" placeholder="e.g. Avishkar" maxlength="24" autocomplete="nickname">
 
-    <label class="lbl" for="relayInput">Sync server</label>
-    <input id="relayInput" class="in" placeholder="textshare-sync.you.workers.dev" spellcheck="false" autocapitalize="off">
-    <p class="hint">Deploy <code>worker/</code> with <code>npx wrangler deploy</code> and paste the URL it prints.</p>
+    <div id="relayRow" hidden>
+      <label class="lbl" for="relayInput">Sync server</label>
+      <input id="relayInput" class="in" spellcheck="false" autocapitalize="off">
+    </div>
 
     <div style="margin-top:18px"><button id="createRoom" class="btn primary" style="width:100%;height:40px">Create a room</button></div>
 
@@ -110,6 +112,7 @@ footer{display:flex;align-items:center;gap:10px;padding:6px 12px;border-top:1px 
       <button class="btn" type="submit" id="joinBtn" style="height:38px;padding:0 16px">Join</button>
     </form>
     <p class="sub" id="gateErr" style="margin-top:12px" hidden></p>
+    <p class="hint">Syncing via <span id="relayName"></span> <button type="button" id="relayToggle" class="lnk">change</button></p>
   </div>
 </div>
 
@@ -182,6 +185,9 @@ import { Awareness, encodeAwarenessUpdate, applyAwarenessUpdate, removeAwareness
 import * as enc from 'lib0/encoding'
 import * as dec from 'lib0/decoding'
 
+/* The deployed relay. Override per-device in Settings, or per-link with ?relay= */
+const DEFAULT_RELAY = 'textshare-sync.avishkarkedar.workers.dev'
+
 const $ = id => document.getElementById(id)
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v } catch (e) { return d } },
@@ -211,7 +217,7 @@ const VIEW_ONLY = QS.get('view') === '1'
 function cleanHost(v) {
   return (v || '').trim().replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/+$/, '')
 }
-function relayHost() { return cleanHost(QS.get('relay') || LS.get('ts.relay', '')) }
+function relayHost() { return cleanHost(QS.get('relay') || LS.get('ts.relay', '') || DEFAULT_RELAY) }
 async function roomInfo(host, code) {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), 8000)
@@ -328,8 +334,10 @@ const gate = $('gate'), gateErr = $('gateErr')
 const showErr = m => { gateErr.textContent = m || ''; gateErr.hidden = !m }
 
 $('gateName').value = LS.get('ts.name', '')
-$('relayInput').value = LS.get('ts.relay', '')
-if (QS.get('relay')) { LS.set('ts.relay', cleanHost(QS.get('relay'))); $('relayInput').value = cleanHost(QS.get('relay')) }
+$('relayInput').value = relayHost()
+$('relayName').textContent = relayHost()
+$('relayToggle').onclick = () => { $('relayRow').hidden = !$('relayRow').hidden; if (!$('relayRow').hidden) $('relayInput').focus() }
+if (QS.get('relay')) LS.set('ts.relay', cleanHost(QS.get('relay')))
 
 const hashCode = norm(location.hash.slice(1))
 if (hashCode.length === LEN) {
@@ -346,23 +354,22 @@ function readName() {
   return n
 }
 function readRelay() {
-  const h = cleanHost($('relayInput').value)
-  if (!h) { showErr('Add your sync server address (the workers.dev URL).'); $('relayInput').focus(); return null }
+  const h = cleanHost($('relayInput').value) || DEFAULT_RELAY
   LS.set('ts.relay', h)
+  $('relayName').textContent = h
   return h
 }
 
 $('createRoom').onclick = () => {
   showErr('')
   const n = readName(); if (!n) return
-  const h = readRelay(); if (!h) return
-  start(newCode(), h, n, true)
+  start(newCode(), readRelay(), n, true)
 }
 
 $('joinForm').onsubmit = async e => {
   e.preventDefault(); showErr('')
   const n = readName(); if (!n) return
-  const h = readRelay(); if (!h) return
+  const h = readRelay()
   const code = norm($('joinCode').value)
   if (code.length !== LEN) return showErr('Room codes are 6 characters, like K7Q2XM.')
   const btn = $('joinBtn'); btn.disabled = true; btn.textContent = 'Checking...'
@@ -374,15 +381,16 @@ $('joinForm').onsubmit = async e => {
     }
     start(code, h, n, false)
   } catch (err) {
-    showErr('Cannot reach the sync server at ' + h + '. Check the address, and make sure the Worker is deployed.')
+    showErr('Cannot reach the sync server at ' + h + '. Check your connection and try again.')
   } finally { btn.disabled = false; btn.textContent = 'Join' }
 }
 
-// Straight in when we already know the person and the room.
-const savedName = LS.get('ts.name', ''), savedRelay = relayHost()
-if (hashCode.length === LEN && savedName && savedRelay) {
-  roomInfo(savedRelay, hashCode)
-    .then(info => { if (info.exists) start(hashCode, savedRelay, savedName, false) })
+// Known person, known room: skip the gate entirely.
+const savedName = LS.get('ts.name', '')
+if (hashCode.length === LEN && savedName) {
+  const h = relayHost()
+  roomInfo(h, hashCode)
+    .then(info => { if (info.exists) start(hashCode, h, savedName, false) })
     .catch(() => {})
 }
 
@@ -415,7 +423,6 @@ function start(CODE, HOST, NAME, create) {
 
   if (VIEW_ONLY) { ta.readOnly = true; $('roBadge').hidden = false; $('clearAll').hidden = true; $('ph').textContent = 'Waiting for the room to fill in...' }
 
-  /* toast + banner */
   let toastT
   function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1900) }
   function banner(msg, actions) {
@@ -431,7 +438,6 @@ function start(CODE, HOST, NAME, create) {
     bannerEl.hidden = false
   }
 
-  /* metrics */
   let CW = 8.4, LH = 22
   function metrics() {
     const p = document.createElement('span')
@@ -444,7 +450,6 @@ function start(CODE, HOST, NAME, create) {
     LH = parseFloat(getComputedStyle(hl).lineHeight) || 22
   }
 
-  /* painting */
   let lastLines = -1
   function paint() {
     const txt = ta.value, lang = langSel.value, re = RE[lang]
@@ -482,7 +487,6 @@ function start(CODE, HOST, NAME, create) {
     drawCursors()
   }
 
-  /* cursors */
   const relPos = off => Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(ytext, off))
   function absPos(j) {
     try {
@@ -516,7 +520,6 @@ function start(CODE, HOST, NAME, create) {
     cursors.style.transform = 'translate(' + (-ta.scrollLeft) + 'px,' + (-ta.scrollTop) + 'px)'
   }
 
-  /* presence */
   function renderPeople() {
     const list = []
     aw.getStates().forEach((st, id) => { if (st.user) list.push({ id, name: st.user.name, color: st.user.color, view: st.user.view, typing: !!st.typing }) })
@@ -546,7 +549,6 @@ function start(CODE, HOST, NAME, create) {
     typingT = setTimeout(() => aw.setLocalStateField('typing', false), 1400)
   }
 
-  /* text sync */
   function localEdit() {
     const cur = ytext.toString(), next = ta.value
     if (cur === next) return
@@ -559,6 +561,12 @@ function start(CODE, HOST, NAME, create) {
       if (cur.length - s - e > 0) ytext.delete(s, cur.length - s - e)
       if (next.length - s - e > 0) ytext.insert(s, next.slice(s, next.length - e))
     }, 'local')
+  }
+
+  let draftT
+  function saveDraft() {
+    clearTimeout(draftT)
+    draftT = setTimeout(() => { const v = ytext.toString(); if (v) LS.set(DRAFT, v); else LS.del(DRAFT) }, 800)
   }
 
   ytext.observe(ev => {
@@ -586,9 +594,9 @@ function start(CODE, HOST, NAME, create) {
     if (l && l !== langSel.value) { langSel.value = l; paint() }
   })
 
+  const pushSel = () => aw.setLocalStateField('sel', { a: relPos(ta.selectionStart), b: relPos(ta.selectionEnd) })
   ta.addEventListener('input', () => { localEdit(); markTyping(); paint(); pushSel() })
   ta.addEventListener('scroll', syncScroll)
-  const pushSel = () => aw.setLocalStateField('sel', { a: relPos(ta.selectionStart), b: relPos(ta.selectionEnd) })
   ;['keyup', 'click', 'select', 'focus'].forEach(ev => ta.addEventListener(ev, pushSel))
 
   ta.addEventListener('keydown', e => {
@@ -609,9 +617,7 @@ function start(CODE, HOST, NAME, create) {
       } else {
         const ls = v.lastIndexOf('\n', s - 1) + 1
         const block = v.slice(ls, en)
-        const shifted = e.shiftKey
-          ? block.replace(/^ {1,2}/gm, '')
-          : block.replace(/^/gm, '  ')
+        const shifted = e.shiftKey ? block.replace(/^ {1,2}/gm, '') : block.replace(/^/gm, '  ')
         ta.value = v.slice(0, ls) + shifted + v.slice(en)
         ta.setSelectionRange(ls, ls + shifted.length)
       }
@@ -619,14 +625,6 @@ function start(CODE, HOST, NAME, create) {
     }
   })
 
-  /* local draft */
-  let draftT
-  function saveDraft() {
-    clearTimeout(draftT)
-    draftT = setTimeout(() => { const v = ytext.toString(); if (v) LS.set(DRAFT, v); else LS.del(DRAFT) }, 800)
-  }
-
-  /* header actions */
   const link = () => location.origin + location.pathname + '#' + CODE
   const viewLink = () => location.origin + location.pathname + '?view=1#' + CODE
   async function copy(text, msg) {
@@ -639,7 +637,8 @@ function start(CODE, HOST, NAME, create) {
     }
   }
   function download() {
-    const ext = (LANGS.find(l => l[0] === langSel.value) || [, , 'txt'])[2]
+    const row = LANGS.find(l => l[0] === langSel.value)
+    const ext = row ? row[2] : 'txt'
     const blob = new Blob([ta.value], { type: 'text/plain' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
@@ -673,7 +672,6 @@ function start(CODE, HOST, NAME, create) {
   }
   langSel.onchange = () => { ymeta.set('lang', langSel.value); paint() }
 
-  /* connection status */
   function status() {
     const dot = $('dot'), txt = $('connText')
     const peers = aw.getStates().size - 1
@@ -691,7 +689,7 @@ function start(CODE, HOST, NAME, create) {
 
   setTimeout(() => {
     if (!provider.connected) {
-      banner('Cannot reach the sync server at ' + HOST + '. Check that the Worker is deployed and the address is right.', [['Settings', () => { $('panel').hidden = false }]])
+      banner('Cannot reach the sync server at ' + HOST + '. Check your connection.', [['Settings', () => { $('panel').hidden = false }]])
     }
   }, 9000)
 
@@ -705,7 +703,6 @@ function start(CODE, HOST, NAME, create) {
     }
   }, 2600)
 
-  /* boot */
   metrics()
   addEventListener('resize', () => { metrics(); drawCursors() })
   ta.value = ytext.toString()
