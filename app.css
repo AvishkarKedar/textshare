@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------
-   textshare - vanta black, hairline borders, monospace chrome.
+   anonshare - vanta black, hairline borders, monospace chrome.
    Sharp corners everywhere. The only round thing is a person.
 ------------------------------------------------------------------ */
 
@@ -79,6 +79,17 @@ select.in{-webkit-appearance:none;appearance:none;font-family:var(--mono);font-s
   text-transform:uppercase;color:var(--mut);
 }
 .sec.danger{color:var(--danger)}
+
+/* password field with a reveal toggle */
+.passrow{display:flex;align-items:stretch}
+.passrow .in{flex:1;min-width:0}
+.eye{
+  flex:none;padding:0 10px;border:1px solid var(--line2);border-left:0;
+  background:var(--raise);color:var(--mut);
+  font:10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;
+}
+.eye:hover{color:var(--fg)}
+.eye[aria-pressed=true]{color:var(--accent)}
 
 /* ============================================================== gate */
 #gate{
@@ -168,9 +179,10 @@ select.in{-webkit-appearance:none;appearance:none;font-family:var(--mono);font-s
 }
 .bad{border-color:var(--danger)!important;box-shadow:inset 0 0 0 1px var(--danger)!important}
 
-/* ============================================================= modal */
-#modal{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:22px;background:rgba(0,0,0,.72);backdrop-filter:blur(3px)}
-[data-theme=light] #modal{background:rgba(255,255,255,.75)}
+/* ====================================================== modal & dialog */
+#modal,#ask{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:22px;background:rgba(0,0,0,.72);backdrop-filter:blur(3px)}
+#ask{z-index:59}
+[data-theme=light] #modal,[data-theme=light] #ask{background:rgba(255,255,255,.75)}
 .sheet{
   width:100%;max-width:340px;background:var(--raise);
   border:1px solid var(--line2);padding:22px;
@@ -184,6 +196,7 @@ select.in{-webkit-appearance:none;appearance:none;font-family:var(--mono);font-s
 .addpass{display:inline-block;margin-top:14px}
 .mrow{display:flex;gap:8px;margin-top:20px}
 .mrow .btn{height:36px}
+#ask .in{margin-top:14px}
 
 /* ====================================================== boot overlay */
 #boot{position:fixed;inset:0;z-index:55;display:grid;place-items:center;background:var(--bg)}
@@ -327,6 +340,7 @@ aside{width:300px;flex:none;background:var(--panel);border-left:1px solid var(--
 .msg .when{color:var(--dim);font:10px/1 var(--mono);margin-left:6px}
 .msg .body{white-space:pre-wrap;word-break:break-word;font-size:12.5px;margin-top:3px}
 .msg .body .mention{color:var(--accent);font-weight:600}
+.msg.hit{border-left:2px solid var(--accent);padding-left:8px}
 .msg.sys{color:var(--mut);font:11px/1.5 var(--mono)}
 #chatForm{flex:none;padding-top:8px;border-top:1px solid var(--line)}
 
