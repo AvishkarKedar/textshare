@@ -4,21 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 
-<title>textshare - live end-to-end encrypted text &amp; code</title>
+<title>anonshare - live end-to-end encrypted text &amp; code</title>
 <meta name="description" content="Share text and code live with anyone in the world. End-to-end encrypted in your browser, 6-character room codes, no account, erased when everyone leaves.">
 <meta name="theme-color" content="#000000">
 <link rel="canonical" href="https://tx.avishkark.in/">
 
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="textshare">
-<meta property="og:title" content="textshare - live end-to-end encrypted text &amp; code">
+<meta property="og:site_name" content="anonshare">
+<meta property="og:title" content="anonshare - live end-to-end encrypted text &amp; code">
 <meta property="og:description" content="Open a room, share six characters, write together. Encrypted in your browser. No account. Erased when everyone leaves.">
 <meta property="og:url" content="https://tx.avishkark.in/">
 <meta property="og:image" content="https://tx.avishkark.in/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="textshare - live end-to-end encrypted text &amp; code">
+<meta name="twitter:title" content="anonshare - live end-to-end encrypted text &amp; code">
 <meta name="twitter:description" content="Open a room, share six characters, write together. Encrypted in your browser.">
 <meta name="twitter:image" content="https://tx.avishkark.in/og.png">
 
@@ -35,7 +35,7 @@
 
   <div class="hero">
     <div class="gwrap">
-      <div class="logo"><span class="caret">&gt;</span> textshare</div>
+      <div class="logo"><span class="caret">&gt;</span> anonshare</div>
       <h1 class="htitle">Write together, in the open, with nothing stored.</h1>
       <p class="tag">A room is six characters. Everything in it is encrypted in your browser before it leaves. When the last person goes, it is erased.</p>
 
@@ -52,7 +52,7 @@
       <p class="errline" id="gErr" hidden role="alert"></p>
     </div>
 
-    <!-- the product demonstrating itself, driven by app.js -->
+    <!-- the product demonstrating itself, driven by demo.js -->
     <div class="demoWrap" aria-hidden="true">
       <div class="demoBar">
         <span class="dcode">DEMO01</span>
@@ -86,7 +86,7 @@
 
   <footer id="siteFoot">
     <div class="fcol">
-      <b>textshare</b>
+      <b>anonshare</b>
       <p>A live, end-to-end encrypted scratchpad for text and code.</p>
       <p class="by">Built by <a href="https://avishkark.in" target="_blank" rel="noopener">Avishkar Kedar</a></p>
     </div>
@@ -102,8 +102,8 @@
     <div class="fcol">
       <b>Relay</b>
       <p class="relayLine"><span id="relayDot" class="rdot"></span> <span id="gRelayName"></span></p>
-      <button type="button" id="gRelayToggle" class="lnk">use a different relay</button>
-      <input id="gRelayInput" class="in mono-in" spellcheck="false" autocapitalize="off" hidden>
+      <button type="button" id="gRelayToggle" class="lnk" aria-expanded="false">use a different relay</button>
+      <input id="gRelayInput" class="in mono-in" spellcheck="false" autocapitalize="off" aria-label="Relay hostname" hidden>
       <p class="fineprint" id="verStamp"></p>
     </div>
   </footer>
@@ -112,7 +112,7 @@
 <!-- ============================================================ step two -->
 <div id="modal" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
-    <div class="lockmark" id="mLock" hidden>&#128274;</div>
+    <div class="lockmark" id="mLock" hidden aria-hidden="true">&#128274;</div>
     <h2 id="mTitle">Join room</h2>
     <p class="msub" id="mSub"></p>
 
@@ -121,7 +121,11 @@
 
     <div id="mPassWrap" hidden>
       <label class="lbl" for="mPass"><span id="mPassLbl">Password</span></label>
-      <input id="mPass" class="in" type="password" autocomplete="off" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
+      <div class="passrow">
+        <input id="mPass" class="in" type="password" autocomplete="off" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
+        <button type="button" id="mPassEye" class="eye" aria-label="Show password" aria-pressed="false">show</button>
+      </div>
+      <p class="fineprint" id="mPassHint" hidden></p>
     </div>
 
     <button type="button" id="mAddPass" class="lnk addpass" hidden>+ protect this room with a password</button>
@@ -144,11 +148,25 @@
   </div>
 </div>
 
+<!-- ====================================== in-app confirm / prompt dialog -->
+<div id="ask" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="askTitle">
+    <h2 id="askTitle"></h2>
+    <p class="msub" id="askBody"></p>
+    <input id="askIn" class="in" maxlength="60" autocomplete="off" hidden>
+    <p class="errline" id="askErr" hidden role="alert"></p>
+    <div class="mrow">
+      <button id="askNo" class="btn">Cancel</button>
+      <button id="askYes" class="btn primary grow">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============================================================== boot -->
 <div id="boot" hidden>
   <div class="bootIn">
     <div class="spin"></div>
-    <p id="bootMsg">Deriving your key</p>
+    <p id="bootMsg" role="status">Deriving your key</p>
     <p class="fineprint">This happens in your browser and never leaves it.</p>
   </div>
 </div>
@@ -156,59 +174,60 @@
 <!-- =============================================================== app -->
 <main id="app" hidden>
   <header id="topbar">
-    <span class="logo sm hideS"><span class="caret">&gt;</span></span>
+    <span class="logo sm hideS" aria-hidden="true"><span class="caret">&gt;</span></span>
     <button id="roomChip" class="chip" title="Copy room code">
-      <span id="roomCode">------</span><span id="lockIcon" hidden>&#128274;</span>
+      <span id="roomCode">------</span><span id="lockIcon" hidden aria-label="Password protected">&#128274;</span>
     </button>
     <button class="btn hideS" id="copyLink">Invite</button>
     <span class="grow"></span>
 
-    <div class="stack" id="people"></div>
+    <div class="stack" id="people" aria-label="People in this room"></div>
 
     <select id="lang" class="btn sel" title="Language" aria-label="Language"></select>
-    <button class="btn ico" id="undoBtn" title="Undo">&#8630;</button>
-    <button class="btn ico" id="redoBtn" title="Redo">&#8631;</button>
-    <button class="btn ico" id="chatBtn" title="Chat">&#9647;<span class="nd" id="chatDot" hidden></span></button>
-    <button class="btn ico" id="moreBtn" title="More">&#8943;</button>
+    <button class="btn ico" id="undoBtn" title="Undo" aria-label="Undo">&#8630;</button>
+    <button class="btn ico" id="redoBtn" title="Redo" aria-label="Redo">&#8631;</button>
+    <button class="btn ico" id="chatBtn" title="Chat" aria-label="Chat">&#9647;<span class="nd" id="chatDot" hidden></span></button>
+    <button class="btn ico" id="moreBtn" title="More" aria-label="More" aria-haspopup="true" aria-expanded="false">&#8943;</button>
 
-    <div id="menu" hidden>
-      <button data-a="palette">Command palette <kbd>Ctrl K</kbd></button>
+    <div id="menu" role="menu" hidden>
+      <button data-a="palette" role="menuitem">Command palette <kbd>Ctrl K</kbd></button>
+      <button data-a="find" role="menuitem">Find and replace <kbd>Ctrl F</kbd></button>
       <div class="msep"></div>
-      <button data-a="newfile">New file</button>
-      <button data-a="rename">Rename file</button>
-      <button data-a="download">Download file</button>
-      <button data-a="exportzip">Export all files</button>
+      <button data-a="newfile" role="menuitem">New file</button>
+      <button data-a="rename" role="menuitem">Rename file</button>
+      <button data-a="download" role="menuitem">Download file</button>
+      <button data-a="exportzip" role="menuitem">Export all files</button>
       <div class="msep"></div>
-      <button data-a="invite">Copy invite link</button>
-      <button data-a="viewlink">Copy view-only link</button>
+      <button data-a="invite" role="menuitem">Copy invite link</button>
+      <button data-a="viewlink" role="menuitem">Copy view-only link</button>
       <div class="msep"></div>
-      <button data-a="theme">Theme: <span id="themeVal">system</span></button>
-      <button data-a="settings">Settings</button>
-      <button data-a="leave">Leave room</button>
+      <button data-a="theme" role="menuitem">Theme: <span id="themeVal">system</span></button>
+      <button data-a="settings" role="menuitem">Settings</button>
+      <button data-a="leave" role="menuitem">Leave room</button>
     </div>
   </header>
 
-  <div id="banner" hidden></div>
+  <div id="banner" role="status" hidden></div>
 
-  <nav id="tabbar">
+  <nav id="tabbar" aria-label="Files">
     <div id="tabs"></div>
-    <button class="btn ico flat" id="newFile" title="New file">+</button>
+    <button class="btn ico flat" id="newFile" title="New file" aria-label="New file">+</button>
   </nav>
 
   <div id="stage">
     <div id="editorWrap">
       <div id="editor"></div>
-      <div id="overlay"></div>
-      <div id="jump" hidden></div>
+      <div id="overlay" aria-hidden="true"></div>
+      <button id="jump" hidden></button>
     </div>
 
-    <aside id="chat" hidden>
+    <aside id="chat" hidden aria-label="Room chat">
       <div class="phead"><span>Chat</span><button class="btn ico flat" id="chatClose" aria-label="Close chat">&times;</button></div>
-      <div id="chatList"></div>
-      <form id="chatForm"><input id="chatInput" class="in" placeholder="Message the room" maxlength="500" autocomplete="off"></form>
+      <div id="chatList" role="log" aria-live="polite"></div>
+      <form id="chatForm"><input id="chatInput" class="in" placeholder="Message the room" maxlength="500" autocomplete="off" aria-label="Message the room"></form>
     </aside>
 
-    <aside id="panel" hidden>
+    <aside id="panel" hidden aria-label="Settings">
       <div class="phead"><span>Settings</span><button class="btn ico flat" id="panelClose" aria-label="Close settings">&times;</button></div>
 
       <div class="sec">In this room</div>
@@ -217,8 +236,8 @@
       <div class="sec">You</div>
       <label class="lbl" for="nameInput">Display name</label>
       <input id="nameInput" class="in" maxlength="24">
-      <label class="lbl">Your colour</label>
-      <div id="swatches"></div>
+      <label class="lbl" for="swatches">Your colour</label>
+      <div id="swatches" role="radiogroup" aria-label="Your colour"></div>
       <label class="lbl" for="sigInput">Relay</label>
       <input id="sigInput" class="in mono-in" spellcheck="false" autocapitalize="off">
       <div class="mrow"><button class="btn primary" id="saveSettings">Save</button></div>
@@ -242,10 +261,10 @@
   </div>
 
   <footer id="statusbar">
-    <span id="dot"></span><span id="connText">connecting</span>
-    <span class="sep"></span>
+    <span id="dot" aria-hidden="true"></span><span id="connText">connecting</span>
+    <span class="sep" aria-hidden="true"></span>
     <span id="userCount">1 online</span>
-    <span class="sep"></span>
+    <span class="sep" aria-hidden="true"></span>
     <span id="encBadge" title="End-to-end encrypted in your browser">e2e</span>
     <span class="pill" id="offlineBadge" hidden>offline</span>
     <span class="pill" id="roBadge" hidden>view only</span>
@@ -255,7 +274,7 @@
     <span id="counts"></span>
   </footer>
 
-  <nav id="mbar">
+  <nav id="mbar" aria-label="Actions">
     <button data-a="files">files</button>
     <button data-a="chat">chat</button>
     <button data-a="undo">undo</button>
@@ -268,12 +287,12 @@
 <div id="pal" hidden>
   <div class="palBox" role="dialog" aria-modal="true" aria-label="Command palette">
     <input id="palInput" class="palIn" placeholder="Type a command" autocomplete="off" spellcheck="false">
-    <div id="palList"></div>
+    <div id="palList" role="listbox"></div>
   </div>
 </div>
 
-<div id="toast" role="status"></div>
-<noscript><p style="color:#e7e7e7;font-family:monospace;padding:24px">textshare encrypts in the browser, so it needs JavaScript enabled.</p></noscript>
+<div id="toast" role="status" aria-live="polite"></div>
+<noscript><p style="color:#e7e7e7;font-family:monospace;padding:24px">anonshare encrypts in the browser, so it needs JavaScript enabled.</p></noscript>
 
 <script type="importmap">
 {"imports":{
