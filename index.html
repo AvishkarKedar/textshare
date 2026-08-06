@@ -1,117 +1,159 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>textshare - live, encrypted text &amp; code sharing</title>
+<title>textshare - live encrypted text &amp; code</title>
 <meta name="description" content="Share text and code live with anyone in the world. End-to-end encrypted, 6-character room codes, no account.">
-<meta name="theme-color" content="#191919">
+<meta name="theme-color" content="#000000">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#128221;</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22black%22/><text x=%2250%22 y=%2256%22 font-size=%2264%22 font-family=%22monospace%22 fill=%22%234c8dff%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22>&gt;</text></svg>">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 
-<div id="gate">
-  <div class="card">
-    <div id="invited" class="chip" hidden></div>
-    <h1 class="wm">textshare</h1>
-    <p class="sub" id="gateSub">Live text and code sharing, end-to-end encrypted. No account needed.</p>
+<!-- ---------------------------------------------------------- step one -->
+<section id="gate">
+  <div class="gwrap">
+    <div class="logo"><span class="caret">&gt;</span> textshare</div>
+    <p class="tag">Live, end-to-end encrypted text and code. No account.</p>
 
-    <label class="lbl" for="gateName">Your name</label>
-    <input id="gateName" class="in" placeholder="e.g. Avishkar" maxlength="24" autocomplete="nickname">
+    <button id="gCreate" class="btn primary block">Create a room</button>
 
-    <div id="passRow">
-      <label class="lbl" for="gatePass">Password <span class="dim" id="passHint">(optional)</span></label>
-      <input id="gatePass" class="in" type="password" placeholder="Leave empty for none" autocomplete="off">
-    </div>
+    <div class="rule"><span>or join with a code</span></div>
 
-    <div id="relayRow" hidden>
-      <label class="lbl" for="relayInput">Sync server</label>
-      <input id="relayInput" class="in" spellcheck="false" autocapitalize="off">
-    </div>
-
-    <button id="createRoom" class="btn primary big">Create a room</button>
-
-    <div class="or">or join one</div>
-    <form id="joinForm">
-      <input id="joinCode" class="in mono" placeholder="ABC123" maxlength="6" spellcheck="false" autocapitalize="characters">
-      <button class="btn" type="submit" id="joinBtn">Join</button>
+    <form id="gJoin" class="codebox">
+      <input id="gCode" class="code-in" placeholder="ABC123" maxlength="6" spellcheck="false"
+             autocapitalize="characters" autocomplete="off" inputmode="text" aria-label="Room code">
+      <button id="gGo" class="btn go" type="submit" aria-label="Join">&#8594;</button>
     </form>
 
-    <p class="err" id="gateErr" hidden></p>
-    <p class="hint">Rooms are erased 10 minutes after everyone leaves. Syncing via <span id="relayName"></span> <button type="button" id="relayToggle" class="lnk">change</button></p>
+    <p class="errline" id="gErr" hidden></p>
+
+    <div class="gfoot">
+      <span class="k">relay</span>
+      <span id="gRelayName" class="v"></span>
+      <button type="button" id="gRelayToggle" class="lnk">change</button>
+      <input id="gRelayInput" class="in mono-in" spellcheck="false" autocapitalize="off" hidden>
+    </div>
+    <p class="fineprint">Rooms are erased 10 minutes after everyone leaves.</p>
+  </div>
+</section>
+
+<!-- ---------------------------------------------------------- step two -->
+<div id="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="lockmark" id="mLock" hidden>&#128274;</div>
+    <h2 id="mTitle">Join room</h2>
+    <p class="msub" id="mSub"></p>
+
+    <label class="lbl" for="mName">Display name</label>
+    <input id="mName" class="in" maxlength="24" placeholder="So others know who joined" autocomplete="nickname">
+
+    <div id="mPassWrap" hidden>
+      <label class="lbl" for="mPass"><span id="mPassLbl">Password</span></label>
+      <input id="mPass" class="in" type="password" autocomplete="off" placeholder="••••••••">
+    </div>
+
+    <button type="button" id="mAddPass" class="lnk addpass" hidden>+ protect this room with a password</button>
+
+    <p class="errline" id="mErr" hidden></p>
+
+    <div class="mrow">
+      <button id="mBack" class="btn">Back</button>
+      <button id="mGo" class="btn primary grow">Continue</button>
+    </div>
   </div>
 </div>
 
-<div id="app" hidden>
-  <header>
-    <span class="brand hideM">textshare</span>
-    <span id="roomCode" title="Click to copy">------</span>
-    <span id="lockIcon" title="Password protected" hidden>&#128274;</span>
-    <button class="btn hideS" id="copyCode">Copy code</button>
-    <button class="btn hideS" id="copyLink">Invite link</button>
+<!-- ------------------------------------------------------------- app -->
+<main id="app" hidden>
+  <header id="topbar">
+    <span class="logo sm hideS"><span class="caret">&gt;</span></span>
+    <button id="roomChip" class="chip" title="Copy room code">
+      <span id="roomCode">------</span><span id="lockIcon" hidden>&#128274;</span>
+    </button>
+    <button class="btn hideS" id="copyLink">Invite</button>
     <span class="grow"></span>
-    <div class="people" id="people" title="Click someone to follow their cursor"></div>
-    <select id="lang" class="btn sel"></select>
+
+    <div class="stack" id="people"></div>
+
+    <select id="lang" class="btn sel" title="Language"></select>
     <button class="btn ico" id="undoBtn" title="Undo">&#8630;</button>
     <button class="btn ico" id="redoBtn" title="Redo">&#8631;</button>
-    <button class="btn ico" id="chatBtn" title="Chat">&#128172;<span class="dotb" id="chatDot" hidden></span></button>
-    <button class="btn ico hideM" id="download" title="Download">&#8595;</button>
-    <button class="btn ico" id="themeBtn" title="Theme">&#9788;</button>
-    <button class="btn ico" id="gear" title="Settings">&#9881;</button>
+    <button class="btn ico" id="chatBtn" title="Chat">&#9647;<span class="nd" id="chatDot" hidden></span></button>
+    <button class="btn ico" id="moreBtn" title="More">&#8943;</button>
+
+    <div id="menu" hidden>
+      <button data-a="newfile">New file</button>
+      <button data-a="rename">Rename file</button>
+      <button data-a="download">Download file</button>
+      <div class="msep"></div>
+      <button data-a="invite">Copy invite link</button>
+      <button data-a="viewlink">Copy view-only link</button>
+      <div class="msep"></div>
+      <button data-a="theme">Theme: <span id="themeVal">system</span></button>
+      <button data-a="settings">Settings</button>
+    </div>
   </header>
 
   <div id="banner" hidden></div>
 
-  <div id="tabbar">
+  <nav id="tabbar">
     <div id="tabs"></div>
-    <button class="btn ico" id="newFile" title="New file">+</button>
-  </div>
+    <button class="btn ico flat" id="newFile" title="New file">+</button>
+  </nav>
 
-  <div id="wrap">
-    <div id="editor"></div>
+  <div id="stage">
+    <div id="editorWrap">
+      <div id="editor"></div>
+      <div id="overlay"></div>
+    </div>
 
     <aside id="chat" hidden>
-      <div class="phead">Chat <button class="btn ico" id="chatClose">&times;</button></div>
+      <div class="phead"><span>Chat</span><button class="btn ico flat" id="chatClose">&times;</button></div>
       <div id="chatList"></div>
-      <form id="chatForm">
-        <input id="chatInput" class="in" placeholder="Message the room" maxlength="500" autocomplete="off">
-      </form>
+      <form id="chatForm"><input id="chatInput" class="in" placeholder="Message the room" maxlength="500" autocomplete="off"></form>
     </aside>
 
     <aside id="panel" hidden>
-      <div class="phead">Settings <button class="btn ico" id="panelClose">&times;</button></div>
-      <strong class="sec">In this room</strong>
+      <div class="phead"><span>Settings</span><button class="btn ico flat" id="panelClose">&times;</button></div>
+      <div class="sec">In this room</div>
       <div id="roster"></div>
-      <label class="lbl" for="nameInput">Your name</label>
+      <label class="lbl" for="nameInput">Display name</label>
       <input id="nameInput" class="in" maxlength="24">
-      <label class="lbl" for="sigInput">Sync server</label>
-      <input id="sigInput" class="in" spellcheck="false" autocapitalize="off">
-      <div class="prow">
-        <button class="btn primary" id="saveSettings">Save</button>
-        <button class="btn" id="copyViewLink">Copy view-only link</button>
-      </div>
-      <strong class="sec">This device</strong>
-      <p class="hint">An offline copy of this room is kept on this device so you can keep editing without a connection.</p>
+      <label class="lbl" for="sigInput">Relay</label>
+      <input id="sigInput" class="in mono-in" spellcheck="false" autocapitalize="off">
+      <div class="mrow"><button class="btn primary" id="saveSettings">Save</button></div>
+      <div class="sec">This device</div>
+      <p class="fineprint">An offline copy of this room lives in this browser so you can keep working without a connection.</p>
       <button class="btn danger" id="forgetRoom">Delete offline copy</button>
-      <strong class="sec">Privacy</strong>
-      <p class="hint" id="privacyNote"></p>
+      <div class="sec">Privacy</div>
+      <p class="fineprint" id="privacyNote"></p>
     </aside>
   </div>
 
-  <footer>
-    <span id="dot"></span><span id="connText">Connecting...</span>
-    <span class="badge" id="userCount">1 online</span>
-    <span class="badge" id="encBadge" title="End-to-end encrypted">&#128274; E2E</span>
-    <span class="badge" id="offlineBadge" hidden>Offline</span>
-    <span class="badge" id="roBadge" hidden>View only</span>
-    <span class="badge follow" id="followBadge" hidden></span>
-    <span id="typing"></span>
+  <footer id="statusbar">
+    <span id="dot"></span><span id="connText">connecting</span>
+    <span class="sep"></span>
+    <span id="userCount">1 online</span>
+    <span class="sep"></span>
+    <span id="encBadge" title="End-to-end encrypted">e2e</span>
+    <span class="pill" id="offlineBadge" hidden>offline</span>
+    <span class="pill" id="roBadge" hidden>view only</span>
+    <button class="pill act" id="followBadge" hidden></button>
     <span class="grow"></span>
     <span id="counts"></span>
   </footer>
-</div>
+
+  <nav id="mbar">
+    <button data-a="files">files</button>
+    <button data-a="chat">chat</button>
+    <button data-a="undo">undo</button>
+    <button data-a="redo">redo</button>
+    <button data-a="more">more</button>
+  </nav>
+</main>
 
 <div id="toast"></div>
 
@@ -128,8 +170,7 @@
 "@codemirror/search":"https://esm.sh/@codemirror/search@6.5.8?external=@codemirror/state,@codemirror/view",
 "@codemirror/autocomplete":"https://esm.sh/@codemirror/autocomplete@6.18.3?external=@codemirror/state,@codemirror/view,@codemirror/language",
 "@codemirror/lint":"https://esm.sh/@codemirror/lint@6.8.4?external=@codemirror/state,@codemirror/view",
-"@codemirror/theme-one-dark":"https://esm.sh/@codemirror/theme-one-dark@6.1.2?external=@codemirror/state,@codemirror/view,@codemirror/language",
-"codemirror":"https://esm.sh/codemirror@6.0.1?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/commands,@codemirror/search,@codemirror/autocomplete,@codemirror/lint",
+"@lezer/highlight":"https://esm.sh/@lezer/highlight@1.2.1",
 "@codemirror/lang-javascript":"https://esm.sh/@codemirror/lang-javascript@6.2.2?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete,@codemirror/lint",
 "@codemirror/lang-python":"https://esm.sh/@codemirror/lang-python@6.1.6?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
 "@codemirror/lang-html":"https://esm.sh/@codemirror/lang-html@6.4.9?external=@codemirror/state,@codemirror/view,@codemirror/language,@codemirror/autocomplete",
