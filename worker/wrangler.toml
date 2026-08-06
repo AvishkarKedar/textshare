@@ -1,0 +1,15 @@
+name = "textshare-sync"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+# SQLite-backed Durable Objects are the ones available on the free plan.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+[observability]
+enabled = true
