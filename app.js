@@ -221,7 +221,6 @@ const b64 = u8 => {
   for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i])
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
-const sha = async s => b64(new Uint8Array(await crypto.subtle.digest('SHA-256', TE.encode(String(s)))))
 const randToken = () => b64(crypto.getRandomValues(new Uint8Array(32)))
 
 /**
@@ -231,8 +230,12 @@ const randToken = () => b64(crypto.getRandomValues(new Uint8Array(32)))
  *   auth - proves to the relay that we know the password. Different salt, so
  *          handing it over reveals nothing about the key.
  *
- * The relay stores only SHA-256(auth), so even its own storage does not hold
- * anything replayable.
+ * We send the auth token raw and the relay stores only SHA-256 of it. Hashing
+ * is deliberately the relay's job alone: when both sides hashed, create-time
+ * values got hashed twice and every new room was rejected as unauthenticated.
+ *
+ * The salts still read "textshare". They are cryptographic constants, not
+ * branding - changing them would lock every existing room out of its own data.
  */
 async function derive(code, pass) {
   const base = await crypto.subtle.importKey(
@@ -282,6 +285,9 @@ async function roomInfo(host, code) {
  * over plain HTTP first is the only way to tell "wrong password" apart from
  * "your wifi died". 426 means the token was accepted and it now wants an
  * upgrade, which is exactly what we wanted to hear.
+ *
+ * status 0 means the request never completed at all - that, and only that, is
+ * a genuine connectivity failure.
  */
 async function preflight(host, code, params) {
   const res = await http(host, '/room/' + code + (params ? '?' + params : ''))
@@ -290,6 +296,13 @@ async function preflight(host, code, params) {
   try { body = await res.json() } catch (e) {}
   return { status: res.status, body }
 }
+
+const refused = r => ({
+  ok: false,
+  reason: 'relay',
+  status: r.status,
+  detail: (r.body && r.body.error) || '',
+})
 
 async function admin(host, code, token, action, value) {
   const res = await http(host, '/room/' + code + '/admin', {
@@ -712,6 +725,14 @@ $('mGo').onclick = async () => {
     mErr('Too many requests from your network. Wait a minute and try again.')
   } else if (result.reason === 'crash') {
     mErr('Something went wrong setting up encryption. Reload and try again.')
+  } else if (result.reason === 'collision') {
+    mErr('Could not reserve a free room code. Please try again.')
+  } else if (result.reason === 'relay') {
+    // The relay answered, it just said no. Saying "check your connection"
+    // here sends people to reboot their router over a server-side fault.
+    mErr('The relay refused this request (HTTP ' + result.status +
+      (result.detail ? ', ' + result.detail : '') + ').')
+    shake(sheetOf('modal'))
   } else {
     mErr('Could not reach ' + relayHost() + '. Check your connection.')
   }
@@ -732,18 +753,22 @@ async function createRoom(password, ttl) {
     const { key, auth } = await derive(code, password)
 
     bootMsg('Reserving room ' + code)
+    // Raw tokens. The relay hashes them once, on arrival. Sending pre-hashed
+    // values meant the relay hashed them a second time when authenticating
+    // this same request, so creation always answered 403.
     const p = new URLSearchParams({
       create: '1', excl: '1',
-      a: await sha(auth),
-      o: await sha(ownerToken),
+      a: auth,
+      o: ownerToken,
       ttl: ttl || '10m',
     })
     if (password) p.set('p', '1')
 
     const r = await preflight(host, code, p.toString())
     if (r.status === 409) continue             // taken, pick another
+    if (r.status === 0) return { ok: false, reason: 'network' }
     if (r.status === 429) return { ok: false, reason: 'busy' }
-    if (r.status !== 426) return { ok: false, reason: 'network' }
+    if (r.status !== 426) return refused(r)
 
     LS.set('ts.own.' + code, ownerToken)
     OWNER = ownerToken
@@ -751,7 +776,7 @@ async function createRoom(password, ttl) {
     await enterRoom(code, !!password)
     return { ok: true }
   }
-  return { ok: false, reason: 'network' }
+  return { ok: false, reason: 'collision' }
 }
 
 async function joinRoom(code, password) {
@@ -765,11 +790,12 @@ async function joinRoom(code, password) {
   bootMsg('Checking the password')
   const r = await preflight(host, code, p.toString())
 
+  if (r.status === 0) return { ok: false, reason: 'network' }
   if (r.status === 403) return { ok: false, reason: 'password' }
   if (r.status === 404) return { ok: false, reason: 'gone' }
   if (r.status === 423) return { ok: false, reason: 'suspended' }
   if (r.status === 429) return { ok: false, reason: 'busy' }
-  if (r.status !== 426) return { ok: false, reason: 'network' }
+  if (r.status !== 426) return refused(r)
 
   KEY = key; AUTH = auth
   await enterRoom(code, !!(pending && pending.info && pending.info.hasPassword))
