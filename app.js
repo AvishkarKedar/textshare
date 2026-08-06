@@ -29,6 +29,9 @@ const LS = {
   del(k) { try { localStorage.removeItem(k) } catch (e) {} },
 }
 
+// The relay keeps its deployed hostname. Renaming the app does not rename a
+// running Worker, and pointing at a host that does not exist would break every
+// existing invite link.
 const DEFAULT_RELAY = 'textshare-sync.avishkarkedar.workers.dev'
 const REPO = 'AvishkarKedar/textshare'
 const BUILD = '2026-08-06'
@@ -87,7 +90,77 @@ function shake(el) {
   setTimeout(() => el.classList.remove('shake'), 400)
 }
 
-const sheetEl = () => document.querySelector('.sheet')
+const sheetOf = id => $(id).querySelector('.sheet')
+
+/* ================================================== in-app ask dialog */
+
+/**
+ * Replaces window.confirm and window.prompt.
+ *
+ * Native dialogs are not just ugly here: several in-app browsers suppress
+ * them outright, so "Delete room" would silently do nothing at all.
+ */
+let askResolve = null, askState = null, lastFocus = null
+
+function ask(opts) {
+  return new Promise(resolve => {
+    askResolve = resolve
+    askState = { input: !!opts.input, mustType: opts.mustType || null }
+
+    $('askTitle').textContent = opts.title
+    $('askBody').textContent = opts.body || ''
+    $('askBody').hidden = !opts.body
+
+    const inp = $('askIn')
+    inp.hidden = !opts.input
+    inp.value = opts.value || ''
+    inp.placeholder = opts.placeholder || ''
+    inp.classList.remove('bad')
+
+    $('askErr').hidden = true
+    const yes = $('askYes')
+    yes.textContent = opts.confirmLabel || 'Confirm'
+    yes.className = 'btn grow ' + (opts.danger ? 'danger' : 'primary')
+
+    lastFocus = document.activeElement
+    $('ask').hidden = false
+    setTimeout(() => (opts.input ? inp : yes).focus(), 40)
+  })
+}
+
+function closeAsk(value) {
+  $('ask').hidden = true
+  const r = askResolve
+  askResolve = null
+  askState = null
+  if (lastFocus && lastFocus.focus) { try { lastFocus.focus() } catch (e) {} }
+  if (r) r(value)
+}
+
+function askErr(msg) {
+  $('askErr').textContent = msg
+  $('askErr').hidden = false
+  $('askIn').classList.add('bad')
+  shake(sheetOf('ask'))
+}
+
+$('askNo').onclick = () => closeAsk(null)
+$('askYes').onclick = () => {
+  if (!askState) return
+  if (!askState.input) return closeAsk(true)
+  const v = $('askIn').value.trim()
+  if (!v) return askErr('This cannot be empty.')
+  if (askState.mustType && norm(v) !== askState.mustType) return askErr('That does not match. Nothing has been changed.')
+  closeAsk(v)
+}
+$('askIn').addEventListener('input', () => {
+  $('askIn').classList.remove('bad')
+  $('askErr').hidden = true
+})
+$('askIn').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); $('askYes').click() }
+})
+$('ask').addEventListener('click', e => { if (e.target === $('ask')) closeAsk(null) })
 
 /* ============================================================== theming */
 
@@ -390,9 +463,10 @@ let scrollHandler = null, stopDemo = null
 const known = new Map()
 
 const langComp = new Compartment(), themeComp = new Compartment(), roComp = new Compartment()
-let myColor = safeColor(LS.get('ts.color', '')) === '#4c8dff' && !LS.get('ts.color', '')
-  ? PALETTE[Math.floor(Math.random() * PALETTE.length)]
-  : safeColor(LS.get('ts.color', ''))
+const storedColor = LS.get('ts.color', '')
+let myColor = /^#[0-9a-f]{6}$/i.test(storedColor)
+  ? storedColor
+  : PALETTE[Math.floor(Math.random() * PALETTE.length)]
 let myName = LS.get('ts.name', '')
 
 applyTheme()
@@ -441,6 +515,7 @@ if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
 $('gRelayToggle').onclick = () => {
   const i = $('gRelayInput')
   i.hidden = !i.hidden
+  $('gRelayToggle').setAttribute('aria-expanded', String(!i.hidden))
   if (!i.hidden) i.focus()
 }
 $('gRelayInput').onchange = () => {
@@ -500,6 +575,38 @@ async function tryJoin(code, btn) {
 
 let pending = null
 
+function resetEye() {
+  $('mPass').type = 'password'
+  $('mPassEye').textContent = 'show'
+  $('mPassEye').setAttribute('aria-pressed', 'false')
+  $('mPassEye').setAttribute('aria-label', 'Show password')
+}
+
+$('mPassEye').onclick = () => {
+  const i = $('mPass'), reveal = i.type === 'password'
+  i.type = reveal ? 'text' : 'password'
+  $('mPassEye').textContent = reveal ? 'hide' : 'show'
+  $('mPassEye').setAttribute('aria-pressed', String(reveal))
+  $('mPassEye').setAttribute('aria-label', reveal ? 'Hide password' : 'Show password')
+  i.focus()
+}
+
+// Honest feedback: the room code is public, so the password is the only thing
+// standing between a stranger and an offline guessing run.
+$('mPass').addEventListener('input', () => {
+  $('mPass').classList.remove('bad')
+  const hint = $('mPassHint')
+  if (!pending || pending.mode !== 'create') return hint.hidden = true
+  const v = $('mPass').value
+  if (!v) return hint.hidden = true
+  hint.hidden = false
+  const weak = v.length < 8
+  hint.textContent = weak
+    ? 'Short passwords can be guessed offline. Eight or more characters is much safer.'
+    : 'Strong enough. Without this, nobody can even connect.'
+  hint.style.color = weak ? 'var(--warn)' : 'var(--ok)'
+})
+
 function openModal(mode, code, info) {
   pending = { mode, code: code || null, info: info || null }
   const locked = mode === 'join' && info && info.hasPassword
@@ -520,12 +627,23 @@ function openModal(mode, code, info) {
   $('mTtlRow').hidden = mode !== 'create'
   $('mPass').value = ''
   $('mPass').classList.remove('bad')
+  $('mPassHint').hidden = true
+  resetEye()
   $('mErr').hidden = true
   $('mName').value = myName
   $('mGo').textContent = mode === 'create' ? 'Create room' : 'Join'
+  $('mGo').disabled = false
+  $('mBack').disabled = false
 
+  lastFocus = document.activeElement
   $('modal').hidden = false
   setTimeout(() => (myName && locked ? $('mPass') : $('mName')).focus(), 60)
+}
+
+function closeModal() {
+  $('modal').hidden = true
+  pending = null
+  if (lastFocus && lastFocus.focus) { try { lastFocus.focus() } catch (e) {} }
 }
 
 $('mAddPass').onclick = () => {
@@ -535,7 +653,7 @@ $('mAddPass').onclick = () => {
   $('mPass').focus()
 }
 
-$('mBack').onclick = () => { $('modal').hidden = true; pending = null }
+$('mBack').onclick = () => closeModal()
 $('mName').addEventListener('keydown', e => { if (e.key === 'Enter') $('mGo').click() })
 $('mPass').addEventListener('keydown', e => { if (e.key === 'Enter') $('mGo').click() })
 
@@ -552,7 +670,7 @@ $('mGo').onclick = async () => {
   const pass = $('mPass').value
   if (pending.mode === 'join' && pending.info.hasPassword && !pass) {
     mErr('This room needs a password.')
-    shake(sheetEl())
+    shake(sheetOf('modal'))
     $('mPass').classList.add('bad'); $('mPass').focus()
     return
   }
@@ -563,12 +681,18 @@ $('mGo').onclick = async () => {
   $('modal').hidden = true
   bootMsg('Deriving your key')
 
-  const result = pending.mode === 'create'
-    ? await createRoom(pass, $('mTtl').value)
-    : await joinRoom(pending.code, pass)
+  let result
+  try {
+    result = pending.mode === 'create'
+      ? await createRoom(pass, $('mTtl').value)
+      : await joinRoom(pending.code, pass)
+  } catch (e) {
+    // Without this the boot overlay stays up forever and the user is stranded
+    // on a black screen with no way back to the form.
+    result = { ok: false, reason: 'crash' }
+  }
 
   $('boot').hidden = true
-
   if (result.ok) return
 
   $('modal').hidden = false
@@ -577,7 +701,7 @@ $('mGo').onclick = async () => {
 
   if (result.reason === 'password') {
     mErr('That password is not right for room ' + pending.code + '.')
-    shake(sheetEl())
+    shake(sheetOf('modal'))
     $('mPass').classList.add('bad')
     $('mPass').select()
   } else if (result.reason === 'gone') {
@@ -586,6 +710,8 @@ $('mGo').onclick = async () => {
     mErr('This room has been suspended by its owner.')
   } else if (result.reason === 'busy') {
     mErr('Too many requests from your network. Wait a minute and try again.')
+  } else if (result.reason === 'crash') {
+    mErr('Something went wrong setting up encryption. Reload and try again.')
   } else {
     mErr('Could not reach ' + relayHost() + '. Check your connection.')
   }
@@ -683,7 +809,7 @@ function boot(host) {
   awareness.setLocalStateField('user', { name: myName, color: myColor, view: VIEW_ONLY })
   awareness.setLocalStateField('act', Date.now())
 
-  idb = new IndexeddbPersistence('textshare-' + CODE, ydoc)
+  idb = new IndexeddbPersistence('anonshare-' + CODE, ydoc)
   idb.on('synced', () => { ensureFile(); renderTabs() })
 
   relay = new Relay(host, CODE, ydoc, awareness, KEY, AUTH, OWNER)
@@ -715,6 +841,7 @@ function applyRoomState(s) {
   $('roBadge').hidden = !readOnlyNow()
   if ($('btnLock')) $('btnLock').textContent = roomLocked ? 'Allow everyone to edit again' : 'Make read-only for everyone else'
   if (view) view.dispatch({ effects: roComp.reconfigure(readOnlyExt()) })
+  renderTabs()
 }
 
 function onKilled(reason) {
@@ -766,26 +893,38 @@ function openFile(id) {
   $('lang').value = currentLang()
 }
 
-function closeFile(id) {
+async function closeFile(id) {
   if (readOnlyNow()) return toast('This room is read-only')
   if (ylist.length <= 1) return toast('A room keeps at least one file')
-  if (!confirm('Delete this file for everyone?')) return
+  const f = files().find(x => x.id === id)
+  const ok = await ask({
+    title: 'Delete this file?',
+    body: '"' + ((f && f.name) || 'This file') + '" will disappear for everyone in the room. This cannot be undone.',
+    confirmLabel: 'Delete',
+    danger: true,
+  })
+  if (!ok) return
   ydoc.transact(() => {
-    const i = files().findIndex(f => f.id === id)
+    const i = files().findIndex(x => x.id === id)
     if (i >= 0) ylist.delete(i, 1)
     ytexts.delete(id)
   }, 'local')
   if (activeId === id) openFile(files()[0].id)
 }
 
-function renameFile(id) {
+async function renameFile(id) {
   if (readOnlyNow()) return toast('This room is read-only')
   const f = files().find(x => x.id === id)
   if (!f) return
-  const name = prompt('File name', f.name)
+  const name = await ask({
+    title: 'Rename file',
+    body: 'The extension sets the syntax highlighting.',
+    input: true, value: f.name, placeholder: 'notes.md',
+    confirmLabel: 'Rename',
+  })
   if (!name) return
   ydoc.transact(() => {
-    f.map.set('name', name.trim().slice(0, 40))
+    f.map.set('name', name.slice(0, 40))
     f.map.set('lang', langFromName(name))
   }, 'local')
   $('lang').value = currentLang()
@@ -794,6 +933,7 @@ function renameFile(id) {
 
 function renderTabs() {
   const host = $('tabs')
+  if (!host || !ylist) return
   host.innerHTML = ''
   for (const f of files()) {
     const el = document.createElement('div')
@@ -806,6 +946,7 @@ function renderTabs() {
       const x = document.createElement('span')
       x.className = 'x'
       x.textContent = '\u00d7'
+      x.title = 'Delete file'
       x.onclick = e => { e.stopPropagation(); closeFile(f.id) }
       el.appendChild(x)
     }
@@ -813,10 +954,15 @@ function renderTabs() {
   }
 }
 
-$('newFile').onclick = () => {
+$('newFile').onclick = async () => {
   if (readOnlyNow()) return toast('This room is read-only')
-  const name = prompt('File name', 'notes.md')
-  if (name) openFile(addFile(name.trim().slice(0, 40)))
+  const name = await ask({
+    title: 'New file',
+    body: 'The extension sets the syntax highlighting.',
+    input: true, value: 'notes.md', placeholder: 'notes.md',
+    confirmLabel: 'Create',
+  })
+  if (name) openFile(addFile(name.slice(0, 40)))
 }
 
 /* ====================================================== presence gutter */
@@ -1177,6 +1323,9 @@ function buildSwatches() {
     el.className = 'cs' + (c === myColor ? ' on' : '')
     el.style.background = c
     el.title = c
+    el.setAttribute('role', 'radio')
+    el.setAttribute('aria-checked', String(c === myColor))
+    el.setAttribute('aria-label', 'Colour ' + c)
     el.onclick = () => {
       myColor = c
       LS.set('ts.color', c)
@@ -1280,7 +1429,7 @@ function renderChat() {
         s.className = 'mention'
         s.textContent = part
         body.appendChild(s)
-        if (part.slice(1).toLowerCase() === myName.toLowerCase()) el.style.borderLeft = '2px solid var(--accent)'
+        if (part.slice(1).toLowerCase() === myName.toLowerCase()) el.classList.add('hit')
       } else if (part) {
         body.appendChild(document.createTextNode(part))
       }
@@ -1339,12 +1488,16 @@ $('copyLink').onclick = () => copy(inviteLink(), 'Invite link')
 $('undoBtn').onclick = () => { if (undoManager) undoManager.undo(); if (view) view.focus() }
 $('redoBtn').onclick = () => { if (undoManager) undoManager.redo(); if (view) view.focus() }
 
+function setMenu(open) {
+  $('menu').hidden = !open
+  $('moreBtn').setAttribute('aria-expanded', String(open))
+}
 $('moreBtn').onclick = e => {
   e.stopPropagation()
-  $('menu').hidden = !$('menu').hidden
+  setMenu($('menu').hidden)
 }
 addEventListener('click', e => {
-  if (!$('menu').hidden && !$('menu').contains(e.target) && e.target !== $('moreBtn')) $('menu').hidden = true
+  if (!$('menu').hidden && !$('menu').contains(e.target) && e.target !== $('moreBtn')) setMenu(false)
 })
 
 function downloadBlob(blob, name) {
@@ -1359,7 +1512,7 @@ const ACTIONS = {
   palette: () => openPalette(),
   newfile: () => $('newFile').click(),
   rename: () => renameFile(activeId),
-  find: () => { if (view) openSearchPanel(view) },
+  find: () => { if (view) { view.focus(); openSearchPanel(view) } },
   download: () => {
     const f = files().find(x => x.id === activeId)
     downloadBlob(new Blob([view.state.doc.toString()], { type: 'text/plain;charset=utf-8' }),
@@ -1369,7 +1522,7 @@ const ACTIONS = {
     try {
       const { makeZip } = await import('./zip.js')
       const entries = files().map(f => ({ name: f.name, text: (ytexts.get(f.id) || { toString: () => '' }).toString() }))
-      downloadBlob(makeZip(entries), 'textshare-' + CODE + '.zip')
+      downloadBlob(makeZip(entries), 'anonshare-' + CODE + '.zip')
     } catch (e) { toast('Could not build the archive') }
   },
   invite: () => copy(inviteLink(), 'Invite link'),
@@ -1394,15 +1547,20 @@ $('menu').addEventListener('click', e => {
   if (!b) return
   const fn = ACTIONS[b.dataset.a]
   if (fn) fn()
-  if (b.dataset.a !== 'theme') $('menu').hidden = true
+  if (b.dataset.a !== 'theme') setMenu(false)
 })
 $('mbar').addEventListener('click', e => {
   const b = e.target.closest('button')
   if (b && ACTIONS[b.dataset.a]) ACTIONS[b.dataset.a]()
 })
 
-function leaveRoom() {
-  if (!confirm('Leave this room? Your offline copy stays on this device.')) return
+async function leaveRoom() {
+  const ok = await ask({
+    title: 'Leave this room?',
+    body: 'Your offline copy stays on this device, and you can rejoin with the same code.',
+    confirmLabel: 'Leave',
+  })
+  if (!ok) return
   try { relay.close() } catch (e) {}
   location.href = location.origin + location.pathname
 }
@@ -1426,7 +1584,13 @@ $('saveSettings').onclick = () => {
 }
 
 $('forgetRoom').onclick = async () => {
-  if (!confirm('Delete this room from this device? Anyone still connected keeps their copy.')) return
+  const ok = await ask({
+    title: 'Delete the offline copy?',
+    body: 'This removes the room from this browser only. Anyone still connected keeps theirs, and you can rejoin with the code.',
+    confirmLabel: 'Delete copy',
+    danger: true,
+  })
+  if (!ok) return
   try { await idb.clearData() } catch (e) {}
   location.href = location.origin + location.pathname
 }
@@ -1450,20 +1614,32 @@ $('btnLock').onclick = async () => {
 }
 
 $('btnSuspend').onclick = async () => {
-  if (!confirm('Suspend this room? Everyone else is disconnected immediately, but nothing is deleted and you can resume it.')) return
+  const ok = await ask({
+    title: 'Suspend this room?',
+    body: 'Everyone else is disconnected immediately. Nothing is deleted, and you can resume it later.',
+    confirmLabel: 'Suspend',
+    danger: true,
+  })
+  if (!ok) return
   const r = await ownerAction('suspend', true, 'Room suspended')
   if (r) banner('You have suspended this room. Others cannot connect until you resume it.', 'warn')
 }
 
 $('btnDelete').onclick = async () => {
-  const typed = prompt('This erases the room from the relay for everyone, immediately and permanently.\n\nType the room code to confirm:')
-  if (norm(typed || '') !== CODE) return toast('Not deleted')
+  const typed = await ask({
+    title: 'Delete room ' + CODE + '?',
+    body: 'This erases the room from the relay for everyone, immediately and permanently. Type the room code to confirm.',
+    input: true, placeholder: CODE, mustType: CODE,
+    confirmLabel: 'Delete forever',
+    danger: true,
+  })
+  if (!typed) return
   const r = await ownerAction('delete', true)
   if (!r) return
   LS.del('ts.own.' + CODE)
   try { await idb.clearData() } catch (e) {}
-  alert('Room ' + CODE + ' has been deleted.')
-  location.href = location.origin + location.pathname
+  toast('Room ' + CODE + ' deleted')
+  setTimeout(() => { location.href = location.origin + location.pathname }, 900)
 }
 
 /* ====================================================== command palette */
@@ -1487,12 +1663,16 @@ const COMMANDS = [
 let palIndex = 0, palShown = []
 
 function openPalette() {
+  lastFocus = document.activeElement
   $('pal').hidden = false
   $('palInput').value = ''
   renderPalette('')
   setTimeout(() => $('palInput').focus(), 30)
 }
-function closePalette() { $('pal').hidden = true }
+function closePalette() {
+  $('pal').hidden = true
+  if (view) view.focus()
+}
 
 function renderPalette(q) {
   const needle = q.toLowerCase().trim()
@@ -1510,6 +1690,7 @@ function renderPalette(q) {
   palShown.forEach((c, i) => {
     const el = document.createElement('div')
     el.className = 'pi' + (i === 0 ? ' on' : '')
+    el.setAttribute('role', 'option')
     el.textContent = c[0]
     if (c[2]) {
       const kb = document.createElement('span')
@@ -1517,7 +1698,7 @@ function renderPalette(q) {
       kb.textContent = c[2]
       el.appendChild(kb)
     }
-    el.onclick = () => { closePalette(); ACTIONS[c[1]] && ACTIONS[c[1]]() }
+    el.onclick = () => { closePalette(); if (ACTIONS[c[1]]) ACTIONS[c[1]]() }
     list.appendChild(el)
   })
 }
@@ -1525,7 +1706,7 @@ function renderPalette(q) {
 function movePalette(d) {
   const items = [...$('palList').children].filter(el => el.classList.contains('pi'))
   if (!items.length) return
-  items[palIndex] && items[palIndex].classList.remove('on')
+  if (items[palIndex]) items[palIndex].classList.remove('on')
   palIndex = (palIndex + d + items.length) % items.length
   items[palIndex].classList.add('on')
   items[palIndex].scrollIntoView({ block: 'nearest' })
@@ -1546,10 +1727,16 @@ $('pal').addEventListener('click', e => { if (e.target === $('pal')) closePalett
 
 /* ---------------------------------------------------------- cursor chat */
 
-function cursorChat() {
-  const text = prompt('Say something at your cursor (it disappears after a few seconds)')
+async function cursorChat() {
+  const text = await ask({
+    title: 'Say something at your cursor',
+    body: 'Everyone sees it next to your cursor for a few seconds. It is not saved.',
+    input: true, placeholder: 'is this bit right?',
+    confirmLabel: 'Say it',
+  })
   if (!text) return
   awareness.setLocalStateField('say', { text: text.slice(0, 80), ts: Date.now() })
+  if (view) view.focus()
   setTimeout(() => awareness.setLocalStateField('say', null), 8200)
 }
 
@@ -1557,9 +1744,10 @@ function cursorChat() {
 
 addEventListener('keydown', e => {
   if (e.key === 'Escape') {
+    if (!$('ask').hidden) return closeAsk(null)
     if (!$('pal').hidden) return closePalette()
     if (!$('modal').hidden) return $('mBack').click()
-    $('menu').hidden = true
+    setMenu(false)
     return
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -1583,12 +1771,12 @@ addEventListener('keydown', e => {
 addEventListener('drop', async e => {
   if ($('app').hidden || readOnlyNow()) return
   const list = [...(e.dataTransfer ? e.dataTransfer.files : [])].slice(0, 8)
-  let last = null
+  let last = null, added = 0
   for (const file of list) {
     if (file.size > 512 * 1024) { toast(file.name + ' is too large (512 KB max)'); continue }
-    try { last = addFile(file.name.slice(0, 40), await file.text()) } catch (err) {}
+    try { last = addFile(file.name.slice(0, 40), await file.text()); added++ } catch (err) {}
   }
-  if (last) { openFile(last); toast('Imported ' + list.length + ' file' + (list.length === 1 ? '' : 's')) }
+  if (last) { openFile(last); toast('Imported ' + added + ' file' + (added === 1 ? '' : 's')) }
 })
 
 /* ---------------------------------------------------------------- misc */
