@@ -811,19 +811,38 @@ function boot(host) {
   awareness.setLocalStateField('user', { name: myName, color: myColor, view: VIEW_ONLY })
   awareness.setLocalStateField('act', Date.now())
 
+  // Only seed the room's default file once, and only once we actually know
+  // what the room already contains. Calling ensureFile() eagerly - on doc
+  // boot, on IndexedDB sync, or on every relay state change - raced the
+  // relay's log replay: two devices opening an empty room within the same
+  // second could each decide "this room has no files yet" and add their own
+  // untitled.txt before the other device's copy arrived, leaving two
+  // separate files that never appeared to share content even though
+  // encryption and the relay connection were both working correctly.
+  // Waiting for relay.synced (set only after the relay's T_SYNCED frame,
+  // i.e. after any existing files have already been replayed into this doc)
+  // makes that "is this room really empty" decision safe.
+  let seeded = false
+  const seedIfEmpty = () => {
+    if (seeded) return
+    seeded = true
+    ensureFile()
+  }
+
   // Offline persistence is a nice-to-have, not a requirement: private
   // browsing and some browser/extension settings block IndexedDB outright.
   // Losing it should never stop the room itself from working.
   idb = null
   try {
     idb = new IndexeddbPersistence('anonshare-' + CODE, ydoc)
-    idb.on('synced', () => { ensureFile(); renderTabs() })
-  } catch (e) {
-    ensureFile()
-  }
+    idb.on('synced', () => { renderTabs() })
+  } catch (e) {}
 
   relay = new Relay(host, CODE, ydoc, awareness, KEY, AUTH, OWNER)
-  relay.onstate = () => { setTimeout(ensureFile, 300); paintStatus() }
+  relay.onstate = () => {
+    if (relay.synced) setTimeout(seedIfEmpty, 300)
+    paintStatus()
+  }
   relay.onroom = applyRoomState
   relay.onkilled = onKilled
 
@@ -831,11 +850,14 @@ function boot(host) {
   ydoc.getArray('chat').observe(renderChat)
   awareness.on('change', onPresence)
 
-  ensureFile()
   renderChat()
   onPresence()
   buildSwatches()
   setInterval(() => { paintPeople(); paintStatus() }, 15000)
+
+  // Fully offline use (relay unreachable, e.g. no network at all) should
+  // still get a file to type into rather than staying blank forever.
+  setTimeout(seedIfEmpty, 5000)
 
   setTimeout(() => {
     if (!relay.synced) {
