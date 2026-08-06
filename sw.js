@@ -1,15 +1,31 @@
 /**
- * Offline shell for textshare.
+ * Offline shell.
  *
- * The app shell is cached on install. Module dependencies from esm.sh are
- * cached the first time they load, so a second visit works with no network
- * at all - Yjs merges whatever you typed offline when you reconnect.
+ * Two rules that matter: never touch /room/ or websocket traffic, and never
+ * serve a stale app.js against a relay that has moved on. The shell is
+ * network-first so a deploy reaches people on their next load, and esm.sh is
+ * cache-first because those URLs are version-pinned and immutable.
  */
-const VERSION = 'textshare-v4'
-const SHELL = ['./', './index.html', './app.css', './app.js', './manifest.webmanifest']
+
+const VERSION = 'textshare-v5'
+const SHELL = [
+  './',
+  './index.html',
+  './app.css',
+  './app.js',
+  './demo.js',
+  './zip.js',
+  './security.html',
+  './manifest.webmanifest',
+]
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()))
+  e.waitUntil(
+    caches.open(VERSION)
+      // addAll is all-or-nothing; one 404 would leave us with no cache at all.
+      .then(c => Promise.allSettled(SHELL.map(u => c.add(u))))
+      .then(() => self.skipWaiting())
+  )
 })
 
 self.addEventListener('activate', e => {
@@ -23,33 +39,35 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request
   if (req.method !== 'GET') return
+
   const url = new URL(req.url)
+  if (url.protocol === 'wss:' || url.protocol === 'ws:') return
+  if (url.pathname.startsWith('/room/')) return
+  if (url.hostname === 'api.github.com') return
 
-  // Never cache sync traffic or room lookups.
-  if (url.pathname.startsWith('/room/') || url.protocol === 'wss:') return
-
-  const isModule = url.hostname === 'esm.sh'
-  const isShell = url.origin === location.origin
-  if (!isModule && !isShell) return
-
-  if (isModule) {
-    // Immutable versioned modules: cache first.
+  // Pinned module URLs never change contents. Cache them hard.
+  if (url.hostname === 'esm.sh') {
     e.respondWith(
       caches.match(req).then(hit => hit || fetch(req).then(res => {
-        const copy = res.clone()
-        caches.open(VERSION).then(c => c.put(req, copy))
+        if (res.ok) {
+          const copy = res.clone()
+          caches.open(VERSION).then(c => c.put(req, copy))
+        }
         return res
       }))
     )
     return
   }
 
-  // App shell: network first so deploys land immediately, cache as fallback.
+  if (url.origin !== location.origin) return
+
   e.respondWith(
     fetch(req)
       .then(res => {
-        const copy = res.clone()
-        caches.open(VERSION).then(c => c.put(req, copy))
+        if (res.ok) {
+          const copy = res.clone()
+          caches.open(VERSION).then(c => c.put(req, copy))
+        }
         return res
       })
       .catch(() => caches.match(req).then(hit => hit || caches.match('./index.html')))
