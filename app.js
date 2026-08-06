@@ -31,7 +31,8 @@ const LS = {
 
 // The relay keeps its deployed hostname. Renaming the app does not rename a
 // running Worker, and pointing at a host that does not exist would break every
-// existing invite link.
+// existing invite link. Nothing about the relay is shown or editable in the
+// UI; a ?relay= query param remains for advanced/self-hosted use only.
 const DEFAULT_RELAY = 'textshare-sync.avishkarkedar.workers.dev'
 const CONTACT = 'avishkarkedar+text@gmail.com'
 const AL = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
@@ -163,19 +164,26 @@ $('ask').addEventListener('click', e => { if (e.target === $('ask')) closeAsk(nu
 
 /* ============================================================== theming */
 
-const MQ = matchMedia('(prefers-color-scheme: light)')
-const themePref = () => LS.get('ts.theme', 'system')
-const resolved = () => (themePref() === 'system' ? (MQ.matches ? 'light' : 'dark') : themePref())
+// A theme is either "dark" or "light" - nothing in the UI shows or tracks a
+// third "system" state. The very first visit picks one to match the OS,
+// then remembers that explicit choice from then on.
+function themePref() {
+  const saved = LS.get('ts.theme', '')
+  if (saved === 'dark' || saved === 'light') return saved
+  const guess = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  LS.set('ts.theme', guess)
+  return guess
+}
+const resolved = () => themePref()
 
 function applyTheme() {
   const r = resolved()
   document.documentElement.dataset.theme = r
   const meta = document.querySelector('meta[name=theme-color]')
   if (meta) meta.content = r === 'dark' ? '#000000' : '#ffffff'
-  if ($('themeVal')) $('themeVal').textContent = themePref()
+  if ($('themeVal')) $('themeVal').textContent = r
   if (view) view.dispatch({ effects: themeComp.reconfigure(highlightFor(r)) })
 }
-MQ.addEventListener('change', () => { if (themePref() === 'system') applyTheme() })
 
 const darkHL = HighlightStyle.define([
   { tag: [t.comment, t.lineComment, t.blockComment], color: '#5c6370', fontStyle: 'italic' },
@@ -489,22 +497,6 @@ const readOnlyNow = () => VIEW_ONLY || !canEdit
 
 const gErr = m => { const e = $('gErr'); e.textContent = m || ''; e.hidden = !m }
 
-function paintRelay() {
-  $('gRelayName').textContent = relayHost()
-  $('gRelayInput').value = relayHost()
-  if ($('sigInput')) $('sigInput').value = relayHost()
-}
-paintRelay()
-
-// Footer: is the relay actually up right now?
-;(async () => {
-  const res = await http(relayHost(), '/health')
-  const dot = $('relayDot')
-  if (!dot) return
-  dot.className = 'rdot ' + (res && res.ok ? 'on' : 'off')
-  dot.title = res && res.ok ? 'Relay is responding' : 'Relay is not responding'
-})()
-
 // The demo is decoration: never let it break the page it sits on. Respect
 // reduced motion by making the demo static, not by hiding it on desktop
 // while mobile still gets the full animation.
@@ -512,16 +504,6 @@ import('./demo.js')
   .then(m => { if (!booted) stopDemo = m.runDemo($('demo')) })
   .catch(() => {})
 
-$('gRelayToggle').onclick = () => {
-  const i = $('gRelayInput')
-  i.hidden = !i.hidden
-  $('gRelayToggle').setAttribute('aria-expanded', String(!i.hidden))
-  if (!i.hidden) i.focus()
-}
-$('gRelayInput').onchange = () => {
-  const h = cleanHost($('gRelayInput').value)
-  if (h) { LS.set('ts.relay', h); paintRelay(); toast('Relay set to ' + h) }
-}
 $('gCode').addEventListener('input', e => {
   e.target.value = norm(e.target.value)
   e.target.classList.remove('bad')
@@ -553,7 +535,7 @@ async function tryJoin(code, btn) {
   if (btn) { btn.disabled = false; btn.innerHTML = '&#8594;' }
 
   if (!res.ok) {
-    gErr('Cannot reach ' + relayHost() + '. Check your connection, then try again.')
+    gErr('Cannot reach the relay. Check your connection, then try again.')
     shake($('gCode'))
     return
   }
@@ -721,7 +703,7 @@ $('mGo').onclick = async () => {
       (result.detail ? ', ' + result.detail : '') + ').')
     shake(sheetOf('modal'))
   } else {
-    mErr('Could not reach ' + relayHost() + '. Check your connection.')
+    mErr('Could not reach the relay. Check your connection.')
   }
 }
 
@@ -802,14 +784,21 @@ async function enterRoom(code, locked) {
   $('roomCode').textContent = code
   $('lockIcon').hidden = !locked
   $('nameInput').value = myName
-  $('sigInput').value = host
   $('ownerOnly').hidden = !OWNER
   $('privacyNote').textContent =
-    'Everything is encrypted in this browser before it is sent. ' + host +
-    ' relays sealed bytes it has no key for, and destroys the room once everyone has left.'
+    'Everything is encrypted in this browser before it is sent. The relay ' +
+    'only ever sees sealed bytes it has no key for, and destroys the room once everyone has left.'
 
   startedAt = Date.now()
-  boot(host)
+  // Anything unexpected past this point (storage blocked, a constructor
+  // throwing in an unusual browser) should degrade gracefully, not get
+  // reported on the join form as an "encryption" failure - the room is
+  // already open on screen by now.
+  try {
+    boot(host)
+  } catch (e) {
+    banner('Something went wrong setting up this room. Please reload and try again.', 'bad')
+  }
 }
 
 /* ================================================================= boot */
@@ -822,8 +811,16 @@ function boot(host) {
   awareness.setLocalStateField('user', { name: myName, color: myColor, view: VIEW_ONLY })
   awareness.setLocalStateField('act', Date.now())
 
-  idb = new IndexeddbPersistence('anonshare-' + CODE, ydoc)
-  idb.on('synced', () => { ensureFile(); renderTabs() })
+  // Offline persistence is a nice-to-have, not a requirement: private
+  // browsing and some browser/extension settings block IndexedDB outright.
+  // Losing it should never stop the room itself from working.
+  idb = null
+  try {
+    idb = new IndexeddbPersistence('anonshare-' + CODE, ydoc)
+    idb.on('synced', () => { ensureFile(); renderTabs() })
+  } catch (e) {
+    ensureFile()
+  }
 
   relay = new Relay(host, CODE, ydoc, awareness, KEY, AUTH, OWNER)
   relay.onstate = () => { setTimeout(ensureFile, 300); paintStatus() }
@@ -842,7 +839,7 @@ function boot(host) {
 
   setTimeout(() => {
     if (!relay.synced) {
-      banner('Still reaching ' + host + '. Your edits are saved on this device and will sync when it answers.', 'warn')
+      banner('Still connecting. Your edits are saved on this device and will sync once the connection is back.', 'warn')
     }
   }, 9000)
 }
@@ -1541,8 +1538,7 @@ const ACTIONS = {
   invite: () => copy(inviteLink(), 'Invite link'),
   viewlink: () => copy(viewLink(), 'View-only link'),
   theme: () => {
-    const order = ['system', 'dark', 'light']
-    LS.set('ts.theme', order[(order.indexOf(themePref()) + 1) % 3])
+    LS.set('ts.theme', themePref() === 'dark' ? 'light' : 'dark')
     applyTheme()
   },
   settings: () => showPanel($('panel')),
@@ -1585,12 +1581,6 @@ $('saveSettings').onclick = () => {
     LS.set('ts.name', n)
     awareness.setLocalStateField('user', { name: n, color: myColor, view: VIEW_ONLY })
   }
-  const h = cleanHost($('sigInput').value)
-  if (h && h !== relayHost()) {
-    LS.set('ts.relay', h)
-    toast('Reconnecting to ' + h)
-    return setTimeout(() => location.reload(), 500)
-  }
   toast('Saved')
   paintPeople()
   $('panel').hidden = true
@@ -1604,7 +1594,7 @@ $('forgetRoom').onclick = async () => {
     danger: true,
   })
   if (!ok) return
-  try { await idb.clearData() } catch (e) {}
+  if (idb) { try { await idb.clearData() } catch (e) {} }
   location.href = location.origin + location.pathname
 }
 
@@ -1650,7 +1640,7 @@ $('btnDelete').onclick = async () => {
   const r = await ownerAction('delete', true)
   if (!r) return
   LS.del('ts.own.' + CODE)
-  try { await idb.clearData() } catch (e) {}
+  if (idb) { try { await idb.clearData() } catch (e) {} }
   toast('Room ' + CODE + ' deleted')
   setTimeout(() => { location.href = location.origin + location.pathname }, 900)
 }
