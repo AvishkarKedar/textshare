@@ -1,4 +1,4 @@
-# textshare
+# anonshare
 
 A live, end-to-end encrypted scratchpad for text and code. Open a room, share six
 characters, write together. Nothing is stored once everyone leaves.
@@ -9,6 +9,10 @@ characters, write together. Nothing is stored once everyone leaves.
 - AES-GCM encryption in the browser. The relay only ever forwards sealed bytes.
 - Real-time multi-cursor editing with presence, chat, and syntax highlighting for 15 languages.
 - Works offline and re-syncs when you come back.
+
+> The GitHub repository and the relay Worker are still named `textshare`.
+> Renaming a running Worker would break every invite link that has already been
+> shared, so only the product name has changed.
 
 ---
 
@@ -41,11 +45,14 @@ prove you know the password; because the salt differs, it reveals nothing about
 the key. The relay stores only `SHA-256(auth)`, so its own storage holds nothing
 replayable.
 
+The salt strings still read `textshare`. They are cryptographic constants, not
+branding: changing them would lock every existing room out of its own data.
+
 ### Joining
 
 A failed WebSocket upgrade gives JavaScript no status code, so the client proves
 its token over plain HTTP first. `426 Upgrade Required` means the token was
-accepted, `403` means the password is wrong. This is why a bad password now says
+accepted, `403` means the password is wrong. This is why a bad password says
 "that password is not right" instead of connecting you to a room you cannot read.
 
 ```
@@ -70,20 +77,20 @@ this does *not* protect against.
 
 ## Features
 
-**Collaboration** — live cursors with names, Google-Docs-style flags that fade and
+**Collaboration** - live cursors with names, Google-Docs-style flags that fade and
 return on hover, initials in the gutter, an "N people editing below" pill,
 click an avatar to jump to someone, double-click to follow them, idle detection,
 room chat with `@mentions`, and ephemeral cursor chat (`Alt` `/`).
 
-**Editing** — CodeMirror 6, multiple files as tabs, undo/redo scoped per user,
+**Editing** - CodeMirror 6, multiple files as tabs, undo/redo scoped per user,
 find and replace, bracket matching, autocomplete, language auto-detection on
 first paste, drag-and-drop file import, download one file or export all as a zip.
 
-**Rooms** — optional password, read-only mode, suspend, permanent delete,
+**Rooms** - optional password, read-only mode, suspend, permanent delete,
 view-only invite links, and a choice of 10 minute / 1 hour / 24 hour lifetime
 after the last person leaves.
 
-**Interface** — command palette (`Ctrl`/`Cmd` `K`), dark and light themes that
+**Interface** - command palette (`Ctrl`/`Cmd` `K`), dark and light themes that
 follow the system, persistent identity colour, offline support via service
 worker, and a mobile layout.
 

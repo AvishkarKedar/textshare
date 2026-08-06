@@ -1,95 +1,118 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Security and threat model - textshare</title>
-<meta name="description" content="What textshare encrypts, what the relay can see, and what it cannot protect you from.">
+<title>anonshare - how the encryption works</title>
+<meta name="description" content="The anonshare threat model: what is encrypted, what the relay can see, and what this does not protect against.">
 <meta name="theme-color" content="#000000">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#9993;</text></svg>">
 <link rel="stylesheet" href="app.css">
 <style>
   body{overflow:auto}
-  .doc{max-width:720px;margin:0 auto;padding:48px 24px 96px}
-  .doc h1{font:600 24px/1.25 var(--sans);letter-spacing:-.02em;margin:20px 0 6px}
-  .doc h2{font:600 13px/1 var(--mono);letter-spacing:.02em;margin:44px 0 12px;padding-top:20px;border-top:1px solid var(--line)}
+  .doc{max-width:660px;margin:0 auto;padding:56px 24px 80px}
+  .doc h1{font:600 24px/1.25 var(--sans);letter-spacing:-.02em;margin:20px 0 10px}
+  .doc h2{font:600 13px/1 var(--mono);letter-spacing:.02em;margin:40px 0 12px;padding-top:18px;border-top:1px solid var(--line)}
   .doc p,.doc li{color:var(--mut);font-size:13px;line-height:1.75}
   .doc strong{color:var(--fg);font-weight:600}
+  .doc code{font-family:var(--mono);font-size:12px;color:var(--fg);background:var(--panel);padding:1px 5px}
+  .doc pre{background:var(--panel);border:1px solid var(--line);padding:14px;overflow:auto;font:12px/1.6 var(--mono);color:var(--fg)}
   .doc ul{padding-left:18px}
-  .doc li{margin-bottom:7px}
-  .doc code{font:12px var(--mono);background:var(--panel);border:1px solid var(--line);padding:1px 5px}
-  .doc table{width:100%;border-collapse:collapse;margin:14px 0}
-  .doc th,.doc td{text-align:left;padding:9px 10px;border:1px solid var(--line);font-size:12.5px;vertical-align:top}
-  .doc th{font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
-  .doc td{color:var(--mut)}
-  .yes{color:var(--ok)} .no{color:var(--danger)}
-  .back{font:11px/1 var(--mono);color:var(--accent);text-decoration:none;letter-spacing:.08em;text-transform:uppercase}
+  .doc a{color:var(--accent)}
+  .back{font:11px/1 var(--mono);color:var(--mut);text-decoration:none}
+  .warn{border-left:2px solid var(--warn);padding-left:14px}
+  .warn strong{color:var(--warn)}
 </style>
 </head>
 <body>
-<div class="doc">
+<main class="doc">
+  <a class="back" href="./">&larr; back to anonshare</a>
+  <h1>How the encryption works</h1>
+  <p>Written plainly, including the parts that are not reassuring. If you are
+  deciding whether to trust this with something that matters, read the last
+  section first.</p>
 
-  <a class="back" href="./">&#8592; back to textshare</a>
-  <h1>Security and threat model</h1>
-  <p>Plain description of what is protected, what is not, and how. If something here is wrong, please <a href="https://github.com/AvishkarKedar/textshare/issues">open an issue</a>.</p>
+  <h2>What is encrypted</h2>
+  <p>Every document edit, every cursor position, every chat message and every
+  display name is encrypted with <strong>AES-GCM 256</strong> in your browser
+  before it touches the network. The relay receives a 12-byte nonce followed by
+  ciphertext it has no key for.</p>
 
-  <h2>The short version</h2>
-  <p>Your text is encrypted in your browser with a key derived from the room code and password. The relay forwards sealed bytes and never receives the key. It can see how much traffic a room has and when, and nothing about what is in it.</p>
+  <h2>Where the key comes from</h2>
+  <p>Your room code and password are stretched with <strong>PBKDF2-SHA256 at
+  200,000 iterations</strong> into two separate values, using two different
+  salts:</p>
+<pre>key  = PBKDF2(code + ":" + password, salt = "textshare|CODE")
+auth = PBKDF2(code + ":" + password, salt = "textshare-auth|CODE")</pre>
+  <p>The <strong>key</strong> never leaves your browser. The <strong>auth</strong>
+  token is sent to the relay to prove you know the password. Because the salts
+  differ, handing over the auth token tells an attacker nothing useful about the
+  key. The relay stores only <code>SHA-256(auth)</code>, so even a full dump of
+  its storage contains nothing that can be replayed.</p>
+  <p>The salt strings still say <code>textshare</code>. Those are cryptographic
+  constants rather than branding, and changing them would lock every existing
+  room out of its own data.</p>
 
-  <h2>How keys are made</h2>
+  <h2>What the relay can see</h2>
+  <p>It genuinely cannot read your text. It can see:</p>
   <ul>
-    <li>Key material is <code>room code + ":" + password</code>. With no password, the room code alone is the secret, so anyone who has the code can read the room. That is the intended behaviour for a quick share.</li>
-    <li><strong>Encryption key</strong>: PBKDF2-SHA256, 200,000 iterations, salt <code>textshare|CODE</code>, producing an AES-GCM 256 key. This never leaves your browser.</li>
-    <li><strong>Auth token</strong>: PBKDF2-SHA256, 200,000 iterations, <em>different</em> salt <code>textshare-auth|CODE</code>. This is sent to the relay to prove you know the password. Because the salt differs, holding the auth token tells an attacker nothing usable about the encryption key.</li>
-    <li>The relay stores only <code>SHA-256(auth token)</code>, so even a dump of its storage contains nothing replayable.</li>
-    <li>Every frame is sealed with AES-GCM under a fresh random 96-bit IV.</li>
+    <li>that a room with a given code exists, and how many sockets are attached</li>
+    <li>the size and timing of each frame, so it knows roughly when someone is typing</li>
+    <li>the IP address of everyone connected, as any web server would</li>
   </ul>
+  <p>It keeps no request log tying those together, but traffic analysis is a real
+  limitation of any relay design and it would be dishonest to claim otherwise.</p>
 
-  <h2>What the relay can and cannot see</h2>
-  <table>
-    <tr><th>Item</th><th>Visible to the relay</th></tr>
-    <tr><td>Your text, file names, chat messages, cursor positions</td><td class="yes">No - AES-GCM ciphertext only</td></tr>
-    <tr><td>Your password or encryption key</td><td class="yes">No - never transmitted</td></tr>
-    <tr><td>The room code</td><td class="no">Yes - it routes on it</td></tr>
-    <tr><td>Whether a room has a password</td><td class="no">Yes - one boolean</td></tr>
-    <tr><td>Number of connections, message sizes, timing</td><td class="no">Yes - unavoidable for a relay</td></tr>
-    <tr><td>Your IP address</td><td class="no">Yes, transiently, for rate limiting. Not logged.</td></tr>
-  </table>
+  <h2>Who can get in</h2>
+  <p>If a room has a password, the relay refuses the connection before a socket
+  is ever opened. Without the password a stranger with the room code cannot read
+  the text, and cannot write into it either. Rooms without a password are open to
+  anyone who has the six characters.</p>
+  <p>The room code is not a secret in any meaningful sense: it travels in links,
+  chat apps and screen shares. <strong>The password is the real boundary.</strong></p>
 
-  <h2>Access control</h2>
-  <p>Knowing the code is not enough to connect to a password-protected room. The relay checks the auth token during the HTTP handshake and returns <code>403</code> before any socket opens. An earlier version let anyone connect and merely fail to decrypt, which meant a stranger could still write garbage into the shared log. That is fixed.</p>
-  <p>Room codes are reserved exclusively at creation. Two people cannot land on the same code with different keys.</p>
+  <h2>How long anything lasts</h2>
+  <p>A room is erased once everyone has left and the timer you chose runs out:
+  10 minutes, an hour, or a day. Deletion is not a flag, it removes the stored
+  frames. Whoever created the room can also delete it immediately, which
+  disconnects everyone and erases it on the spot.</p>
+  <p>A copy also lives in your own browser via IndexedDB, so you can keep working
+  offline. "Delete offline copy" in settings removes it from this device.</p>
 
-  <h2>Whoever creates a room controls it</h2>
-  <p>Creating a room mints a random 256-bit owner token, kept in your browser's local storage. Only that browser can make the room read-only, suspend it, or delete it. The relay holds only a hash of the token. <strong>Clear your browser storage and you lose owner rights permanently</strong> - there is no recovery, by design.</p>
+  <h2>Owner rights</h2>
+  <p>Creating a room mints a random 256-bit token stored in your browser. Only
+  that browser can lock, suspend or delete the room. The relay holds only a hash
+  of it. Clear your browser storage and those rights are gone permanently, with
+  no recovery, by design.</p>
 
-  <h2>Data lifetime</h2>
-  <ul>
-    <li>A room is erased from the relay <strong>10 minutes</strong> after the last person disconnects. Longer windows (1 hour, 24 hours) are opt-in at creation.</li>
-    <li>Deleting a room wipes it immediately and disconnects everyone.</li>
-    <li>Your browser keeps a local offline copy in IndexedDB. "Delete from this device" in settings removes it.</li>
-  </ul>
-
-  <h2>Abuse limits</h2>
-  <p>Per room: 30 connections, 120 messages per second, 256 KB per frame, 5 MB of log. Per IP: 120 room lookups per minute. Exceeding these gets you throttled, not banned.</p>
-
-  <h2>What this does not protect you from</h2>
-  <ul>
-    <li><strong>A weak password.</strong> A 6-character code with no password is guessable in bulk by a determined attacker. Set a password for anything sensitive.</li>
-    <li><strong>Anyone you gave the link to.</strong> There is no per-person identity. The link is the credential.</li>
-    <li><strong>A compromised device</strong>, keylogger, or someone reading over your shoulder.</li>
-    <li><strong>A malicious version of this site.</strong> All browser-based end-to-end encryption shares this: if the server that hands you the JavaScript is hostile, it can hand you JavaScript that leaks the key. The code is public and the build is served as static files, but you are trusting the host at load time. For a threat model where that matters, use an audited native client.</li>
-    <li><strong>Traffic analysis.</strong> Sizes and timing are visible.</li>
-    <li><strong>Impersonation of display names.</strong> Names are self-asserted and unverified.</li>
-  </ul>
-
-  <h2>Browser hardening</h2>
-  <p>The site sends a Content Security Policy, <code>frame-ancestors 'none'</code>, <code>object-src 'none'</code>, <code>no-referrer</code>, and HSTS. The policy still allows inline scripts, because the ES module import map must be inline on static hosting and there is no server to issue a nonce. No third-party script is loaded other than the version-pinned modules from esm.sh. Names, colours, and chat text arriving from other clients are inserted as text nodes and validated, never as HTML.</p>
+  <h2 class="warn">What this does not protect against</h2>
+  <div class="warn">
+    <p><strong>A weak password.</strong> The code is public and the ciphertext
+    passes through a server. A short password can be attacked offline. Use
+    something long.</p>
+    <p><strong>Anyone you invite.</strong> Everybody in the room holds the same
+    key. There is no per-person access, and no way to un-share what someone has
+    already read.</p>
+    <p><strong>A compromised browser or device.</strong> Encryption in the page
+    cannot help if the machine itself is not trustworthy.</p>
+    <p><strong>A hostile version of this site.</strong> The code is served to you
+    at load time, so whoever controls the hosting could serve something that
+    leaks your key. This is an inherent limit of browser-delivered cryptography.
+    The source is public so you can read it, and you can host it yourself.</p>
+    <p><strong>Inline scripts are still permitted by the CSP.</strong> The ES
+    module import map has to be inline on static hosting, and there is no server
+    here to mint a nonce. Everything else is locked down:
+    <code>object-src 'none'</code>, <code>base-uri 'none'</code>,
+    <code>frame-ancestors 'none'</code>, <code>form-action 'none'</code>.</p>
+    <p><strong>No formal audit.</strong> This is one person's project using
+    standard WebCrypto primitives. It has not been reviewed by anyone else.</p>
+  </div>
 
   <h2>Reporting something</h2>
-  <p>Open an issue at <a href="https://github.com/AvishkarKedar/textshare/issues">github.com/AvishkarKedar/textshare</a>. For anything you would rather not post publicly, mark the issue as a security report and I will follow up privately.</p>
+  <p>If you find a flaw, please open an issue at
+  <a href="https://github.com/AvishkarKedar/textshare/issues" target="_blank" rel="noopener">github.com/AvishkarKedar/textshare</a>.
+  Corrections to this page are just as welcome as code.</p>
 
-  <p style="margin-top:44px"><a class="back" href="./">&#8592; back to textshare</a></p>
-</div>
+  <p style="margin-top:44px"><a class="back" href="./">&larr; back to anonshare</a></p>
+</main>
 </body>
 </html>
