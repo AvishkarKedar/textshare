@@ -502,7 +502,16 @@ const gErr = m => { const e = $('gErr'); e.textContent = m || ''; e.hidden = !m 
 // while mobile still gets the full animation.
 import('./demo.js')
   .then(m => { if (!booted) stopDemo = m.runDemo($('demo')) })
-  .catch(() => {})
+  .catch(() => {
+    // The only way this import realistically fails is an ad/content blocker
+    // stopping the esm.sh CodeMirror fetch the demo needs. Say so plainly
+    // instead of leaving an empty box with no explanation - the real editor
+    // is entirely unaffected either way.
+    const d = $('demo')
+    if (d && !booted) {
+      d.innerHTML = '<p class="fineprint" style="padding:16px;text-align:center">Demo preview blocked, likely by an ad or content blocker. The room editor itself still works.</p>'
+    }
+  })
 
 $('gCode').addEventListener('input', e => {
   e.target.value = norm(e.target.value)
