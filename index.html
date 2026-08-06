@@ -57,9 +57,9 @@
       <div class="demoBar">
         <span class="dcode">DEMO01</span>
         <span class="grow"></span>
-        <span class="dav" style="background:#4c8dff">AK</span>
-        <span class="dav" style="background:#3ddc84">PR</span>
-        <span class="dav" style="background:#c792ea">SM</span>
+        <span class="dav" style="background:#4c8dff">ME</span>
+        <span class="dav" style="background:#3ddc84">AV</span>
+        <span class="dav" style="background:#c792ea">LZ</span>
       </div>
       <div id="demo"></div>
       <div class="demoFoot"><span class="ddot"></span> live &middot; 3 online &middot; e2e</div>
@@ -87,26 +87,36 @@
   <footer id="siteFoot">
     <div class="fcol">
       <b>anonshare</b>
-      <p>A live, end-to-end encrypted scratchpad for text and code.</p>
+      <p>A live, end-to-end encrypted scratchpad for text and code. No account, no tracking, nothing kept.</p>
       <p class="by">Built by <a href="https://avishkark.in" target="_blank" rel="noopener">Avishkar Kedar</a></p>
     </div>
+
     <div class="fcol">
-      <b>Source</b>
-      <a href="https://github.com/AvishkarKedar/textshare" target="_blank" rel="noopener">
-        github.com/AvishkarKedar/textshare <span id="ghStars" class="stars"></span>
-      </a>
-      <a href="https://github.com/AvishkarKedar/textshare/issues/new" target="_blank" rel="noopener">Report a bug</a>
+      <b>Help</b>
+      <a href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20bug%20report">Report a bug</a>
+      <a href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20feedback">Send feedback</a>
       <a href="security.html">How the encryption works</a>
-      <a href="https://github.com/AvishkarKedar/textshare/blob/main/LICENSE" target="_blank" rel="noopener">MIT licensed</a>
     </div>
+
+    <div class="fcol">
+      <b>Legal</b>
+      <a href="privacy.html">Privacy policy</a>
+      <a href="terms.html">Terms &amp; conditions</a>
+    </div>
+
     <div class="fcol">
       <b>Relay</b>
       <p class="relayLine"><span id="relayDot" class="rdot"></span> <span id="gRelayName"></span></p>
       <button type="button" id="gRelayToggle" class="lnk" aria-expanded="false">use a different relay</button>
       <input id="gRelayInput" class="in mono-in" spellcheck="false" autocapitalize="off" aria-label="Relay hostname" hidden>
-      <p class="fineprint" id="verStamp"></p>
     </div>
   </footer>
+
+  <div id="footbar">
+    <span>&copy; 2026 Avishkar Kedar. All rights reserved.</span>
+    <span class="grow"></span>
+    <span class="hideS">Built in Pune, India</span>
+  </div>
 </section>
 
 <!-- ============================================================ step two -->
@@ -256,7 +266,12 @@
 
       <div class="sec">Privacy</div>
       <p class="fineprint" id="privacyNote"></p>
-      <a class="lnk" href="security.html" target="_blank" rel="noopener">How the encryption works</a>
+      <div class="plinks">
+        <a class="lnk" href="security.html" target="_blank" rel="noopener">How the encryption works</a>
+        <a class="lnk" href="privacy.html" target="_blank" rel="noopener">Privacy policy</a>
+        <a class="lnk" href="terms.html" target="_blank" rel="noopener">Terms</a>
+        <a class="lnk" href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20bug%20report">Report a bug</a>
+      </div>
     </aside>
   </div>
 
