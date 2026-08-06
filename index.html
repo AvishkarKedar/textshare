@@ -103,13 +103,6 @@
       <a href="privacy.html">Privacy policy</a>
       <a href="terms.html">Terms &amp; conditions</a>
     </div>
-
-    <div class="fcol">
-      <b>Relay</b>
-      <p class="relayLine"><span id="relayDot" class="rdot"></span> <span id="gRelayName"></span></p>
-      <button type="button" id="gRelayToggle" class="lnk" aria-expanded="false">use a different relay</button>
-      <input id="gRelayInput" class="in mono-in" spellcheck="false" autocapitalize="off" aria-label="Relay hostname" hidden>
-    </div>
   </footer>
 
   <div id="footbar">
@@ -211,7 +204,7 @@
       <button data-a="invite" role="menuitem">Copy invite link</button>
       <button data-a="viewlink" role="menuitem">Copy view-only link</button>
       <div class="msep"></div>
-      <button data-a="theme" role="menuitem">Theme: <span id="themeVal">system</span></button>
+      <button data-a="theme" role="menuitem">Theme: <span id="themeVal">dark</span></button>
       <button data-a="settings" role="menuitem">Settings</button>
       <button data-a="leave" role="menuitem">Leave room</button>
     </div>
@@ -248,8 +241,6 @@
       <input id="nameInput" class="in" maxlength="24">
       <label class="lbl" for="swatches">Your colour</label>
       <div id="swatches" role="radiogroup" aria-label="Your colour"></div>
-      <label class="lbl" for="sigInput">Relay</label>
-      <input id="sigInput" class="in mono-in" spellcheck="false" autocapitalize="off">
       <div class="mrow"><button class="btn primary" id="saveSettings">Save</button></div>
 
       <div class="sec">This device</div>
