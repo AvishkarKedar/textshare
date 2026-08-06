@@ -42,17 +42,7 @@ self.addEventListener('fetch', e => {
   if (url.pathname.startsWith('/room/')) return       // relay traffic, never cached
   if (url.hostname === 'api.github.com') return
 
-  // Modules from esm.sh are immutable and version-pinned: cache first.
-  if (url.hostname === 'esm.sh') {
-    e.respondWith(
-      caches.match(req).then(hit => hit || fetch(req).then(res => {
-        const copy = res.clone()
-        caches.open(VERSION).then(c => c.put(req, copy)).catch(() => {})
-        return res
-      }))
-    )
-    return
-  }
+
 
   if (url.origin !== location.origin) return
 
