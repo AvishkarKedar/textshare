@@ -3,18 +3,21 @@ main = "src/index.js"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# This Worker serves no static files - it is a WebSocket relay only.
-# Declaring an empty assets block is not needed; omitting it keeps Wrangler
-# from ever treating the repo as a static site.
-
 [[durable_objects.bindings]]
 name = "ROOM"
 class_name = "Room"
 
-# SQLite-backed Durable Objects are the ones available on the free plan.
+[[durable_objects.bindings]]
+name = "LIMIT"
+class_name = "Limiter"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Limiter"]
 
 [observability]
 enabled = true
