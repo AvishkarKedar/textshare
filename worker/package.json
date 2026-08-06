@@ -1,17 +1,12 @@
 {
   "name": "textshare-sync",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "WebSocket relay and room registry for textshare",
+  "description": "Zero-knowledge WebSocket relay and room registry for textshare",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
-  },
-  "dependencies": {
-    "lib0": "^0.2.98",
-    "y-protocols": "^1.0.6",
-    "yjs": "^13.6.20"
   },
   "devDependencies": {
     "wrangler": "^3.90.0"
