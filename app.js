@@ -505,12 +505,12 @@ paintRelay()
   dot.title = res && res.ok ? 'Relay is responding' : 'Relay is not responding'
 })()
 
-// The demo is decoration: never let it break the page it sits on.
-if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-  import('./demo.js')
-    .then(m => { if (!booted) stopDemo = m.runDemo($('demo')) })
-    .catch(() => {})
-}
+// The demo is decoration: never let it break the page it sits on. Respect
+// reduced motion by making the demo static, not by hiding it on desktop
+// while mobile still gets the full animation.
+import('./demo.js')
+  .then(m => { if (!booted) stopDemo = m.runDemo($('demo')) })
+  .catch(() => {})
 
 $('gRelayToggle').onclick = () => {
   const i = $('gRelayInput')
