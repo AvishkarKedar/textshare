@@ -73,6 +73,7 @@ export function runDemo(parent) {
 
   const full = SCRIPT.join('\n')
   let n = 0, stopped = false, timer
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
 
   function placeFlags() {
     const doc = view.state.doc
@@ -109,7 +110,15 @@ export function runDemo(parent) {
     }
   }
 
-  step()
+  // Reduced motion still gets the demo - the finished script shown once,
+  // instead of the typing animation, so the desktop panel is never left
+  // empty while a phone (which rarely has this OS setting on) still animates.
+  if (reduced) {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: full } })
+    placeFlags()
+  } else {
+    step()
+  }
   const onResize = () => placeFlags()
   addEventListener('resize', onResize)
 
