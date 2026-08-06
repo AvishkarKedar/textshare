@@ -1,13 +1,11 @@
 /**
- * Offline shell.
+ * anonshare service worker.
  *
- * Two rules that matter: never touch /room/ or websocket traffic, and never
- * serve a stale app.js against a relay that has moved on. The shell is
- * network-first so a deploy reaches people on their next load, and esm.sh is
- * cache-first because those URLs are version-pinned and immutable.
+ * Caches the shell so the editor opens offline, and stays out of the way of
+ * anything live: websockets, room lookups, and the relay are never touched.
  */
 
-const VERSION = 'anonshare-v6'
+const VERSION = 'anonshare-v7'
 const SHELL = [
   './',
   './index.html',
@@ -16,16 +14,15 @@ const SHELL = [
   './demo.js',
   './zip.js',
   './security.html',
+  './privacy.html',
+  './terms.html',
   './manifest.webmanifest',
 ]
 
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(VERSION)
-      // addAll is all-or-nothing; one 404 would leave us with no cache at all.
-      .then(c => Promise.allSettled(SHELL.map(u => c.add(u))))
-      .then(() => self.skipWaiting())
-  )
+  self.skipWaiting()
+  // allSettled, not all: one 404 must not throw away the whole cache.
+  e.waitUntil(caches.open(VERSION).then(c => Promise.allSettled(SHELL.map(u => c.add(u)))))
 })
 
 self.addEventListener('activate', e => {
@@ -41,18 +38,16 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return
 
   const url = new URL(req.url)
-  if (url.protocol === 'wss:' || url.protocol === 'ws:') return
-  if (url.pathname.startsWith('/room/')) return
+  if (url.protocol === 'ws:' || url.protocol === 'wss:') return
+  if (url.pathname.startsWith('/room/')) return       // relay traffic, never cached
   if (url.hostname === 'api.github.com') return
 
-  // Pinned module URLs never change contents. Cache them hard.
+  // Modules from esm.sh are immutable and version-pinned: cache first.
   if (url.hostname === 'esm.sh') {
     e.respondWith(
       caches.match(req).then(hit => hit || fetch(req).then(res => {
-        if (res.ok) {
-          const copy = res.clone()
-          caches.open(VERSION).then(c => c.put(req, copy))
-        }
+        const copy = res.clone()
+        caches.open(VERSION).then(c => c.put(req, copy)).catch(() => {})
         return res
       }))
     )
@@ -61,13 +56,12 @@ self.addEventListener('fetch', e => {
 
   if (url.origin !== location.origin) return
 
+  // Our own files: network first, so a deploy is picked up immediately.
   e.respondWith(
     fetch(req)
       .then(res => {
-        if (res.ok) {
-          const copy = res.clone()
-          caches.open(VERSION).then(c => c.put(req, copy))
-        }
+        const copy = res.clone()
+        caches.open(VERSION).then(c => c.put(req, copy)).catch(() => {})
         return res
       })
       .catch(() => caches.match(req).then(hit => hit || caches.match('./index.html')))
