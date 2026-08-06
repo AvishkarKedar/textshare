@@ -33,8 +33,7 @@ const LS = {
 // running Worker, and pointing at a host that does not exist would break every
 // existing invite link.
 const DEFAULT_RELAY = 'textshare-sync.avishkarkedar.workers.dev'
-const REPO = 'AvishkarKedar/textshare'
-const BUILD = '2026-08-06'
+const CONTACT = 'avishkarkedar+text@gmail.com'
 const AL = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
 const LEN = 6
 const VIEW_ONLY = QS.get('view') === '1'
@@ -496,7 +495,6 @@ function paintRelay() {
   if ($('sigInput')) $('sigInput').value = relayHost()
 }
 paintRelay()
-$('verStamp').textContent = 'build ' + BUILD
 
 // Footer: is the relay actually up right now?
 ;(async () => {
@@ -505,17 +503,6 @@ $('verStamp').textContent = 'build ' + BUILD
   if (!dot) return
   dot.className = 'rdot ' + (res && res.ok ? 'on' : 'off')
   dot.title = res && res.ok ? 'Relay is responding' : 'Relay is not responding'
-})()
-
-;(async () => {
-  try {
-    const r = await fetch('https://api.github.com/repos/' + REPO, { cache: 'force-cache' })
-    if (!r.ok) return
-    const d = await r.json()
-    if (typeof d.stargazers_count === 'number') {
-      $('ghStars').textContent = '\u2605 ' + d.stargazers_count
-    }
-  } catch (e) {}
 })()
 
 // The demo is decoration: never let it break the page it sits on.
