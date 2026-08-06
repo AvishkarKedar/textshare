@@ -7,8 +7,8 @@ import {
   drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightSpecialChars,
   gutter, GutterMarker
 } from '@codemirror/view'
-import { defaultKeymap, indentWithTab } from '@codemirror/commands'
-import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/search'
+import { defaultKeymap, indentWithTab, history, historyKeymap } from '@codemirror/commands'
+import { search, searchKeymap, highlightSelectionMatches, openSearchPanel } from '@codemirror/search'
 import {
   bracketMatching, indentOnInput, foldGutter, foldKeymap, indentUnit,
   syntaxHighlighting, HighlightStyle, StreamLanguage
@@ -17,6 +17,8 @@ import { tags as t } from '@lezer/highlight'
 import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from '@codemirror/autocomplete'
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
 
+window.__ts_booted = true
+
 /* ================================================================ basics */
 
 const $ = id => document.getElementById(id)
@@ -24,22 +26,31 @@ const QS = new URLSearchParams(location.search)
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v } catch (e) { return d } },
   set(k, v) { try { localStorage.setItem(k, v) } catch (e) {} },
+  del(k) { try { localStorage.removeItem(k) } catch (e) {} },
 }
 
 const DEFAULT_RELAY = 'textshare-sync.avishkarkedar.workers.dev'
+const REPO = 'AvishkarKedar/textshare'
+const BUILD = '2026-08-06'
 const AL = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
 const LEN = 6
 const VIEW_ONLY = QS.get('view') === '1'
 const IDLE_AFTER = 60000
+const PBKDF2_ROUNDS = 200000
+const CHAT_MAX = 400, CHAT_KEEP = 300
 
-// Readable on black, readable on white, and distinct from each other.
 const PALETTE = ['#4c8dff', '#3ddc84', '#ffb347', '#c792ea', '#ff87b5', '#4fd6d2', '#ff6b5b', '#e8d44d']
 
-const T_UPDATE = 0, T_AWARE = 1, T_SNAPSHOT = 2, T_SYNCED = 3, T_ERROR = 4, T_COMPACT = 5
+const T_UPDATE = 0, T_AWARE = 1, T_SNAPSHOT = 2, T_SYNCED = 3,
+      T_ERROR = 4, T_COMPACT = 5, T_STATE = 6, T_KILLED = 7, T_GRANT = 8
 
 const norm = v => (v || '').toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, LEN)
 const cleanHost = v => (v || '').trim().replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/+$/, '')
 const relayHost = () => cleanHost(QS.get('relay') || LS.get('ts.relay', '') || DEFAULT_RELAY)
+
+// Names and colours arrive from other clients, so treat both as hostile.
+const safeColor = c => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#4c8dff')
+const safeName = n => String(n == null ? '' : n).slice(0, 24) || 'anon'
 
 function newCode() {
   const a = new Uint8Array(LEN)
@@ -50,7 +61,7 @@ function newCode() {
 }
 
 function initials(n) {
-  const p = (n || '?').trim().split(/\s+/)
+  const p = safeName(n).trim().split(/\s+/)
   return ((p[0] || '?')[0] + (p[1] ? p[1][0] : '')).toUpperCase()
 }
 
@@ -60,7 +71,7 @@ function toast(msg) {
   el.textContent = msg
   el.classList.add('show')
   clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2200)
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2400)
 }
 
 async function copy(text, label) {
@@ -69,11 +80,14 @@ async function copy(text, label) {
 }
 
 function shake(el) {
+  if (!el) return
   el.classList.remove('shake')
   void el.offsetWidth
   el.classList.add('shake')
   setTimeout(() => el.classList.remove('shake'), 400)
 }
+
+const sheetEl = () => document.querySelector('.sheet')
 
 /* ============================================================== theming */
 
@@ -91,7 +105,6 @@ function applyTheme() {
 }
 MQ.addEventListener('change', () => { if (themePref() === 'system') applyTheme() })
 
-// One highlight style, tuned for pure black rather than a generic dark grey.
 const darkHL = HighlightStyle.define([
   { tag: [t.comment, t.lineComment, t.blockComment], color: '#5c6370', fontStyle: 'italic' },
   { tag: [t.keyword, t.modifier, t.controlKeyword, t.moduleKeyword], color: '#c792ea' },
@@ -129,15 +142,37 @@ const highlightFor = r => syntaxHighlighting(r === 'dark' ? darkHL : lightHL, { 
 /* =========================================================== encryption */
 
 const TE = new TextEncoder(), TD = new TextDecoder()
-const PROBE = 'textshare-verify-v3'
 
-async function deriveKey(code, pass) {
-  const base = await crypto.subtle.importKey('raw', TE.encode(code + ':' + (pass || '')), 'PBKDF2', false, ['deriveKey'])
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: TE.encode('textshare|' + code), iterations: 150000, hash: 'SHA-256' },
-    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
-  )
+const b64 = u8 => {
+  let s = ''
+  for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i])
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
+const sha = async s => b64(new Uint8Array(await crypto.subtle.digest('SHA-256', TE.encode(String(s)))))
+const randToken = () => b64(crypto.getRandomValues(new Uint8Array(32)))
+
+/**
+ * Two independent values from one password.
+ *
+ *   key  - AES-GCM, never leaves this browser.
+ *   auth - proves to the relay that we know the password. Different salt, so
+ *          handing it over reveals nothing about the key.
+ *
+ * The relay stores only SHA-256(auth), so even its own storage does not hold
+ * anything replayable.
+ */
+async function derive(code, pass) {
+  const base = await crypto.subtle.importKey(
+    'raw', TE.encode(code + ':' + (pass || '')), 'PBKDF2', false, ['deriveKey', 'deriveBits'])
+  const key = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: TE.encode('textshare|' + code), iterations: PBKDF2_ROUNDS, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: TE.encode('textshare-auth|' + code), iterations: PBKDF2_ROUNDS, hash: 'SHA-256' },
+    base, 256)
+  return { key, auth: b64(new Uint8Array(bits)) }
+}
+
 async function seal(key, bytes) {
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes))
@@ -149,38 +184,60 @@ async function unseal(key, bytes) {
   return new Uint8Array(await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: bytes.slice(0, 12) }, key, bytes.slice(12)))
 }
-const b64 = u8 => {
-  let s = ''
-  for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i])
-  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-const unb64 = str => {
-  const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/'))
-  const out = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
-  return out
-}
 
-/* ========================================================== room lookup */
+/* ========================================================= relay lookup */
+
+async function http(host, path, opts) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 9000)
+  try {
+    return await fetch('https://' + host + path,
+      Object.assign({ cache: 'no-store', signal: ctrl.signal }, opts || {}))
+  } catch (e) { return null }
+  finally { clearTimeout(timer) }
+}
 
 async function roomInfo(host, code) {
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 8000)
-  try {
-    const res = await fetch('https://' + host + '/room/' + code + '/exists', { cache: 'no-store', signal: ctrl.signal })
-    if (!res.ok) return { ok: false }
-    return { ok: true, info: await res.json() }
-  } catch (e) { return { ok: false } }
-  finally { clearTimeout(timer) }
+  const res = await http(host, '/room/' + code + '/exists')
+  if (!res || !res.ok) return { ok: false }
+  try { return { ok: true, info: await res.json() } } catch (e) { return { ok: false } }
+}
+
+/**
+ * Ask the relay to judge our auth token before we open a socket. A failed
+ * WebSocket upgrade gives JavaScript no status code, so proving the password
+ * over plain HTTP first is the only way to tell "wrong password" apart from
+ * "your wifi died". 426 means the token was accepted and it now wants an
+ * upgrade, which is exactly what we wanted to hear.
+ */
+async function preflight(host, code, params) {
+  const res = await http(host, '/room/' + code + (params ? '?' + params : ''))
+  if (!res) return { status: 0 }
+  let body = null
+  try { body = await res.json() } catch (e) {}
+  return { status: res.status, body }
+}
+
+async function admin(host, code, token, action, value) {
+  const res = await http(host, '/room/' + code + '/admin', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token, action, value }),
+  })
+  if (!res) return { ok: false }
+  try { return Object.assign({ ok: res.ok, status: res.status }, await res.json()) }
+  catch (e) { return { ok: res.ok, status: res.status } }
 }
 
 /* ================================================================ relay */
 
 class Relay {
-  constructor(host, code, doc, aw, key, createOpts) {
-    Object.assign(this, { host, code, doc, aw, key, createOpts: createOpts || null })
+  constructor(host, code, doc, aw, key, auth, owner) {
+    Object.assign(this, { host, code, doc, aw, key, auth, owner })
     this.tries = 0; this.dead = false; this.synced = false
     this.onstate = () => {}
+    this.onroom = () => {}
+    this.onkilled = () => {}
 
     this._doc = (u, origin) => { if (origin !== this) this.send(T_UPDATE, u) }
     this._aw = ({ added, updated, removed }) =>
@@ -194,12 +251,11 @@ class Relay {
   }
 
   url() {
-    let u = 'wss://' + this.host + '/room/' + this.code
-    if (this.createOpts) {
-      u += '?create=1&v=' + encodeURIComponent(this.createOpts.verifier)
-      if (this.createOpts.hasPassword) u += '&p=1'
-    }
-    return u
+    const p = new URLSearchParams()
+    if (this.auth) p.set('a', this.auth)
+    if (this.owner) p.set('o', this.owner)
+    p.set('cid', String(this.doc.clientID))
+    return 'wss://' + this.host + '/room/' + this.code + '?' + p.toString()
   }
 
   connect() {
@@ -219,19 +275,28 @@ class Relay {
     ws.onmessage = async ev => {
       if (typeof ev.data === 'string') return
       const buf = new Uint8Array(ev.data)
+      if (!buf.length) return
       const type = buf[0], body = buf.slice(1)
 
+      // Control frames are relay-authored and therefore not encrypted.
       if (type === T_SYNCED) { this.synced = true; this.onstate(); return }
       if (type === T_COMPACT) { this.send(T_SNAPSHOT, Y.encodeStateAsUpdate(this.doc)); return }
+      if (type === T_STATE) {
+        try { this.onroom(JSON.parse(TD.decode(body))) } catch (e) {}
+        return
+      }
+      if (type === T_KILLED) { this.dead = true; this.onkilled(TD.decode(body)); return }
       if (type === T_ERROR) {
         const r = TD.decode(body)
         if (r === 'rate_limited') toast('Slow down a moment')
-        if (r === 'room_full_bytes') toast('Room size limit reached')
+        else if (r === 'room_full_bytes') toast('This room has hit its size limit')
+        else if (r === 'read_only') toast('This room is read-only')
         return
       }
 
       let plain
-      try { plain = await unseal(this.key, body) } catch (e) { return }
+      try { plain = await unseal(this.key, body) }
+      catch (e) { return }   // not ours to read: wrong key, or a stale frame
       try {
         if (type === T_UPDATE) Y.applyUpdate(this.doc, plain, this)
         else if (type === T_AWARE) applyAwarenessUpdate(this.aw, plain, this)
@@ -249,13 +314,21 @@ class Relay {
     this.timer = setTimeout(() => this.connect(), Math.min(15000, 600 * Math.pow(1.6, this.tries++)))
   }
 
-  async send(type, payload) {
+  close() {
+    this.dead = true
+    clearTimeout(this.timer)
+    try { this._bye() } catch (e) {}
+    try { this.ws.close() } catch (e) {}
+  }
+
+  // `raw` skips encryption, for the few frames the relay must actually read.
+  async send(type, payload, raw) {
     if (!this.ws || this.ws.readyState !== 1) return
     try {
-      const sealed = await seal(this.key, payload)
-      const out = new Uint8Array(1 + sealed.length)
+      const body = raw ? new Uint8Array(payload) : await seal(this.key, payload)
+      const out = new Uint8Array(1 + body.length)
       out[0] = type
-      out.set(sealed, 1)
+      out.set(body, 1)
       if (this.ws.readyState === 1) this.ws.send(out.buffer)
     } catch (e) {}
   }
@@ -284,28 +357,49 @@ const EXT = {}
 for (const id in LANGS) EXT[LANGS[id][1]] = id
 Object.assign(EXT, {
   htm: 'html', jsx: 'javascript', mjs: 'javascript', tsx: 'typescript', yaml: 'yaml',
-  c: 'cpp', h: 'cpp', cc: 'cpp', hpp: 'cpp', bash: 'shell', zsh: 'shell',
+  c: 'cpp', h: 'cpp', cc: 'cpp', hpp: 'cpp', bash: 'shell', zsh: 'shell', markdown: 'markdown',
 })
 const langFromName = name => {
   const d = (name || '').lastIndexOf('.')
   return d < 0 ? 'text' : (EXT[name.slice(d + 1).toLowerCase()] || 'text')
 }
 
+// Rough sniffing, only ever applied to an untouched "plain" file.
+function sniff(text) {
+  const s = text.slice(0, 4000)
+  if (/^\s*[{[][\s\S]*[}\]]\s*$/.test(s.trim())) { try { JSON.parse(s); return 'json' } catch (e) {} }
+  if (/^\s*<(!doctype|html|div|section|head)\b/i.test(s)) return 'html'
+  if (/\b(def|elif)\b.*:|^\s*import\s+\w+$/m.test(s)) return 'python'
+  if (/\b(const|let|=>|function)\b/.test(s)) return 'javascript'
+  if (/^\s*(SELECT|INSERT|UPDATE|CREATE TABLE)\b/im.test(s)) return 'sql'
+  if (/^\s*#!\s*\/bin\/(ba)?sh/.test(s)) return 'shell'
+  if (/^#{1,3}\s|\*\*\w/m.test(s)) return 'markdown'
+  if (/\b(fn|impl|pub struct)\b/.test(s)) return 'rust'
+  if (/\b(package|func)\b.*\{/.test(s)) return 'go'
+  return null
+}
+
 /* ================================================================ state */
 
 let CODE = norm(location.hash.slice(1))
-let ydoc, awareness, relay, idb, key, view
+let ydoc, awareness, relay, idb, KEY, AUTH, OWNER = null, view
 let ylist, ytexts, undoManager, activeId = null, following = null
 let typingTimer, actTimer, chatSeen = 0, markSig = '', startedAt = 0
+let roomLocked = false, canEdit = !VIEW_ONLY, killed = false, booted = false
+let scrollHandler = null, stopDemo = null
 const known = new Map()
 
-const langComp = new Compartment(), themeComp = new Compartment()
-const myColor = PALETTE[Math.floor(Math.random() * PALETTE.length)]
+const langComp = new Compartment(), themeComp = new Compartment(), roComp = new Compartment()
+let myColor = safeColor(LS.get('ts.color', '')) === '#4c8dff' && !LS.get('ts.color', '')
+  ? PALETTE[Math.floor(Math.random() * PALETTE.length)]
+  : safeColor(LS.get('ts.color', ''))
 let myName = LS.get('ts.name', '')
 
 applyTheme()
 
-/* ============================================================= step one */
+const readOnlyNow = () => VIEW_ONLY || !canEdit
+
+/* ========================================================= landing page */
 
 const gErr = m => { const e = $('gErr'); e.textContent = m || ''; e.hidden = !m }
 
@@ -315,6 +409,34 @@ function paintRelay() {
   if ($('sigInput')) $('sigInput').value = relayHost()
 }
 paintRelay()
+$('verStamp').textContent = 'build ' + BUILD
+
+// Footer: is the relay actually up right now?
+;(async () => {
+  const res = await http(relayHost(), '/health')
+  const dot = $('relayDot')
+  if (!dot) return
+  dot.className = 'rdot ' + (res && res.ok ? 'on' : 'off')
+  dot.title = res && res.ok ? 'Relay is responding' : 'Relay is not responding'
+})()
+
+;(async () => {
+  try {
+    const r = await fetch('https://api.github.com/repos/' + REPO, { cache: 'force-cache' })
+    if (!r.ok) return
+    const d = await r.json()
+    if (typeof d.stargazers_count === 'number') {
+      $('ghStars').textContent = '\u2605 ' + d.stargazers_count
+    }
+  } catch (e) {}
+})()
+
+// The demo is decoration: never let it break the page it sits on.
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  import('./demo.js')
+    .then(m => { if (!booted) stopDemo = m.runDemo($('demo')) })
+    .catch(() => {})
+}
 
 $('gRelayToggle').onclick = () => {
   const i = $('gRelayInput')
@@ -323,7 +445,7 @@ $('gRelayToggle').onclick = () => {
 }
 $('gRelayInput').onchange = () => {
   const h = cleanHost($('gRelayInput').value)
-  if (h) { LS.set('ts.relay', h); paintRelay(); toast('Relay set') }
+  if (h) { LS.set('ts.relay', h); paintRelay(); toast('Relay set to ' + h) }
 }
 $('gCode').addEventListener('input', e => {
   e.target.value = norm(e.target.value)
@@ -356,14 +478,19 @@ async function tryJoin(code, btn) {
   if (btn) { btn.disabled = false; btn.innerHTML = '&#8594;' }
 
   if (!res.ok) {
-    gErr('Cannot reach ' + relayHost() + '. Check your connection.')
+    gErr('Cannot reach ' + relayHost() + '. Check your connection, then try again.')
     shake($('gCode'))
     return
   }
   if (!res.info.exists) {
-    gErr('No room exists with code ' + code + '. It may have been erased after 10 minutes of no activity.')
+    gErr('No room exists with code ' + code + '. Rooms are erased once everyone leaves.')
     shake($('gCode')); $('gCode').classList.add('bad')
     if (location.hash) history.replaceState(null, '', location.pathname + location.search)
+    return
+  }
+  if (res.info.suspended && !LS.get('ts.own.' + code, '')) {
+    gErr('Room ' + code + ' has been suspended by whoever created it.')
+    shake($('gCode'))
     return
   }
   openModal('join', code, res.info)
@@ -378,7 +505,9 @@ function openModal(mode, code, info) {
   const locked = mode === 'join' && info && info.hasPassword
 
   $('mLock').hidden = !locked
-  $('mTitle').textContent = mode === 'create' ? 'New room' : (locked ? 'Room ' + code + ' is locked' : 'Join ' + code)
+  $('mTitle').textContent = mode === 'create'
+    ? 'New room'
+    : (locked ? 'Room ' + code + ' is locked' : 'Join ' + code)
   $('mSub').textContent = mode === 'create'
     ? 'You will get a 6-character code to share.'
     : (locked
@@ -388,7 +517,7 @@ function openModal(mode, code, info) {
   $('mPassWrap').hidden = !locked
   $('mPassLbl').textContent = 'Password'
   $('mAddPass').hidden = mode !== 'create'
-  $('mAddPass').textContent = '+ protect this room with a password'
+  $('mTtlRow').hidden = mode !== 'create'
   $('mPass').value = ''
   $('mPass').classList.remove('bad')
   $('mErr').hidden = true
@@ -407,18 +536,11 @@ $('mAddPass').onclick = () => {
 }
 
 $('mBack').onclick = () => { $('modal').hidden = true; pending = null }
-addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !$('modal').hidden) $('mBack').click()
-  if (e.key === 'Escape') { $('menu').hidden = true }
-})
 $('mName').addEventListener('keydown', e => { if (e.key === 'Enter') $('mGo').click() })
 $('mPass').addEventListener('keydown', e => { if (e.key === 'Enter') $('mGo').click() })
 
-const mErr = m => {
-  const e = $('mErr')
-  e.textContent = m || ''
-  e.hidden = !m
-}
+const mErr = m => { const e = $('mErr'); e.textContent = m || ''; e.hidden = !m }
+const bootMsg = m => { $('boot').hidden = false; $('bootMsg').textContent = m }
 
 $('mGo').onclick = async () => {
   if (!pending) return
@@ -430,60 +552,130 @@ $('mGo').onclick = async () => {
   const pass = $('mPass').value
   if (pending.mode === 'join' && pending.info.hasPassword && !pass) {
     mErr('This room needs a password.')
-    shake($('.sheet') ? document.querySelector('.sheet') : $('mPass'))
+    shake(sheetEl())
     $('mPass').classList.add('bad'); $('mPass').focus()
     return
   }
 
   mErr('')
   $('mGo').disabled = true
-  const ok = await enterRoom(pending.mode === 'create' ? newCode() : pending.code, pass, pending.mode === 'create')
+  $('mBack').disabled = true
+  $('modal').hidden = true
+  bootMsg('Deriving your key')
+
+  const result = pending.mode === 'create'
+    ? await createRoom(pass, $('mTtl').value)
+    : await joinRoom(pending.code, pass)
+
+  $('boot').hidden = true
+
+  if (result.ok) return
+
+  $('modal').hidden = false
   $('mGo').disabled = false
-  if (!ok) {
-    mErr('Wrong password for room ' + pending.code + '.')
-    shake(document.querySelector('.sheet'))
+  $('mBack').disabled = false
+
+  if (result.reason === 'password') {
+    mErr('That password is not right for room ' + pending.code + '.')
+    shake(sheetEl())
     $('mPass').classList.add('bad')
     $('mPass').select()
+  } else if (result.reason === 'gone') {
+    mErr('Room ' + pending.code + ' no longer exists.')
+  } else if (result.reason === 'suspended') {
+    mErr('This room has been suspended by its owner.')
+  } else if (result.reason === 'busy') {
+    mErr('Too many requests from your network. Wait a minute and try again.')
+  } else {
+    mErr('Could not reach ' + relayHost() + '. Check your connection.')
   }
 }
 
-/* ========================================================== entering */
+/* ========================================================= create / join */
 
-async function enterRoom(code, password, creating) {
+async function createRoom(password, ttl) {
+  const host = relayHost()
+  const ownerToken = randToken()
+
+  // Reserve a code exclusively. Without this, a random collision would drop
+  // two strangers into one room holding two different keys, and neither of
+  // them could read a single byte the other typed.
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const code = newCode()
+    bootMsg('Deriving your key')
+    const { key, auth } = await derive(code, password)
+
+    bootMsg('Reserving room ' + code)
+    const p = new URLSearchParams({
+      create: '1', excl: '1',
+      a: await sha(auth),
+      o: await sha(ownerToken),
+      ttl: ttl || '10m',
+    })
+    if (password) p.set('p', '1')
+
+    const r = await preflight(host, code, p.toString())
+    if (r.status === 409) continue             // taken, pick another
+    if (r.status === 429) return { ok: false, reason: 'busy' }
+    if (r.status !== 426) return { ok: false, reason: 'network' }
+
+    LS.set('ts.own.' + code, ownerToken)
+    OWNER = ownerToken
+    KEY = key; AUTH = auth
+    await enterRoom(code, !!password)
+    return { ok: true }
+  }
+  return { ok: false, reason: 'network' }
+}
+
+async function joinRoom(code, password) {
+  const host = relayHost()
+  const { key, auth } = await derive(code, password)
+
+  OWNER = LS.get('ts.own.' + code, '') || null
+  const p = new URLSearchParams({ a: auth })
+  if (OWNER) p.set('o', OWNER)
+
+  bootMsg('Checking the password')
+  const r = await preflight(host, code, p.toString())
+
+  if (r.status === 403) return { ok: false, reason: 'password' }
+  if (r.status === 404) return { ok: false, reason: 'gone' }
+  if (r.status === 423) return { ok: false, reason: 'suspended' }
+  if (r.status === 429) return { ok: false, reason: 'busy' }
+  if (r.status !== 426) return { ok: false, reason: 'network' }
+
+  KEY = key; AUTH = auth
+  await enterRoom(code, !!(pending && pending.info && pending.info.hasPassword))
+  return { ok: true }
+}
+
+async function enterRoom(code, locked) {
   CODE = code
   const host = relayHost()
-  key = await deriveKey(code, password)
-
-  let createOpts = null
-  if (creating) {
-    createOpts = { verifier: b64(await seal(key, TE.encode(PROBE))), hasPassword: !!password }
-  } else if (pending && pending.info && pending.info.verifier) {
-    // The password is proven by decryption, never sent.
-    try {
-      if (TD.decode(await unseal(key, unb64(pending.info.verifier))) !== PROBE) return false
-    } catch (e) { return false }
-  }
-
-  const locked = creating ? !!password : !!(pending && pending.info && pending.info.hasPassword)
+  booted = true
+  if (stopDemo) { try { stopDemo() } catch (e) {} stopDemo = null }
 
   history.replaceState(null, '', location.pathname + location.search + '#' + code)
-  $('modal').hidden = true
   $('gate').hidden = true
+  $('modal').hidden = true
   $('app').hidden = false
   $('roomCode').textContent = code
   $('lockIcon').hidden = !locked
   $('nameInput').value = myName
   $('sigInput').value = host
+  $('ownerOnly').hidden = !OWNER
   $('privacyNote').textContent =
-    'Text is encrypted in this browser before it is sent. ' + host +
-    ' relays sealed data it cannot read, and erases the room 10 minutes after the last person leaves.'
+    'Everything is encrypted in this browser before it is sent. ' + host +
+    ' relays sealed bytes it has no key for, and destroys the room once everyone has left.'
 
   startedAt = Date.now()
-  boot(host, createOpts)
-  return true
+  boot(host)
 }
 
-function boot(host, createOpts) {
+/* ================================================================= boot */
+
+function boot(host) {
   ydoc = new Y.Doc()
   ylist = ydoc.getArray('files')
   ytexts = ydoc.getMap('texts')
@@ -494,8 +686,10 @@ function boot(host, createOpts) {
   idb = new IndexeddbPersistence('textshare-' + CODE, ydoc)
   idb.on('synced', () => { ensureFile(); renderTabs() })
 
-  relay = new Relay(host, CODE, ydoc, awareness, key, createOpts)
+  relay = new Relay(host, CODE, ydoc, awareness, KEY, AUTH, OWNER)
   relay.onstate = () => { setTimeout(ensureFile, 300); paintStatus() }
+  relay.onroom = applyRoomState
+  relay.onkilled = onKilled
 
   ylist.observeDeep(() => { renderTabs(); keepActiveValid() })
   ydoc.getArray('chat').observe(renderChat)
@@ -504,11 +698,35 @@ function boot(host, createOpts) {
   ensureFile()
   renderChat()
   onPresence()
+  buildSwatches()
   setInterval(() => { paintPeople(); paintStatus() }, 15000)
 
   setTimeout(() => {
-    if (!relay.synced) banner('Still reaching ' + host + '. Your edits are saved on this device and will sync when it answers.')
+    if (!relay.synced) {
+      banner('Still reaching ' + host + '. Your edits are saved on this device and will sync when it answers.', 'warn')
+    }
   }, 9000)
+}
+
+function applyRoomState(s) {
+  roomLocked = !!s.locked
+  canEdit = !!s.canEdit && !VIEW_ONLY
+  $('lockBadge').hidden = !roomLocked
+  $('roBadge').hidden = !readOnlyNow()
+  if ($('btnLock')) $('btnLock').textContent = roomLocked ? 'Allow everyone to edit again' : 'Make read-only for everyone else'
+  if (view) view.dispatch({ effects: roComp.reconfigure(readOnlyExt()) })
+}
+
+function onKilled(reason) {
+  killed = true
+  try { relay.close() } catch (e) {}
+  const msg = reason === 'deleted'
+    ? 'This room was deleted by whoever created it. Nothing is left on the relay.'
+    : 'This room has been suspended by whoever created it.'
+  banner(msg, 'bad')
+  canEdit = false
+  if (view) view.dispatch({ effects: roComp.reconfigure(readOnlyExt()) })
+  paintStatus()
 }
 
 /* ================================================================ files */
@@ -516,13 +734,15 @@ function boot(host, createOpts) {
 const files = () => ylist.toArray().map(m => ({ id: m.get('id'), name: m.get('name'), lang: m.get('lang'), map: m }))
 const newId = () => 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
-function addFile(name) {
+function addFile(name, text) {
   const id = newId()
   ydoc.transact(() => {
     const m = new Y.Map()
     m.set('id', id); m.set('name', name); m.set('lang', langFromName(name))
     ylist.push([m])
-    ytexts.set(id, new Y.Text())
+    const yt = new Y.Text()
+    if (text) yt.insert(0, text)
+    ytexts.set(id, yt)
   }, 'local')
   return id
 }
@@ -547,6 +767,7 @@ function openFile(id) {
 }
 
 function closeFile(id) {
+  if (readOnlyNow()) return toast('This room is read-only')
   if (ylist.length <= 1) return toast('A room keeps at least one file')
   if (!confirm('Delete this file for everyone?')) return
   ydoc.transact(() => {
@@ -558,6 +779,7 @@ function closeFile(id) {
 }
 
 function renameFile(id) {
+  if (readOnlyNow()) return toast('This room is read-only')
   const f = files().find(x => x.id === id)
   if (!f) return
   const name = prompt('File name', f.name)
@@ -580,7 +802,7 @@ function renderTabs() {
     lb.textContent = f.name
     lb.onclick = () => (f.id === activeId ? renameFile(f.id) : openFile(f.id))
     el.appendChild(lb)
-    if (!VIEW_ONLY) {
+    if (!readOnlyNow()) {
       const x = document.createElement('span')
       x.className = 'x'
       x.textContent = '\u00d7'
@@ -592,7 +814,7 @@ function renderTabs() {
 }
 
 $('newFile').onclick = () => {
-  if (VIEW_ONLY) return
+  if (readOnlyNow()) return toast('This room is read-only')
   const name = prompt('File name', 'notes.md')
   if (name) openFile(addFile(name.trim().slice(0, 40)))
 }
@@ -628,6 +850,7 @@ function absOf(json) {
 
 function remoteCursors() {
   const out = []
+  if (!view) return out
   for (const p of others()) {
     if (p.file !== activeId || !p.cursor || !p.cursor.head) continue
     const i = absOf(p.cursor.head)
@@ -640,12 +863,15 @@ function remoteCursors() {
 function refreshMarks() {
   if (!view) return
   const cur = remoteCursors()
-  const sig = cur.map(c => c.index + ':' + c.p.user.color).join('|')
-  if (sig === markSig) return
+  const sig = cur.map(c => c.index + ':' + safeColor(c.p.user.color)).join('|')
+  if (sig === markSig) return   // guards against a dispatch feedback loop
   markSig = sig
 
   const rows = cur
-    .map(c => ({ from: view.state.doc.lineAt(c.index).from, m: new NameMark(initials(c.p.user.name), c.p.user.color) }))
+    .map(c => ({
+      from: view.state.doc.lineAt(c.index).from,
+      m: new NameMark(initials(c.p.user.name), safeColor(c.p.user.color)),
+    }))
     .sort((a, b) => a.from - b.from)
 
   const b = new RangeSetBuilder()
@@ -653,28 +879,62 @@ function refreshMarks() {
   view.dispatch({ effects: setMarks.of(b.finish()) })
 }
 
-/* ------- floating "is typing" bubble, pinned to their live cursor ------ */
+/* -------- floating bubbles, pinned to a peer's live cursor ------------ */
+
 function paintBubbles() {
   const layer = $('overlay')
   if (!view || !layer) return
   layer.innerHTML = ''
   const box = view.scrollDOM.getBoundingClientRect()
+
   for (const { p, index } of remoteCursors()) {
-    if (!p.typing) continue
+    const saying = p.say && Date.now() - p.say.ts < 8000 ? p.say.text : null
+    if (!p.typing && !saying) continue
     let c
     try { c = view.coordsAtPos(index) } catch (e) { continue }
     if (!c) continue
+
     const el = document.createElement('div')
     el.className = 'bubble'
-    el.style.background = p.user.color
+    el.style.background = safeColor(p.user.color)
     el.style.left = Math.max(2, c.left - box.left) + 'px'
     el.style.top = (c.top - box.top - 4) + 'px'
-    el.innerHTML = ''
-    el.append(p.user.name + ' ')
-    const i = document.createElement('i')
-    i.textContent = 'typing'
-    el.appendChild(i)
+
+    if (saying) {
+      el.textContent = safeName(p.user.name) + ': ' + String(saying).slice(0, 80)
+    } else {
+      el.append(safeName(p.user.name) + ' ')
+      const i = document.createElement('i')
+      i.textContent = 'typing'
+      el.appendChild(i)
+    }
     layer.appendChild(el)
+  }
+  paintJump()
+}
+
+// "3 edits below" - people working off-screen are otherwise invisible.
+function paintJump() {
+  const pill = $('jump')
+  if (!view || !pill) return
+  const vis = view.visibleRanges
+  if (!vis.length) return pill.hidden = true
+  const from = vis[0].from, to = vis[vis.length - 1].to
+
+  let below = 0, above = 0, target = null
+  for (const { p, index } of remoteCursors()) {
+    if (!p.typing) continue
+    if (index > to) { below++; if (target === null || index < target) target = index }
+    else if (index < from) { above++; if (target === null) target = index }
+  }
+  const n = below + above
+  if (!n) return pill.hidden = true
+
+  pill.hidden = false
+  pill.textContent = n + (n === 1 ? ' person editing ' : ' people editing ') + (below >= above ? 'below' : 'above')
+  pill.onclick = () => {
+    if (target === null) return
+    view.dispatch({ effects: EditorView.scrollIntoView(target, { y: 'center' }) })
   }
 }
 
@@ -691,6 +951,10 @@ async function loadLang(id) {
   if (view) view.dispatch({ effects: langComp.reconfigure(ext) })
 }
 
+const readOnlyExt = () => (readOnlyNow()
+  ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
+  : [])
+
 function touchActive() {
   clearTimeout(actTimer)
   actTimer = setTimeout(() => awareness.setLocalStateField('act', Date.now()), 400)
@@ -699,7 +963,13 @@ function touchActive() {
 function mount() {
   const ytext = ytexts.get(activeId)
   if (!ytext) return
-  if (view) view.destroy()
+
+  // Tear the old one down properly: v4 destroyed the view but left its scroll
+  // listener attached, leaking one handler per tab switch.
+  if (view) {
+    if (scrollHandler) view.scrollDOM.removeEventListener('scroll', scrollHandler)
+    view.destroy()
+  }
   if (undoManager) undoManager.destroy()
   undoManager = new Y.UndoManager(ytext)
   markSig = ''
@@ -735,10 +1005,10 @@ function mount() {
         ]),
         langComp.of([]),
         themeComp.of(highlightFor(resolved())),
-        VIEW_ONLY ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [],
+        roComp.of(readOnlyExt()),
         yCollab(ytext, awareness, { undoManager }),
         EditorView.updateListener.of(u => {
-          if (u.docChanged) { markTyping(); paintCounts() }
+          if (u.docChanged) { markTyping(); paintCounts(); autoLang() }
           if (u.docChanged || u.selectionSet) touchActive()
           if (u.geometryChanged || u.viewportChanged || u.docChanged) paintBubbles()
         }),
@@ -746,11 +1016,29 @@ function mount() {
     }),
   })
 
-  view.scrollDOM.addEventListener('scroll', paintBubbles, { passive: true })
+  scrollHandler = () => paintBubbles()
+  view.scrollDOM.addEventListener('scroll', scrollHandler, { passive: true })
+
   loadLang(currentLang())
-  $('roBadge').hidden = !VIEW_ONLY
+  $('roBadge').hidden = !readOnlyNow()
   paintCounts()
   refreshMarks()
+}
+
+let sniffed = false
+function autoLang() {
+  if (sniffed || readOnlyNow()) return
+  const f = files().find(x => x.id === activeId)
+  if (!f || f.lang !== 'text') return
+  const text = view.state.doc.toString()
+  if (text.length < 40) return
+  const guess = sniff(text)
+  if (!guess) return
+  sniffed = true
+  ydoc.transact(() => f.map.set('lang', guess), 'local')
+  $('lang').value = guess
+  loadLang(guess)
+  toast('Detected ' + LANGS[guess][0])
 }
 
 const langSel = $('lang')
@@ -761,6 +1049,7 @@ for (const id in LANGS) {
   langSel.appendChild(o)
 }
 langSel.onchange = () => {
+  sniffed = true
   const f = files().find(x => x.id === activeId)
   if (f) ydoc.transact(() => f.map.set('lang', langSel.value), 'local')
   loadLang(langSel.value)
@@ -794,7 +1083,8 @@ function onPresence() {
 
 function announce() {
   const now = new Map()
-  for (const p of others()) now.set(p.id, p.user.name)
+  for (const p of others()) now.set(p.id, safeName(p.user.name))
+  // Suppress the burst that initial sync would otherwise produce.
   if (Date.now() - startedAt > 2500) {
     for (const [id, name] of now) if (!known.has(id)) toast(name + ' joined')
     for (const [id, name] of known) if (!now.has(id)) toast(name + ' left')
@@ -805,9 +1095,9 @@ function announce() {
 
 function paintPeople() {
   const host = $('people')
-  if (!host) return
+  if (!host || !ydoc) return
   const now = Date.now()
-  const all = [{ id: ydoc.clientID, me: true, user: { name: myName, color: myColor }, act: now, typing: false }]
+  const all = [{ id: ydoc.clientID, me: true, user: { name: myName, color: myColor }, act: now }]
     .concat(others())
   host.innerHTML = ''
 
@@ -815,11 +1105,11 @@ function paintPeople() {
     const idle = !p.me && now - (p.act || 0) > IDLE_AFTER
     const el = document.createElement('div')
     el.className = 'av' + (p.me ? ' me' : '') + (idle ? ' idle' : '') + (following === p.id ? ' following' : '')
-    el.style.background = p.user.color
+    el.style.background = safeColor(p.user.color)
     el.textContent = initials(p.user.name)
     el.title = p.me
-      ? p.user.name + ' (you)'
-      : p.user.name + (idle ? ' - idle' : '') + '\nclick to jump to their cursor, double-click to follow'
+      ? safeName(p.user.name) + ' (you)'
+      : safeName(p.user.name) + (idle ? ' - idle' : '') + '\nclick to jump to their cursor, double-click to follow'
     if (p.typing) {
       const d = document.createElement('span')
       d.className = 'live'
@@ -850,22 +1140,23 @@ function renderRoster(all, now) {
     const idle = !p.me && now - (p.act || 0) > IDLE_AFTER
     const row = document.createElement('div')
     row.className = 'rowu'
+
     const sw = document.createElement('span')
     sw.className = 'sw'
-    sw.style.background = p.user.color
+    sw.style.background = safeColor(p.user.color)
     if (idle) sw.style.filter = 'grayscale(1)'
+
     const nm = document.createElement('span')
     nm.className = 'nm'
-    nm.textContent = p.user.name + (p.me ? ' (you)' : '')
+    nm.textContent = safeName(p.user.name) + (p.me ? ' (you)' : '')
     row.append(sw, nm)
+
+    const tag = document.createElement('span')
+    tag.className = 'tag'
     if (p.me) {
-      const tag = document.createElement('span')
-      tag.className = 'tag'
-      tag.textContent = VIEW_ONLY ? 'view only' : ''
+      tag.textContent = readOnlyNow() ? 'view only' : ''
       row.appendChild(tag)
     } else {
-      const tag = document.createElement('span')
-      tag.className = 'tag'
       tag.textContent = p.typing ? 'typing' : (idle ? 'idle' : (p.user.view ? 'view only' : ''))
       const f = document.createElement('button')
       f.className = 'fbtn'
@@ -877,13 +1168,37 @@ function renderRoster(all, now) {
   }
 }
 
+function buildSwatches() {
+  const host = $('swatches')
+  if (!host) return
+  host.innerHTML = ''
+  for (const c of PALETTE) {
+    const el = document.createElement('button')
+    el.className = 'cs' + (c === myColor ? ' on' : '')
+    el.style.background = c
+    el.title = c
+    el.onclick = () => {
+      myColor = c
+      LS.set('ts.color', c)
+      awareness.setLocalStateField('user', { name: myName, color: myColor, view: VIEW_ONLY })
+      buildSwatches()
+      paintPeople()
+    }
+    host.appendChild(el)
+  }
+}
+
 function paintStatus() {
   if (!awareness) return
   const n = others().length + 1
   $('userCount').textContent = n + ' online'
   const dot = $('dot'), txt = $('connText')
   $('offlineBadge').hidden = navigator.onLine
-  if (!relay || !relay.ws || relay.ws.readyState !== 1) {
+
+  if (killed) {
+    dot.className = 'off'
+    txt.textContent = 'room closed'
+  } else if (!relay || !relay.ws || relay.ws.readyState !== 1) {
     dot.className = 'off'
     txt.textContent = navigator.onLine ? 'reconnecting' : 'offline'
   } else if (n > 1) {
@@ -897,7 +1212,7 @@ function paintStatus() {
 addEventListener('online', paintStatus)
 addEventListener('offline', paintStatus)
 
-/* --------------------------------------------------- jump & follow */
+/* --------------------------------------------------------- jump & follow */
 
 function jumpTo(id) {
   const st = awareness.getStates().get(id)
@@ -915,7 +1230,7 @@ function toggleFollow(id) {
   const b = $('followBadge')
   b.hidden = !following
   if (following) {
-    b.textContent = 'following ' + ((st && st.user && st.user.name) || '') + ' \u00d7'
+    b.textContent = 'following ' + safeName(st && st.user && st.user.name) + ' \u00d7'
     b.onclick = () => toggleFollow(id)
     followTick()
   }
@@ -940,34 +1255,62 @@ function renderChat() {
   if (!list || !ydoc) return
   const arr = ydoc.getArray('chat').toArray()
   list.innerHTML = ''
+
   for (const m of arr.slice(-200)) {
     const el = document.createElement('div')
     el.className = 'msg'
     const head = document.createElement('div')
+
     const who = document.createElement('span')
     who.className = 'who'
-    who.textContent = m.name
-    who.style.color = m.color
+    who.textContent = safeName(m.name)
+    who.style.color = safeColor(m.color)
+
     const when = document.createElement('span')
     when.className = 'when'
     when.textContent = new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     head.append(who, when)
+
     const body = document.createElement('div')
     body.className = 'body'
-    body.textContent = m.text
+    // Built as text nodes, never innerHTML: chat comes from other people.
+    for (const part of String(m.text).split(/(@[\w-]{1,24})/g)) {
+      if (part.startsWith('@') && part.length > 1) {
+        const s = document.createElement('span')
+        s.className = 'mention'
+        s.textContent = part
+        body.appendChild(s)
+        if (part.slice(1).toLowerCase() === myName.toLowerCase()) el.style.borderLeft = '2px solid var(--accent)'
+      } else if (part) {
+        body.appendChild(document.createTextNode(part))
+      }
+    }
+
     el.append(head, body)
     list.appendChild(el)
   }
   list.scrollTop = list.scrollHeight
+
   if ($('chat').hidden && arr.length > chatSeen) $('chatDot').hidden = false
   else chatSeen = arr.length
+
+  trimChat(arr.length)
+}
+
+// Chat lives in the document, so an all-day room would grow the relay log
+// forever. The lowest client id does the pruning so we do not all race.
+function trimChat(len) {
+  if (len <= CHAT_MAX) return
+  const ids = others().map(p => p.id).concat([ydoc.clientID])
+  if (Math.min.apply(null, ids) !== ydoc.clientID) return
+  ydoc.transact(() => ydoc.getArray('chat').delete(0, len - CHAT_KEEP), 'local')
 }
 
 $('chatForm').onsubmit = e => {
   e.preventDefault()
   const text = $('chatInput').value.trim()
   if (!text) return
-  ydoc.getArray('chat').push([{ name: myName, color: myColor, text, ts: Date.now() }])
+  ydoc.getArray('chat').push([{ name: myName, color: myColor, text: text.slice(0, 500), ts: Date.now() }])
   $('chatInput').value = ''
 }
 
@@ -993,28 +1336,41 @@ const viewLink = () => location.origin + location.pathname + '?view=1#' + CODE
 
 $('roomChip').onclick = () => copy(CODE, 'Room code')
 $('copyLink').onclick = () => copy(inviteLink(), 'Invite link')
-$('undoBtn').onclick = () => { if (undoManager) undoManager.undo(); view.focus() }
-$('redoBtn').onclick = () => { if (undoManager) undoManager.redo(); view.focus() }
+$('undoBtn').onclick = () => { if (undoManager) undoManager.undo(); if (view) view.focus() }
+$('redoBtn').onclick = () => { if (undoManager) undoManager.redo(); if (view) view.focus() }
 
 $('moreBtn').onclick = e => {
   e.stopPropagation()
   $('menu').hidden = !$('menu').hidden
 }
 addEventListener('click', e => {
-  if (!$('menu').hidden && !$('menu').contains(e.target)) $('menu').hidden = true
+  if (!$('menu').hidden && !$('menu').contains(e.target) && e.target !== $('moreBtn')) $('menu').hidden = true
 })
 
+function downloadBlob(blob, name) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = name
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+
 const ACTIONS = {
+  palette: () => openPalette(),
   newfile: () => $('newFile').click(),
   rename: () => renameFile(activeId),
+  find: () => { if (view) openSearchPanel(view) },
   download: () => {
     const f = files().find(x => x.id === activeId)
-    const blob = new Blob([view.state.doc.toString()], { type: 'text/plain;charset=utf-8' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = (f && f.name) || CODE + '.txt'
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+    downloadBlob(new Blob([view.state.doc.toString()], { type: 'text/plain;charset=utf-8' }),
+      (f && f.name) || CODE + '.txt')
+  },
+  exportzip: async () => {
+    try {
+      const { makeZip } = await import('./zip.js')
+      const entries = files().map(f => ({ name: f.name, text: (ytexts.get(f.id) || { toString: () => '' }).toString() }))
+      downloadBlob(makeZip(entries), 'textshare-' + CODE + '.zip')
+    } catch (e) { toast('Could not build the archive') }
   },
   invite: () => copy(inviteLink(), 'Invite link'),
   viewlink: () => copy(viewLink(), 'View-only link'),
@@ -1024,6 +1380,8 @@ const ACTIONS = {
     applyTheme()
   },
   settings: () => showPanel($('panel')),
+  leave: () => leaveRoom(),
+  say: () => cursorChat(),
   files: () => $('tabbar').scrollIntoView(),
   chat: () => showPanel($('chat')),
   undo: () => $('undoBtn').click(),
@@ -1043,6 +1401,12 @@ $('mbar').addEventListener('click', e => {
   if (b && ACTIONS[b.dataset.a]) ACTIONS[b.dataset.a]()
 })
 
+function leaveRoom() {
+  if (!confirm('Leave this room? Your offline copy stays on this device.')) return
+  try { relay.close() } catch (e) {}
+  location.href = location.origin + location.pathname
+}
+
 $('saveSettings').onclick = () => {
   const n = $('nameInput').value.trim()
   if (n) {
@@ -1057,6 +1421,7 @@ $('saveSettings').onclick = () => {
     return setTimeout(() => location.reload(), 500)
   }
   toast('Saved')
+  paintPeople()
   $('panel').hidden = true
 }
 
@@ -1066,11 +1431,174 @@ $('forgetRoom').onclick = async () => {
   location.href = location.origin + location.pathname
 }
 
-function banner(msg) {
+/* ======================================================= owner controls */
+
+async function ownerAction(action, value, label) {
+  const r = await admin(relayHost(), CODE, OWNER, action, value)
+  if (!r.ok) {
+    toast(r.status === 403 ? 'This browser is not the owner of this room' : 'Could not reach the relay')
+    return null
+  }
+  if (label) toast(label)
+  return r
+}
+
+$('btnLock').onclick = async () => {
+  const next = !roomLocked
+  const r = await ownerAction('lock', next, next ? 'Room is now read-only for others' : 'Everyone can edit again')
+  if (r) { roomLocked = !!r.locked; applyRoomState({ locked: roomLocked, canEdit: true }) }
+}
+
+$('btnSuspend').onclick = async () => {
+  if (!confirm('Suspend this room? Everyone else is disconnected immediately, but nothing is deleted and you can resume it.')) return
+  const r = await ownerAction('suspend', true, 'Room suspended')
+  if (r) banner('You have suspended this room. Others cannot connect until you resume it.', 'warn')
+}
+
+$('btnDelete').onclick = async () => {
+  const typed = prompt('This erases the room from the relay for everyone, immediately and permanently.\n\nType the room code to confirm:')
+  if (norm(typed || '') !== CODE) return toast('Not deleted')
+  const r = await ownerAction('delete', true)
+  if (!r) return
+  LS.del('ts.own.' + CODE)
+  try { await idb.clearData() } catch (e) {}
+  alert('Room ' + CODE + ' has been deleted.')
+  location.href = location.origin + location.pathname
+}
+
+/* ====================================================== command palette */
+
+const COMMANDS = [
+  ['New file', 'newfile', ''],
+  ['Rename this file', 'rename', ''],
+  ['Find and replace', 'find', 'Ctrl F'],
+  ['Download this file', 'download', ''],
+  ['Export all files as zip', 'exportzip', ''],
+  ['Copy invite link', 'invite', ''],
+  ['Copy view-only link', 'viewlink', ''],
+  ['Say something at my cursor', 'say', 'Alt /'],
+  ['Open chat', 'chat', ''],
+  ['Toggle theme', 'theme', ''],
+  ['Settings', 'settings', ''],
+  ['Undo', 'undo', 'Ctrl Z'],
+  ['Redo', 'redo', 'Ctrl Y'],
+  ['Leave room', 'leave', ''],
+]
+let palIndex = 0, palShown = []
+
+function openPalette() {
+  $('pal').hidden = false
+  $('palInput').value = ''
+  renderPalette('')
+  setTimeout(() => $('palInput').focus(), 30)
+}
+function closePalette() { $('pal').hidden = true }
+
+function renderPalette(q) {
+  const needle = q.toLowerCase().trim()
+  palShown = COMMANDS.filter(c => !needle || c[0].toLowerCase().includes(needle))
+  palIndex = 0
+  const list = $('palList')
+  list.innerHTML = ''
+  if (!palShown.length) {
+    const n = document.createElement('div')
+    n.className = 'none'
+    n.textContent = 'Nothing matches "' + q + '"'
+    list.appendChild(n)
+    return
+  }
+  palShown.forEach((c, i) => {
+    const el = document.createElement('div')
+    el.className = 'pi' + (i === 0 ? ' on' : '')
+    el.textContent = c[0]
+    if (c[2]) {
+      const kb = document.createElement('span')
+      kb.className = 'kb'
+      kb.textContent = c[2]
+      el.appendChild(kb)
+    }
+    el.onclick = () => { closePalette(); ACTIONS[c[1]] && ACTIONS[c[1]]() }
+    list.appendChild(el)
+  })
+}
+
+function movePalette(d) {
+  const items = [...$('palList').children].filter(el => el.classList.contains('pi'))
+  if (!items.length) return
+  items[palIndex] && items[palIndex].classList.remove('on')
+  palIndex = (palIndex + d + items.length) % items.length
+  items[palIndex].classList.add('on')
+  items[palIndex].scrollIntoView({ block: 'nearest' })
+}
+
+$('palInput').addEventListener('input', e => renderPalette(e.target.value))
+$('palInput').addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); movePalette(1) }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); movePalette(-1) }
+  else if (e.key === 'Enter') {
+    e.preventDefault()
+    const c = palShown[palIndex]
+    closePalette()
+    if (c && ACTIONS[c[1]]) ACTIONS[c[1]]()
+  }
+})
+$('pal').addEventListener('click', e => { if (e.target === $('pal')) closePalette() })
+
+/* ---------------------------------------------------------- cursor chat */
+
+function cursorChat() {
+  const text = prompt('Say something at your cursor (it disappears after a few seconds)')
+  if (!text) return
+  awareness.setLocalStateField('say', { text: text.slice(0, 80), ts: Date.now() })
+  setTimeout(() => awareness.setLocalStateField('say', null), 8200)
+}
+
+/* ------------------------------------------------------------ shortcuts */
+
+addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (!$('pal').hidden) return closePalette()
+    if (!$('modal').hidden) return $('mBack').click()
+    $('menu').hidden = true
+    return
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    if ($('app').hidden) return
+    e.preventDefault()
+    $('pal').hidden ? openPalette() : closePalette()
+  }
+  if (e.altKey && e.key === '/') {
+    if ($('app').hidden) return
+    e.preventDefault()
+    cursorChat()
+  }
+})
+
+/* ------------------------------------------------------- drag and drop */
+
+;['dragover', 'drop'].forEach(ev => addEventListener(ev, e => {
+  if ($('app').hidden) return
+  e.preventDefault()
+}))
+addEventListener('drop', async e => {
+  if ($('app').hidden || readOnlyNow()) return
+  const list = [...(e.dataTransfer ? e.dataTransfer.files : [])].slice(0, 8)
+  let last = null
+  for (const file of list) {
+    if (file.size > 512 * 1024) { toast(file.name + ' is too large (512 KB max)'); continue }
+    try { last = addFile(file.name.slice(0, 40), await file.text()) } catch (err) {}
+  }
+  if (last) { openFile(last); toast('Imported ' + list.length + ' file' + (list.length === 1 ? '' : 's')) }
+})
+
+/* ---------------------------------------------------------------- misc */
+
+function banner(msg, kind) {
   const b = $('banner')
   b.textContent = msg
+  b.className = kind || ''
   b.hidden = false
-  setTimeout(() => { b.hidden = true }, 12000)
+  if (kind !== 'bad') setTimeout(() => { b.hidden = true }, 12000)
 }
 
 function paintCounts() {
