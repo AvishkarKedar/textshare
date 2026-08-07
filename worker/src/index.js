@@ -98,9 +98,18 @@ const json = (body, status) => new Response(JSON.stringify(body), {
   headers: {
     'content-type': 'application/json',
     'cache-control': 'no-store',
-    // Cheap, zero-behavior-risk hardening: tells browsers not to guess a
-    // different content type for this response than the one we declared.
+    // Cheap, zero-behavior-risk hardening on every JSON API response. None of
+    // these change status codes, bodies, or CORS behavior - they only tell
+    // browsers how to treat the response defensively.
     'x-content-type-options': 'nosniff',
+    // This API is never meant to be framed by another site.
+    'x-frame-options': 'DENY',
+    // Room codes/tokens travel in the URL; never leak them via the Referer
+    // header on any outgoing request a browser might make from here.
+    'referrer-policy': 'no-referrer',
+    // This is a JSON API, not a page - it has no legitimate use for any of
+    // these browser features.
+    'permissions-policy': 'geolocation=(), camera=(), microphone=()',
     ...CORS,
   },
 })
