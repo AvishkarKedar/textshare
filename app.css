@@ -352,6 +352,17 @@ aside{position:relative;width:300px;flex:none;background:var(--panel);border-lef
 #swatches .cs{width:20px;height:20px;border-radius:50%;cursor:pointer;box-shadow:0 0 0 2px var(--panel)}
 #swatches .cs.on{box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--fg)}
 
+/* dark / light segmented control, in Settings */
+.segrow{display:flex;border:1px solid var(--line2)}
+.seg{
+  flex:1;height:32px;background:var(--raise);color:var(--mut);
+  font:500 11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;
+  transition:background .12s,color .12s;
+}
+.seg+.seg{border-left:1px solid var(--line2)}
+.seg:hover{color:var(--fg)}
+.seg.on{background:var(--accent);color:#fff}
+
 #chatList{flex:1;overflow:auto;display:flex;flex-direction:column;gap:11px;padding-bottom:10px}
 .msg .head{display:flex;align-items:center;gap:6px}
 .msg .chip-av{width:16px;height:16px;border-radius:50%;flex:none;display:grid;place-items:center;font:600 8px/1 var(--mono);color:#000}
