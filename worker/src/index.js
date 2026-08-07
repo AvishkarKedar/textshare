@@ -46,7 +46,11 @@
  *   single address hammering the API (e.g. scanning for live room codes).
  *   Both are set generously so ordinary bursts of traffic - many people
  *   joining rooms at once, or a shared office/campus network - are never
- *   mistaken for abuse.
+ *   mistaken for abuse. Room *creation* gets its own, stricter per-IP cap
+ *   (CREATE_PER_MIN) below the general one, since each create spins up a
+ *   brand-new Durable Object - cheap individually, but worth capping harder
+ *   than ordinary connects/joins to stop one address from mass-provisioning
+ *   empty rooms.
  */
 
 /* ------------------------------------------------------------ protocol */
@@ -77,6 +81,7 @@ const COMPACT_EVERY = 150
 const SNAPSHOT_WINDOW = 45000   // how long a compaction invitation stays valid
 const DEL_CHUNK = 100           // storage.delete() caps out at 128 keys
 const IP_PER_MIN = 300
+const CREATE_PER_MIN = 20       // stricter: each create provisions a new Durable Object
 const CODE_RE = /^[A-Z0-9]{4,12}$/
 
 /* -------------------------------------------------------------- helpers */
@@ -90,7 +95,14 @@ const CORS = {
 
 const json = (body, status) => new Response(JSON.stringify(body), {
   status: status || 200,
-  headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS },
+  headers: {
+    'content-type': 'application/json',
+    'cache-control': 'no-store',
+    // Cheap, zero-behavior-risk hardening: tells browsers not to guess a
+    // different content type for this response than the one we declared.
+    'x-content-type-options': 'nosniff',
+    ...CORS,
+  },
 })
 
 function b64url(buf) {
@@ -470,22 +482,32 @@ export class Room {
 /* ============================================================== limiter */
 
 /**
- * One object per client IP, holding a one-minute token bucket. This exists
+ * One object per client IP, holding one-minute token buckets. This exists
  * because /exists on an unknown code is otherwise a free room-code scanner,
  * and because room creation was completely unbounded in v2.
+ *
+ * Two independent buckets live in the same object: 'default' covers every
+ * request from this IP, and 'create' additionally, more strictly, covers
+ * only room-creation requests - so mass-provisioning empty rooms from one
+ * address is throttled harder than ordinary joins/connects, without
+ * touching the generous default limit everyone else relies on.
  */
 export class Limiter {
   constructor(state) { this.state = state }
 
-  async fetch() {
+  async fetch(request) {
+    const scope = new URL(request.url).searchParams.get('scope') === 'create' ? 'create' : 'default'
+    const cap = scope === 'create' ? CREATE_PER_MIN : IP_PER_MIN
+    const key = 'b:' + scope
+
     const now = Date.now()
     const st = this.state.storage
-    let b = await st.get('b')
+    let b = await st.get(key)
     if (!b || now - b.t > 60000) b = { t: now, n: 0 }
     b.n++
-    await st.put('b', b)
+    await st.put(key, b)
     if (!(await st.getAlarm())) await st.setAlarm(now + 300000)
-    return json({ n: b.n, ok: b.n <= IP_PER_MIN })
+    return json({ n: b.n, ok: b.n <= cap })
   }
 
   async alarm() { await this.state.storage.deleteAll() }
@@ -510,14 +532,23 @@ export default {
     if (!CODE_RE.test(code)) return json({ error: 'bad_code' }, 400)
 
     // Throttle by IP before touching the room object, so scanning for live
-    // codes cannot spin up an unbounded number of durable objects.
+    // codes cannot spin up an unbounded number of durable objects. Creation
+    // requests additionally get checked against the stricter 'create' scope.
     const ip = request.headers.get('CF-Connecting-IP') || 'anon'
+    const isCreate = url.searchParams.get('create') === '1'
     try {
       const lim = env.LIMIT.get(env.LIMIT.idFromName(ip))
       const verdict = await lim.fetch('https://limiter/check')
       const body = await verdict.json()
       if (!body.ok) {
         return json({ error: 'rate_limited', retryAfter: 60 }, 429)
+      }
+      if (isCreate) {
+        const createVerdict = await lim.fetch('https://limiter/check?scope=create')
+        const createBody = await createVerdict.json()
+        if (!createBody.ok) {
+          return json({ error: 'rate_limited', retryAfter: 60 }, 429)
+        }
       }
     } catch (e) {
       // Never let the limiter being unavailable take the service down.
