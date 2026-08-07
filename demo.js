@@ -75,11 +75,14 @@ export function runDemo(parent) {
   let n = 0, stopped = false, timer
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
 
+  // Clamp each flag to whatever line currently exists so the name/caret
+  // appear from the very first frame and glide into their final spot as
+  // more of the script is typed, instead of popping in only once their
+  // target line has fully arrived.
   function placeFlags() {
     const doc = view.state.doc
     for (const f of flags) {
-      const lineNo = f.p.line + 1
-      if (lineNo > doc.lines) { f.el.style.opacity = '0'; f.bar.style.opacity = '0'; continue }
+      const lineNo = Math.min(f.p.line + 1, doc.lines)
       const line = doc.line(lineNo)
       const pos = Math.min(line.from + Math.floor(line.length * f.p.at), line.to)
       let c
@@ -96,17 +99,28 @@ export function runDemo(parent) {
     }
   }
 
+  function restart() {
+    n = 0
+    timer = setTimeout(step, 3200)
+  }
+
   function step() {
     if (stopped) return
-    if (n <= full.length) {
-      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: full.slice(0, n) } })
-      placeFlags()
-      n += 1
-      // Vary the cadence so it reads as a person, not a printer.
-      const ch = full[n - 1]
-      timer = setTimeout(step, ch === '\n' ? 190 : 26 + Math.random() * 45)
-    } else {
-      timer = setTimeout(() => { n = 0; step() }, 3200)
+    try {
+      if (n <= full.length) {
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: full.slice(0, n) } })
+        placeFlags()
+        n += 1
+        // Vary the cadence so it reads as a person, not a printer.
+        const ch = full[n - 1]
+        timer = setTimeout(step, ch === '\n' ? 190 : 26 + Math.random() * 45)
+      } else {
+        restart()
+      }
+    } catch (e) {
+      // Never let a transient dispatch/layout error permanently kill the
+      // loop - just start the next pass instead of stalling forever.
+      restart()
     }
   }
 
