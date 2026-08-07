@@ -5,7 +5,7 @@
  * anything live: websockets, room lookups, and the relay are never touched.
  */
 
-const VERSION = 'anonshare-v7'
+const VERSION = 'anonshare-v8'
 const SHELL = [
   './',
   './index.html',
