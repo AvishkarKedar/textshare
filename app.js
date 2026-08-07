@@ -185,6 +185,11 @@ function applyTheme() {
   if (view) view.dispatch({ effects: themeComp.reconfigure(highlightFor(r)) })
 }
 
+function applyEdFont() {
+  document.documentElement.style.setProperty('--edfont', edFont + 'px')
+  if ($('edFont')) $('edFont').value = String(edFont)
+}
+
 const darkHL = HighlightStyle.define([
   { tag: [t.comment, t.lineComment, t.blockComment], color: '#5c6370', fontStyle: 'italic' },
   { tag: [t.keyword, t.modifier, t.controlKeyword, t.moduleKeyword], color: '#c792ea' },
@@ -488,8 +493,11 @@ let myColor = /^#[0-9a-f]{6}$/i.test(storedColor)
   ? storedColor
   : PALETTE[Math.floor(Math.random() * PALETTE.length)]
 let myName = LS.get('ts.name', '')
+let chatColorText = LS.get('ts.chatColor', '1') !== '0'
+let edFont = parseInt(LS.get('ts.edfont', '13'), 10) || 13
 
 applyTheme()
+applyEdFont()
 
 const readOnlyNow = () => VIEW_ONLY || !canEdit
 
@@ -1446,23 +1454,38 @@ function renderChat() {
   const arr = ydoc.getArray('chat').toArray()
   list.innerHTML = ''
 
+  let prevName = null, prevTs = 0
   for (const m of arr.slice(-200)) {
+    const grouped = prevName === m.name && (m.ts - prevTs) < 120000
     const el = document.createElement('div')
-    el.className = 'msg'
-    const head = document.createElement('div')
+    el.className = 'msg' + (grouped ? ' grouped' : '')
 
-    const who = document.createElement('span')
-    who.className = 'who'
-    who.textContent = safeName(m.name)
-    who.style.color = safeColor(m.color)
+    if (!grouped) {
+      const head = document.createElement('div')
+      head.className = 'head'
 
-    const when = document.createElement('span')
-    when.className = 'when'
-    when.textContent = new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    head.append(who, when)
+      const chip = document.createElement('span')
+      chip.className = 'chip-av'
+      chip.style.background = safeColor(m.color)
+      chip.textContent = initials(m.name)
+      head.appendChild(chip)
+
+      const who = document.createElement('span')
+      who.className = 'who'
+      who.textContent = safeName(m.name)
+      who.style.color = safeColor(m.color)
+
+      const when = document.createElement('span')
+      when.className = 'when'
+      when.textContent = new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      when.title = new Date(m.ts).toLocaleString()
+      head.append(who, when)
+      el.appendChild(head)
+    }
 
     const body = document.createElement('div')
     body.className = 'body'
+    if (chatColorText) body.style.color = safeColor(m.color)
     // Built as text nodes, never innerHTML: chat comes from other people.
     for (const part of String(m.text).split(/(@[\w-]{1,24})/g)) {
       if (part.startsWith('@') && part.length > 1) {
@@ -1476,13 +1499,19 @@ function renderChat() {
       }
     }
 
-    el.append(head, body)
+    el.appendChild(body)
     list.appendChild(el)
+    prevName = m.name; prevTs = m.ts
   }
   list.scrollTop = list.scrollHeight
 
-  if ($('chat').hidden && arr.length > chatSeen) $('chatDot').hidden = false
-  else chatSeen = arr.length
+  if ($('chat').hidden && arr.length > chatSeen) {
+    $('chatDot').hidden = false
+    const unread = arr.length - chatSeen
+    $('chatDot').textContent = unread > 9 ? '9+' : String(unread)
+  } else {
+    chatSeen = arr.length
+  }
 
   trimChat(arr.length)
 }
@@ -1518,6 +1547,56 @@ function showPanel(el) {
 $('chatBtn').onclick = () => showPanel($('chat'))
 $('chatClose').onclick = () => { $('chat').hidden = true }
 $('panelClose').onclick = () => { $('panel').hidden = true }
+
+if ($('chatColorToggle')) {
+  $('chatColorToggle').setAttribute('aria-pressed', String(chatColorText))
+  $('chatColorToggle').textContent = 'Color messages by sender: ' + (chatColorText ? 'on' : 'off')
+  $('chatColorToggle').onclick = () => {
+    chatColorText = !chatColorText
+    LS.set('ts.chatColor', chatColorText ? '1' : '0')
+    $('chatColorToggle').setAttribute('aria-pressed', String(chatColorText))
+    $('chatColorToggle').textContent = 'Color messages by sender: ' + (chatColorText ? 'on' : 'off')
+    renderChat()
+  }
+}
+if ($('edFont')) {
+  $('edFont').onchange = () => {
+    edFont = parseInt($('edFont').value, 10) || 13
+    LS.set('ts.edfont', String(edFont))
+    applyEdFont()
+  }
+}
+
+// Manual side-panel resize, desktop only. Purely cosmetic and local to this
+// browser: it never touches the shared document or the relay connection.
+function initResizer(handle, aside, storageKey, defaultWidth) {
+  if (!handle || !aside) return
+  const wide = () => matchMedia('(min-width:1081px)').matches
+  const saved = parseInt(LS.get(storageKey, ''), 10)
+  if (saved && wide()) aside.style.width = Math.min(480, Math.max(260, saved)) + 'px'
+  let dragging = false
+  handle.addEventListener('mousedown', e => {
+    if (!wide()) return
+    dragging = true
+    handle.classList.add('active')
+    e.preventDefault()
+  })
+  addEventListener('mousemove', e => {
+    if (!dragging) return
+    const rect = aside.getBoundingClientRect()
+    const w = Math.min(480, Math.max(260, rect.right - e.clientX))
+    aside.style.width = w + 'px'
+  })
+  addEventListener('mouseup', () => {
+    if (!dragging) return
+    dragging = false
+    handle.classList.remove('active')
+    LS.set(storageKey, String(parseInt(aside.style.width, 10) || defaultWidth))
+    if (view) view.requestMeasure()
+  })
+}
+initResizer($('chatResizer'), $('chat'), 'ts.chatw', 300)
+initResizer($('panelResizer'), $('panel'), 'ts.panelw', 300)
 
 /* ============================================================== toolbar */
 
