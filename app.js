@@ -15,7 +15,7 @@ import {
 } from '@codemirror/language'
 import { tags as t } from '@lezer/highlight'
 import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from '@codemirror/autocomplete'
-import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
+import { yCollab, yUndoManagerKeymap, ySyncAnnotation } from 'y-codemirror.next'
 
 window.__ts_booted = true
 
@@ -1203,8 +1203,20 @@ function mount() {
         roComp.of(readOnlyExt()),
         yCollab(ytext, awareness, { undoManager }),
         EditorView.updateListener.of(u => {
-          if (u.docChanged) { markTyping(); paintCounts(); autoLang() }
-          if (u.docChanged || u.selectionSet) touchActive()
+          // Transactions y-codemirror.next dispatches while replaying a remote
+          // peer's Yjs update onto this view carry this annotation. Without
+          // checking for it, syncing someone else's edit into your local doc
+          // fired the exact same "docChanged" path as your own typing - so
+          // *your* awareness state (and therefore your name, on every other
+          // screen showing this room, including this same room open on your
+          // own phone) flashed "typing" whenever anyone else typed.
+          const remote = u.transactions.some(tr => tr.annotation(ySyncAnnotation))
+          if (u.docChanged) {
+            paintCounts()
+            autoLang()
+            if (!remote) markTyping()
+          }
+          if ((u.docChanged || u.selectionSet) && !remote) touchActive()
           if (u.geometryChanged || u.viewportChanged || u.docChanged) paintBubbles()
         }),
       ],
