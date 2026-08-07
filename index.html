@@ -186,9 +186,9 @@
     <div class="stack" id="people" aria-label="People in this room"></div>
 
     <select id="lang" class="btn sel" title="Language" aria-label="Language"></select>
-    <button class="btn ico" id="undoBtn" title="Undo" aria-label="Undo">&#8630;</button>
-    <button class="btn ico" id="redoBtn" title="Redo" aria-label="Redo">&#8631;</button>
-    <button class="btn ico" id="chatBtn" title="Chat" aria-label="Chat">&#9647;<span class="nd" id="chatDot" hidden></span></button>
+    <button class="btn ico" id="undoBtn" title="Undo" aria-label="Undo"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 7 4 12l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button class="btn ico" id="redoBtn" title="Redo" aria-label="Redo"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M15 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 12H10a6 6 0 0 0 0 12h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button class="btn ico" id="chatBtn" title="Chat" aria-label="Chat"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M4 5h16v10H9l-4 4V5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="nd" id="chatDot" hidden></span></button>
     <button class="btn ico" id="moreBtn" title="More" aria-label="More" aria-haspopup="true" aria-expanded="false">&#8943;</button>
 
     <div id="menu" role="menu" hidden>
@@ -224,12 +224,14 @@
     </div>
 
     <aside id="chat" hidden aria-label="Room chat">
+      <div class="resizer" id="chatResizer" aria-hidden="true"></div>
       <div class="phead"><span>Chat</span><button class="btn ico flat" id="chatClose" aria-label="Close chat">&times;</button></div>
       <div id="chatList" role="log" aria-live="polite"></div>
       <form id="chatForm"><input id="chatInput" class="in" placeholder="Message the room" maxlength="500" autocomplete="off" aria-label="Message the room"></form>
     </aside>
 
     <aside id="panel" hidden aria-label="Settings">
+      <div class="resizer" id="panelResizer" aria-hidden="true"></div>
       <div class="phead"><span>Settings</span><button class="btn ico flat" id="panelClose" aria-label="Close settings">&times;</button></div>
 
       <div class="sec">In this room</div>
@@ -240,6 +242,20 @@
       <input id="nameInput" class="in" maxlength="24">
       <label class="lbl" for="swatches">Your colour</label>
       <div id="swatches" role="radiogroup" aria-label="Your colour"></div>
+
+      <label class="lbl" for="chatColorToggle">Chat text</label>
+      <button type="button" id="chatColorToggle" class="btn" aria-pressed="true">Color messages by sender: on</button>
+
+      <label class="lbl" for="edFont">Editor font size</label>
+      <select id="edFont" class="in sel">
+        <option value="12">12px</option>
+        <option value="13">13px</option>
+        <option value="14">14px</option>
+        <option value="15">15px</option>
+        <option value="16">16px</option>
+        <option value="18">18px</option>
+      </select>
+
       <div class="mrow"><button class="btn primary" id="saveSettings">Save</button></div>
 
       <div class="sec">This device</div>
