@@ -356,13 +356,21 @@ class Relay {
     this.onkilled = () => {}
 
     this._doc = (u, origin) => { if (origin !== this) this.send(T_UPDATE, u) }
-    this._aw = ({ added, updated, removed }) =>
-      this.send(T_AWARE, encodeAwarenessUpdate(this.aw, added.concat(updated, removed)))
+    // Broadcast only our own presence. Echoing other peers' states (which is
+    // what this did before) kept refreshing the timestamp y-protocols uses to
+    // expire absent clients, so a ghost entry from a reload or a dropped
+    // socket - frozen mid-"typing", under that person's name - never died.
+    this._aw = ({ added, updated, removed }) => {
+      const mine = added.concat(updated, removed).filter(id => id === this.doc.clientID)
+      if (!mine.length) return
+      this.send(T_AWARE, encodeAwarenessUpdate(this.aw, mine))
+    }
     doc.on('update', this._doc)
     aw.on('update', this._aw)
 
     this._bye = () => removeAwarenessStates(this.aw, [this.doc.clientID], 'unload')
     addEventListener('beforeunload', this._bye)
+    addEventListener('pagehide', this._bye)
     this.connect()
   }
 
@@ -433,6 +441,8 @@ class Relay {
   close() {
     this.dead = true
     clearTimeout(this.timer)
+    removeEventListener('beforeunload', this._bye)
+    removeEventListener('pagehide', this._bye)
     try { this._bye() } catch (e) {}
     try { this.ws.close() } catch (e) {}
   }
@@ -889,6 +899,9 @@ function boot(host) {
   onPresence()
   buildSwatches()
   setInterval(() => { paintPeople(); paintStatus() }, 15000)
+  // Typing flags expire on a timestamp now, so indicators must be repainted
+  // on a tick and not only when an awareness event happens to arrive.
+  setInterval(() => { paintPeople(); paintBubbles() }, 2000)
 
   // Fully offline use (relay unreachable, e.g. no network at all) should
   // still get a file to type into rather than staying blank forever.
@@ -1102,7 +1115,7 @@ function paintBubbles() {
 
   for (const { p, index } of remoteCursors()) {
     const saying = p.say && Date.now() - p.say.ts < 8000 ? p.say.text : null
-    if (!p.typing && !saying) continue
+    if (!isTyping(p) && !saying) continue
     let c
     try { c = view.coordsAtPos(index) } catch (e) { continue }
     if (!c) continue
@@ -1136,7 +1149,7 @@ function paintJump() {
 
   let below = 0, above = 0, target = null
   for (const { p, index } of remoteCursors()) {
-    if (!p.typing) continue
+    if (!isTyping(p)) continue
     if (index > to) { below++; if (target === null || index < target) target = index }
     else if (index < from) { above++; if (target === null) target = index }
   }
@@ -1283,15 +1296,51 @@ langSel.onchange = () => {
 /* ============================================================= presence */
 
 function markTyping() {
-  awareness.setLocalStateField('typing', true)
+  const st = awareness.getLocalState() || {}
+  awareness.setLocalState(Object.assign({}, st, { typing: true, tAt: Date.now() }))
   clearTimeout(typingTimer)
   typingTimer = setTimeout(() => awareness.setLocalStateField('typing', false), 1500)
+}
+
+const AW_STALE = 45000
+const TYPING_TTL = 3000
+
+// y-protocols stamps every state it receives; anything much older than its own
+// refresh interval belongs to a client that is already gone.
+function fresh(id) {
+  try {
+    const m = awareness.meta.get(id)
+    return !m || Date.now() - m.lastUpdated < AW_STALE
+  } catch (e) { return true }
+}
+
+function awarenessSeen(id) {
+  try {
+    const m = awareness.meta.get(id)
+    return m ? m.lastUpdated : 0
+  } catch (e) { return 0 }
+}
+
+// Never trust a remote peer's own timer to turn its typing flag back off:
+// backgrounded tabs and locked phone screens get their timers frozen by the
+// browser, so a peer could sit at typing:true forever and show a permanently
+// "typing" name on everyone else's screen. Expire it locally instead.
+function isTyping(p) {
+  if (!p || !p.typing) return false
+  if (typeof p.tAt === 'number' && Date.now() - p.tAt > TYPING_TTL) return false
+  return fresh(p.id)
+}
+
+function isIdle(p, now) {
+  if (p.me) return false
+  const seen = Math.max(p.act || 0, awarenessSeen(p.id))
+  return now - seen > IDLE_AFTER
 }
 
 function others() {
   const out = []
   awareness.getStates().forEach((st, id) => {
-    if (id === ydoc.clientID || !st.user) return
+    if (id === ydoc.clientID || !st.user || !fresh(id)) return
     out.push(Object.assign({ id }, st))
   })
   return out
@@ -1307,15 +1356,24 @@ function onPresence() {
 }
 
 function announce() {
+  const t = Date.now()
+  const prevKnown = new Map(known)
   const now = new Map()
   for (const p of others()) now.set(p.id, safeName(p.user.name))
   // Suppress the burst that initial sync would otherwise produce.
-  if (Date.now() - startedAt > 2500) {
-    for (const [id, name] of now) if (!known.has(id)) toast(name + ' joined')
-    for (const [id, name] of known) if (!now.has(id)) toast(name + ' left')
+  if (t - startedAt > 2500) {
+    for (const [id, name] of now) if (!prevKnown.has(id)) toast(name + ' joined')
+    for (const [id, info] of prevKnown) if (!now.has(id)) {
+      const missing = !awareness.getStates().get(id)
+      if (missing && t - info.since < 2000) continue
+      toast(info.name + ' left')
+    }
   }
   known.clear()
-  for (const [id, name] of now) known.set(id, name)
+  for (const [id, name] of now) {
+    const prev = prevKnown.get(id)
+    known.set(id, { name, since: prev ? prev.since : t })
+  }
 }
 
 function paintPeople() {
@@ -1327,7 +1385,7 @@ function paintPeople() {
   host.innerHTML = ''
 
   for (const p of all.slice(0, 5)) {
-    const idle = !p.me && now - (p.act || 0) > IDLE_AFTER
+    const idle = isIdle(p, now)
     const el = document.createElement('div')
     el.className = 'av' + (p.me ? ' me' : '') + (idle ? ' idle' : '') + (following === p.id ? ' following' : '')
     el.style.background = safeColor(p.user.color)
@@ -1335,7 +1393,7 @@ function paintPeople() {
     el.title = p.me
       ? safeName(p.user.name) + ' (you)'
       : safeName(p.user.name) + (idle ? ' - idle' : '') + '\nclick to jump to their cursor, double-click to follow'
-    if (p.typing) {
+    if (isTyping(p)) {
       const d = document.createElement('span')
       d.className = 'live'
       el.appendChild(d)
@@ -1362,7 +1420,7 @@ function renderRoster(all, now) {
   if (!host) return
   host.innerHTML = ''
   for (const p of all) {
-    const idle = !p.me && now - (p.act || 0) > IDLE_AFTER
+    const idle = isIdle(p, now)
     const row = document.createElement('div')
     row.className = 'rowu'
 
@@ -1382,7 +1440,7 @@ function renderRoster(all, now) {
       tag.textContent = readOnlyNow() ? 'view only' : ''
       row.appendChild(tag)
     } else {
-      tag.textContent = p.typing ? 'typing' : (idle ? 'idle' : (p.user.view ? 'view only' : ''))
+      tag.textContent = isTyping(p) ? 'typing' : (idle ? 'idle' : (p.user.view ? 'view only' : ''))
       const f = document.createElement('button')
       f.className = 'fbtn'
       f.textContent = following === p.id ? 'unfollow' : 'follow'
@@ -1439,6 +1497,18 @@ function paintStatus() {
 }
 addEventListener('online', paintStatus)
 addEventListener('offline', paintStatus)
+addEventListener('visibilitychange', () => {
+  if (document.hidden && awareness) {
+    clearTimeout(typingTimer)
+    awareness.setLocalStateField('typing', false)
+  }
+})
+addEventListener('blur', () => {
+  if (awareness) {
+    clearTimeout(typingTimer)
+    awareness.setLocalStateField('typing', false)
+  }
+})
 
 /* --------------------------------------------------------- jump & follow */
 
@@ -1550,6 +1620,7 @@ function renderChat() {
 // forever. The lowest client id does the pruning so we do not all race.
 function trimChat(len) {
   if (len <= CHAT_MAX) return
+  // This election relies on others() already excluding stale awareness ghosts.
   const ids = others().map(p => p.id).concat([ydoc.clientID])
   if (Math.min.apply(null, ids) !== ydoc.clientID) return
   ydoc.transact(() => ydoc.getArray('chat').delete(0, len - CHAT_KEEP), 'local')
