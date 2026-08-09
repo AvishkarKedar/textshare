@@ -324,6 +324,14 @@
 
 <script type="module" src="app.js"></script>
 <script>
+// Register the offline/PWA shell. Scoped from root so it can control the
+// whole site, not just this page.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () {})
+  })
+}
+
 // If the module graph never executes, say so instead of showing black nothing.
 setTimeout(function () {
   if (!window.__ts_booted) {
