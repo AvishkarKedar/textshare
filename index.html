@@ -41,6 +41,44 @@
   }
 }
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Is anonshare really end-to-end encrypted?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Everything you type is encrypted with AES-GCM in your browser before it is sent anywhere. The relay only ever stores and forwards sealed bytes it cannot read." }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need to sign up or create an account?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. There is no sign-up, no email, and no account of any kind. Pick a display name and start typing." }
+    },
+    {
+      "@type": "Question",
+      "name": "How long does a room last?",
+      "acceptedAnswer": { "@type": "Answer", "text": "You choose: 10 minutes, 1 hour, or 24 hours after everyone leaves. The owner can also delete the room immediately." }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens if I lose the room code or password?",
+      "acceptedAnswer": { "@type": "Answer", "text": "The room becomes unreachable. There is no password reset and no server-side backdoor, since the key is derived only from the code and password in your browser." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I use anonshare for code, not just plain text?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Rooms support multiple files with syntax highlighting for many languages, plus live chat alongside the editor." }
+    },
+    {
+      "@type": "Question",
+      "name": "Does anonshare track me?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No cookies and no personal data are collected. The marketing site uses cookieless, privacy-friendly analytics that cannot identify or follow you." }
+    }
+  ]
+}
+</script>
 
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon-180.png">
@@ -105,6 +143,57 @@
       <p>No sign-up, no cookies, no personal data collected. Pick a display name and start typing.</p>
     </div>
   </div>
+
+  <section class="howBlock" aria-labelledby="howTitle">
+    <h2 class="sectitle" id="howTitle">How it works</h2>
+    <div class="steps">
+      <div class="step">
+        <span class="stepno">1</span>
+        <b>Create a room</b>
+        <p>Click "Create a room." Optionally add a password and choose how long it lives: 10 minutes, an hour, or a day.</p>
+      </div>
+      <div class="step">
+        <span class="stepno">2</span>
+        <b>Share the code</b>
+        <p>Send the six-character room code, and the password if you set one, to whoever should join. That's the only key that matters.</p>
+      </div>
+      <div class="step">
+        <span class="stepno">3</span>
+        <b>Write together, live</b>
+        <p>Type, code, and chat in real time with everyone in the room. It's encrypted in your browser the whole way, and erased when you're done.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="faqBlock" aria-labelledby="faqTitle">
+    <h2 class="sectitle" id="faqTitle">Frequently asked questions</h2>
+    <div class="faqlist">
+      <details class="faq">
+        <summary>Is anonshare really end-to-end encrypted?</summary>
+        <p>Yes. Everything you type is encrypted with AES-GCM in your browser before it is sent anywhere. The relay only ever stores and forwards sealed bytes it cannot read. See <a href="security.html">how the encryption works</a> for the full threat model.</p>
+      </details>
+      <details class="faq">
+        <summary>Do I need to sign up or create an account?</summary>
+        <p>No. There is no sign-up, no email, and no account of any kind. Pick a display name and start typing.</p>
+      </details>
+      <details class="faq">
+        <summary>How long does a room last?</summary>
+        <p>You choose when you create it: 10 minutes, 1 hour, or 24 hours after everyone has left. The owner can also delete the room immediately, which erases it for everybody.</p>
+      </details>
+      <details class="faq">
+        <summary>What happens if I lose the room code or password?</summary>
+        <p>The room becomes unreachable. There is no password reset and no server-side backdoor, since the key is derived only from the code and password inside your browser.</p>
+      </details>
+      <details class="faq">
+        <summary>Can I use anonshare for code, not just plain text?</summary>
+        <p>Yes. Rooms support multiple files with syntax highlighting for many languages, plus live chat alongside the editor.</p>
+      </details>
+      <details class="faq">
+        <summary>Does anonshare track me?</summary>
+        <p>No cookies and no personal data are collected. The marketing site uses cookieless, privacy-friendly analytics that cannot identify or follow you. See the <a href="privacy.html">privacy policy</a> for details.</p>
+      </details>
+    </div>
+  </section>
 
   <footer id="siteFoot">
     <div class="fcol">

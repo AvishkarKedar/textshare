@@ -160,6 +160,31 @@ select.in{-webkit-appearance:none;appearance:none;font-family:var(--mono);font-s
 .strip b{display:block;margin:12px 0 6px;font:600 12px/1 var(--mono);letter-spacing:.02em}
 .strip p{margin:0;color:var(--mut);font-size:12px;line-height:1.65;max-width:34ch}
 
+/* ---- how it works + FAQ ---- */
+.sectitle{margin:0 0 30px;font:600 20px/1.25 var(--sans);letter-spacing:-.02em}
+.howBlock{max-width:1120px;width:100%;margin:0 auto;padding:52px 28px;border-bottom:1px solid var(--line)}
+.steps{display:grid;gap:1px;background:var(--line);grid-template-columns:repeat(3,1fr);border:1px solid var(--line)}
+.step{background:var(--bg);padding:24px 26px}
+.stepno{
+  display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;
+  border:1px solid var(--line2);font:600 12px/1 var(--mono);color:var(--accent);margin-bottom:14px;
+}
+.step b{display:block;margin:0 0 6px;font:600 13px/1.35 var(--sans)}
+.step p{margin:0;color:var(--mut);font-size:12.5px;line-height:1.65;max-width:32ch}
+
+.faqBlock{max-width:1120px;width:100%;margin:0 auto;padding:52px 28px;border-bottom:1px solid var(--line)}
+.faqlist{border-top:1px solid var(--line)}
+.faq{border-bottom:1px solid var(--line)}
+.faq summary{
+  list-style:none;cursor:pointer;padding:16px 2px;
+  font:600 13px/1.4 var(--sans);color:var(--fg);
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";flex:none;color:var(--mut);font:400 17px/1 var(--mono)}
+.faq[open] summary::after{content:"\2212"}
+.faq p{margin:0 0 18px;padding:0 2px;color:var(--mut);font-size:12.5px;line-height:1.7;max-width:66ch}
+
 /* ---- site footer ---- */
 #siteFoot{
   display:grid;gap:32px;grid-template-columns:1.4fr 1fr 1fr;
@@ -463,6 +488,8 @@ body.doc-page{overflow:auto}
   .demoWrap{height:290px}
   .strips{grid-template-columns:1fr}
   #siteFoot{grid-template-columns:1fr 1fr}
+  .steps{grid-template-columns:1fr}
+  .howBlock,.faqBlock{padding:40px 24px}
 }
 @media(max-width:720px){
   aside{left:0;width:auto!important;top:auto;height:64%;border-left:0;border-top:1px solid var(--line2)}
@@ -481,4 +508,8 @@ body.doc-page{overflow:auto}
   .cm-cursor{border-left-width:3px!important}
   .cm-ySelectionCaret{border-left-width:3px}
   .cm-activeLine{background:rgba(76,141,255,.14)!important}
+  .sectitle{font-size:17px}
+  .howBlock,.faqBlock{padding:32px 18px}
+  .step{padding:20px}
+  .faq summary{padding:14px 2px;font-size:12.5px}
 }
