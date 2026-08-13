@@ -435,6 +435,17 @@ body.doc-page{overflow:auto}
 .doc .warn strong{color:var(--warn)}
 .doc .foot{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);color:var(--dim);font:10px/1.7 var(--mono);letter-spacing:.06em}
 
+/* --------------------------------------------------- sticky mobile CTA */
+.sticky-cta{
+  display:none;position:fixed;left:16px;right:16px;bottom:14px;z-index:45;
+  height:46px;box-shadow:0 10px 28px rgba(0,0,0,.55);
+  opacity:0;transform:translateY(8px);transition:opacity .16s,transform .16s;pointer-events:none;
+}
+@media(max-width:720px){
+  .sticky-cta{display:flex}
+  .sticky-cta.show{opacity:1;transform:translateY(0);pointer-events:auto}
+}
+
 /* ======================================================= responsive */
 @media(min-width:1400px){
   body{font-size:14px}
