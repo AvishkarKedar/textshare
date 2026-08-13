@@ -29,6 +29,11 @@
  *   same request, so no room could ever be created. Doing it in one place
  *   makes that class of mistake impossible.
  *
+ *   A wrong password/owner-token guess is additionally throttled far harder
+ *   than ordinary traffic (see the Limiter's 'auth' scope below), so a
+ *   locked room cannot be brute-forced online at anywhere near the rate an
+ *   offline attack against a stolen ciphertext would require.
+ *
  * Ownership:
  *
  *   Whoever creates a room mints a 32-byte owner token in their browser and
@@ -82,6 +87,7 @@ const SNAPSHOT_WINDOW = 45000   // how long a compaction invitation stays valid
 const DEL_CHUNK = 100           // storage.delete() caps out at 128 keys
 const IP_PER_MIN = 300
 const CREATE_PER_MIN = 20       // stricter: each create provisions a new Durable Object
+const AUTH_PER_MIN = 8          // stricter still: guards a locked room against password guessing
 const CODE_RE = /^[A-Z0-9]{4,12}$/
 
 /* -------------------------------------------------------------- helpers */
@@ -98,17 +104,9 @@ const json = (body, status) => new Response(JSON.stringify(body), {
   headers: {
     'content-type': 'application/json',
     'cache-control': 'no-store',
-    // Cheap, zero-behavior-risk hardening on every JSON API response. None of
-    // these change status codes, bodies, or CORS behavior - they only tell
-    // browsers how to treat the response defensively.
     'x-content-type-options': 'nosniff',
-    // This API is never meant to be framed by another site.
     'x-frame-options': 'DENY',
-    // Room codes/tokens travel in the URL; never leak them via the Referer
-    // header on any outgoing request a browser might make from here.
     'referrer-policy': 'no-referrer',
-    // This is a JSON API, not a page - it has no legitimate use for any of
-    // these browser features.
     'permissions-policy': 'geolocation=(), camera=(), microphone=()',
     ...CORS,
   },
@@ -125,8 +123,6 @@ async function sha256(text) {
   return b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(text))))
 }
 
-// Compare without leaking where the mismatch is. Both sides are fixed-length
-// hashes here, so length equality is not itself a secret.
 function constEq(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false
   let diff = 0
@@ -151,11 +147,8 @@ export class Room {
   constructor(state, env) {
     this.state = state
     this.env = env
-    // Rate counters are deliberately in memory only. If the object hibernates
-    // and wakes, everyone starts with a clean bucket - that is a fine trade
-    // for not writing to storage on every single keystroke frame.
     this.rate = new Map()
-    this.invite = null // { cid, at } - who we asked for a snapshot, and when
+    this.invite = null
   }
 
   sockets() {
@@ -205,9 +198,6 @@ export class Room {
   async clearLog() {
     const st = this.state.storage
     const keys = [...(await st.list({ prefix: 'l:', limit: 10000 })).keys()]
-    // storage.delete() rejects more than 128 keys in one call. v2 passed the
-    // whole array and could throw part way through a compaction, leaving the
-    // log truncated at an arbitrary point.
     for (let i = 0; i < keys.length; i += DEL_CHUNK) {
       await st.delete(keys.slice(i, i + DEL_CHUNK))
     }
@@ -233,10 +223,6 @@ export class Room {
     return true
   }
 
-  // v2 asked whichever socket happened to be first in the map, which could be
-  // a view-only peer, a backgrounded tab, or a socket about to close - so a
-  // busy room could grow to the byte ceiling without ever compacting. Ask the
-  // peer that most recently sent us something and can actually edit.
   requestCompaction() {
     let best = null, bestSeen = -1
     for (const ws of this.sockets()) {
@@ -258,22 +244,17 @@ export class Room {
     const q = url.searchParams
     let meta = await st.get('meta')
 
-    /* -- public probe. Deliberately says as little as possible. ------- */
     if (url.pathname.endsWith('/exists')) {
       return json({
         exists: !!meta,
         peers: this.sockets().length,
         hasPassword: meta ? !!meta.p : false,
-        // v2 returned the encrypted verifier here, which let anyone on the
-        // internet brute-force a room password offline at their leisure.
-        // Proof of password now happens on connect, against a hash we hold.
         auth: meta ? !!meta.a : false,
         suspended: meta ? !!meta.s : false,
         locked: meta ? !!meta.r : false,
       })
     }
 
-    /* -- owner-only control plane ------------------------------------- */
     if (url.pathname.endsWith('/admin')) {
       if (request.method !== 'POST') return json({ error: 'method' }, 405)
       if (!meta) return json({ error: 'no_room' }, 404)
@@ -303,7 +284,6 @@ export class Room {
       await st.put('meta', meta)
 
       if (meta.s) {
-        // Suspending boots the non-owners but keeps every byte on disk.
         for (const ws of this.sockets()) {
           const a = this.att(ws)
           if (a.own) continue
@@ -322,12 +302,7 @@ export class Room {
       return json({ ok: true, suspended: !!meta.s, locked: !!meta.r, ttl: meta.ttl || DEFAULT_TTL })
     }
 
-    /* -- creation ------------------------------------------------------ */
     if (q.get('create') === '1') {
-      // Exclusive create closes the collision hole: v2 silently attached you
-      // to somebody else's existing room if your random code happened to
-      // match theirs, and since the keys differed neither side could read the
-      // other. Now the client is told to pick again.
       if (meta && q.get('excl') === '1') return json({ error: 'taken' }, 409)
       if (!meta) {
         const rawAuth = q.get('a')
@@ -335,9 +310,6 @@ export class Room {
         meta = {
           c: Date.now(),
           p: q.get('p') === '1',
-          // Hash here, not on the client. v3 took a pre-hashed value and then
-          // hashed it again a few lines below to authenticate this very same
-          // request, so every create answered 403 and no room could exist.
           a: rawAuth ? await sha256(rawAuth) : null,
           o: rawOwner ? await sha256(rawOwner) : null,
           s: false,
@@ -357,7 +329,20 @@ export class Room {
 
     if (meta.a && !owner) {
       const token = q.get('a')
-      if (!token || !constEq(await sha256(token), meta.a)) {
+      const ok = !!token && constEq(await sha256(token), meta.a)
+      if (!ok) {
+        // A wrong guess here is exactly what an offline password-guessing
+        // tool looks like online: same room, new token, over and over.
+        // Throttle this specific pattern much harder than ordinary traffic -
+        // on top of, not instead of, the generic per-IP limit already
+        // enforced before this request ever reached a Room object.
+        try {
+          const ip = request.headers.get('CF-Connecting-IP') || 'anon'
+          const lim = this.env.LIMIT.get(this.env.LIMIT.idFromName(ip))
+          const verdict = await lim.fetch('https://limiter/check?scope=auth')
+          const body = await verdict.json()
+          if (!body.ok) return json({ error: 'rate_limited', retryAfter: 60 }, 429)
+        } catch (e) {}
         return json({ error: 'bad_auth' }, 403)
       }
     }
@@ -366,12 +351,9 @@ export class Room {
     if (request.headers.get('Upgrade') !== 'websocket') return json({ error: 'expected_websocket' }, 426)
     if (this.sockets().length >= MAX_CONNS) return json({ error: 'room_full' }, 429)
 
-    /* -- accept -------------------------------------------------------- */
     const pair = new WebSocketPair()
     const client = pair[0], server = pair[1]
 
-    // Hibernation. v2 held sockets in a plain Map with accept(), which pinned
-    // the object in memory and billed duration for rooms sitting idle.
     this.state.acceptWebSocket(server)
     server.serializeAttachment({
       own: owner,
@@ -435,10 +417,6 @@ export class Room {
       if (type === T_UPDATE || type === T_SNAPSHOT) {
         if (!a.edit) return ws.send(errorFrame('read_only'))
 
-        // A snapshot erases the entire history for everyone, so it is only
-        // honoured from the peer we actually invited, and only briefly. v2
-        // accepted one from anybody at any time, which meant a single buggy
-        // or hostile tab could destroy a room's whole document.
         let replace = false
         if (type === T_SNAPSHOT) {
           const inv = this.invite
@@ -481,7 +459,7 @@ export class Room {
     }
     const active = (await st.get('active')) || 0
     if (Date.now() - active >= ttl - 2000) {
-      await st.deleteAll()   // nobody for a full lifetime: erase everything
+      await st.deleteAll()
     } else {
       await st.setAlarm(active + ttl)
     }
@@ -495,28 +473,53 @@ export class Room {
  * because /exists on an unknown code is otherwise a free room-code scanner,
  * and because room creation was completely unbounded in v2.
  *
- * Two independent buckets live in the same object: 'default' covers every
- * request from this IP, and 'create' additionally, more strictly, covers
- * only room-creation requests - so mass-provisioning empty rooms from one
- * address is throttled harder than ordinary joins/connects, without
- * touching the generous default limit everyone else relies on.
+ * Three independent buckets live in the same object: 'default' covers every
+ * request from this IP, 'create' additionally, more strictly, covers only
+ * room-creation requests, and 'auth' covers only failed password/owner-token
+ * attempts against a room - so mass-provisioning empty rooms and guessing a
+ * locked room's password are both throttled far harder than ordinary
+ * joins/connects, without touching the generous default limit everyone else
+ * relies on.
+ *
+ * Each bucket is a weighted blend of the current and immediately-previous
+ * one-minute window, not a hard reset at the minute boundary - a plain reset
+ * let an abuser send a full window's worth of requests right before the
+ * boundary and another full window's worth right after, doubling the
+ * effective rate for a moment every minute.
+ *
+ * The idle-cleanup alarm is re-armed on every request instead of only when
+ * one is missing, so it fires five minutes after this IP's *last* request,
+ * not five minutes after its first ever request - otherwise a sustained,
+ * still-active abuser got a free counter reset every five minutes.
  */
 export class Limiter {
   constructor(state) { this.state = state }
 
   async fetch(request) {
-    const scope = new URL(request.url).searchParams.get('scope') === 'create' ? 'create' : 'default'
-    const cap = scope === 'create' ? CREATE_PER_MIN : IP_PER_MIN
+    const scopeParam = new URL(request.url).searchParams.get('scope')
+    const scope = scopeParam === 'create' ? 'create' : scopeParam === 'auth' ? 'auth' : 'default'
+    const cap = scope === 'create' ? CREATE_PER_MIN : scope === 'auth' ? AUTH_PER_MIN : IP_PER_MIN
     const key = 'b:' + scope
+    const prevKey = 'p:' + scope
 
     const now = Date.now()
     const st = this.state.storage
     let b = await st.get(key)
-    if (!b || now - b.t > 60000) b = { t: now, n: 0 }
+
+    if (!b || now - b.t > 60000) {
+      if (b) await st.put(prevKey, b)
+      b = { t: now, n: 0 }
+    }
     b.n++
     await st.put(key, b)
-    if (!(await st.getAlarm())) await st.setAlarm(now + 300000)
-    return json({ n: b.n, ok: b.n <= cap })
+
+    const prev = (await st.get(prevKey)) || { t: 0, n: 0 }
+    const weight = Math.max(0, 1 - (now - b.t) / 60000)
+    const estimate = b.n + prev.n * weight
+
+    await st.setAlarm(now + 300000)
+
+    return json({ n: b.n, ok: estimate <= cap })
   }
 
   async alarm() { await this.state.storage.deleteAll() }
@@ -540,9 +543,6 @@ export default {
     const code = match[1].toUpperCase()
     if (!CODE_RE.test(code)) return json({ error: 'bad_code' }, 400)
 
-    // Throttle by IP before touching the room object, so scanning for live
-    // codes cannot spin up an unbounded number of durable objects. Creation
-    // requests additionally get checked against the stricter 'create' scope.
     const ip = request.headers.get('CF-Connecting-IP') || 'anon'
     const isCreate = url.searchParams.get('create') === '1'
     try {
