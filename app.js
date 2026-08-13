@@ -33,7 +33,7 @@ const AL = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
 const LEN = 6
 const VIEW_ONLY = QS.get('view') === '1'
 const IDLE_AFTER = 60000
-const PBKDF2_ROUNDS = 200000
+const PBKDF2_ROUNDS = 600000
 const CHAT_MAX = 400, CHAT_KEEP = 300
 
 const PALETTE = ['#4c8dff', '#3ddc84', '#ffb347', '#c792ea', '#ff87b5', '#4fd6d2', '#ff6b5b', '#e8d44d']
