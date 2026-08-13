@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>anonshare admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<!-- one-time setup: where is the sync worker? stored in localStorage only. -->
+<section id="setup" hidden>
+  <div class="card">
+    <h1>Connect the relay</h1>
+    <p class="mut">Enter the base URL of your <code>textshare-sync</code> Worker (the same one the main app talks to). This is stored only in this browser.</p>
+    <input id="setupUrl" class="in" placeholder="https://textshare-sync.your-subdomain.workers.dev" autocomplete="off" spellcheck="false">
+    <p class="errline" id="setupErr" hidden></p>
+    <button id="setupGo" class="btn primary block">Save &amp; continue</button>
+  </div>
+</section>
+
+<section id="login" hidden>
+  <div class="card">
+    <h1>anonshare admin</h1>
+    <p class="mut">Owner-only. Sign in with the admin password set on the relay.</p>
+    <input id="loginPass" class="in" type="password" placeholder="Admin password" autocomplete="current-password">
+    <p class="errline" id="loginErr" hidden></p>
+    <button id="loginGo" class="btn primary block">Sign in</button>
+    <button id="loginResetUrl" class="lnk" type="button">Change relay URL</button>
+  </div>
+</section>
+
+<main id="dash" hidden>
+  <header id="top">
+    <div class="logo"><span class="caret">&gt;</span> anonshare admin</div>
+    <span class="grow"></span>
+    <span id="relayUrl" class="mut small"></span>
+    <button id="refreshBtn" class="btn">Refresh</button>
+    <button id="logoutBtn" class="btn">Sign out</button>
+  </header>
+
+  <div id="banner" hidden></div>
+
+  <section class="metrics">
+    <div class="mcard"><b id="mTotal">&mdash;</b><span>active rooms</span></div>
+    <div class="mcard"><b id="mHour">&mdash;</b><span>created (1h)</span></div>
+    <div class="mcard"><b id="mDay">&mdash;</b><span>created (24h)</span></div>
+    <div class="mcard"><b id="mPass">&mdash;</b><span>password-protected</span></div>
+  </section>
+
+  <section class="panel">
+    <div class="phead">
+      <h2>Rooms</h2>
+      <input id="roomFilter" class="in sm" placeholder="Filter by code">
+    </div>
+    <div class="tablewrap">
+      <table id="roomsTable">
+        <thead>
+          <tr><th>Code</th><th>Created</th><th>TTL</th><th>Peers</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="roomsBody"></tbody>
+      </table>
+      <p id="roomsEmpty" class="mut" hidden>No active rooms right now.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="phead"><h2>Rate limits</h2></div>
+    <p class="mut">Adjust the relay's abuse-prevention caps without a redeploy. Changes take effect within ~15 seconds. Leave a field blank to use the built-in default.</p>
+    <div id="configForm" class="configform"></div>
+    <div class="mrow">
+      <button id="configSave" class="btn primary">Save limits</button>
+      <span id="configSaved" class="mut small" hidden>Saved.</span>
+    </div>
+  </section>
+
+  <footer id="footNote" class="mut small">
+    This dashboard only ever sees room codes, timestamps, TTLs, and peer counts &mdash; never message content, passwords, or encryption keys. See the project's WHITEPAPER.md and COMPLIANCE.md for details.
+  </footer>
+</main>
+
+<script src="admin.js"></script>
+</body>
+</html>
