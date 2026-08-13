@@ -75,6 +75,31 @@
       "@type": "Question",
       "name": "Does anonshare track me?",
       "acceptedAnswer": { "@type": "Answer", "text": "No cookies and no personal data are collected. The marketing site uses cookieless, privacy-friendly analytics that cannot identify or follow you." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I use anonshare on my phone?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. It works in any modern mobile browser, with a layout built for small screens, including a bottom bar for files, chat, and settings." }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens if I lose my internet connection while I'm typing?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Your edits keep working locally. An offline copy is kept in your browser, and everything syncs automatically the moment your connection comes back." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I run my own relay instead of the default one?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. anonshare is open source. You can deploy the relay yourself on Cloudflare Workers and point the app at it, using the instructions in the GitHub repository." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is anonshare open source?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes, the entire project - the editor, the relay, and the admin tools - is open source under the MIT licence on GitHub." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is there a limit on room size?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Each room supports up to 30 connections and about 5 MB of history before it is compacted, which is plenty for text and code but not a place to store large files." }
     }
   ]
 }
@@ -193,6 +218,26 @@
         <summary>Does anonshare track me?</summary>
         <p>No cookies and no personal data are collected. The marketing site uses cookieless, privacy-friendly analytics that cannot identify or follow you. See the <a href="privacy.html">privacy policy</a> for details.</p>
       </details>
+      <details class="faq">
+        <summary>Can I use anonshare on my phone?</summary>
+        <p>Yes. It works in any modern mobile browser, with a layout built for small screens, including a bottom bar for files, chat, and settings.</p>
+      </details>
+      <details class="faq">
+        <summary>What happens if I lose my internet connection while I'm typing?</summary>
+        <p>Your edits keep working locally. An offline copy is kept in your browser, and everything syncs automatically the moment your connection comes back.</p>
+      </details>
+      <details class="faq">
+        <summary>Can I run my own relay instead of the default one?</summary>
+        <p>Yes. anonshare is <a href="https://github.com/AvishkarKedar/textshare" target="_blank" rel="noopener">open source</a>. You can deploy the relay yourself on Cloudflare Workers and point the app at it - see the GitHub repository for instructions.</p>
+      </details>
+      <details class="faq">
+        <summary>Is anonshare open source?</summary>
+        <p>Yes, the entire project - the editor, the relay, and the admin tools - is <a href="https://github.com/AvishkarKedar/textshare" target="_blank" rel="noopener">open source under the MIT licence on GitHub</a>.</p>
+      </details>
+      <details class="faq">
+        <summary>Is there a limit on room size?</summary>
+        <p>Each room supports up to 30 connections and about 5 MB of history before it's compacted, which is plenty for text and code but not a place to store large files.</p>
+      </details>
     </div>
   </section>
 
@@ -207,6 +252,7 @@
       <b>Help</b>
       <a href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20bug%20report">Report a bug</a>
       <a href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20feedback">Send feedback</a>
+      <a href="https://github.com/AvishkarKedar/textshare" target="_blank" rel="noopener">View source on GitHub</a>
       <a href="security.html">How the encryption works</a>
     </div>
 
@@ -222,8 +268,6 @@
     <span class="grow"></span>
     <span class="hideS">Built in Pune, India</span>
   </div>
-
-  <button id="stickyCta" class="btn primary sticky-cta" type="button" aria-label="Create a room">Create a room</button>
 </section>
 
 <!-- ============================================================ step two -->

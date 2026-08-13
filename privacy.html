@@ -30,6 +30,9 @@
     <li>No profile of you, and nothing sold or shared with anyone.</li>
   </ul>
 
+  <h2>Cookies</h2>
+  <p>anonshare sets <strong>zero cookies</strong>, on the marketing site or inside a room. Whatever a &ldquo;Do Not Track&rdquo; or Global Privacy Control signal your browser sends, the answer is already the same: nothing is tracked either way, because there is no cookie or fingerprinting mechanism to switch off in the first place.</p>
+
   <h2>What you type</h2>
   <p>Everything in a room - the text, the file names, the chat, and your display name - is encrypted <strong>in your browser</strong> with AES-GCM before it is sent anywhere. The key is derived from the room code and the room password using PBKDF2, and it never leaves your device.</p>
   <p>The relay server stores and forwards <strong>sealed bytes it cannot read</strong>. It has no key, so it cannot decrypt your content, and neither can I.</p>
@@ -65,17 +68,29 @@
   </ul>
   <p>No other third party receives anything. The site makes no calls to social networks, code hosts, font services, or advertising networks.</p>
 
+  <h2>International data transfers</h2>
+  <p>anonshare runs on Cloudflare's global network, so requests and encrypted traffic may pass through data centres outside your own country in the ordinary course of routing. Cloudflare's own data-processing terms govern that infrastructure layer. There is no separate regional copy of anything to transfer, because rooms are not stored anywhere once they expire.</p>
+
+  <h2>Legal requests</h2>
+  <p>If law enforcement or a court ever compels disclosure, I can only hand over what the relay actually holds: the room code, whether the room is password protected, hashed tokens (never the tokens themselves), and connection metadata such as IP addresses and timing. I cannot hand over room content, because the relay never has the key to decrypt it. Where I am not legally prohibited from doing so, I will disclose that a request was made and what was provided.</p>
+
   <h2>Children</h2>
   <p>anonshare is not directed at children under 13, and no age information is collected because no personal information is collected.</p>
 
   <h2>Your rights</h2>
-  <p>Because no account exists and content is encrypted and short-lived, there is generally no personal data held about you that could be exported or deleted on request. You can delete everything you control yourself: delete the room, and clear the site data in your browser.</p>
+  <p>Because no account exists and content is encrypted and short-lived, there is generally no personal data held about you that could be exported or deleted on request. To the extent a jurisdiction's law (such as the GDPR or CCPA) would otherwise give you rights of access, correction, deletion, or objection, they are satisfied in practice like this:</p>
+  <ul>
+    <li><strong>Access / export:</strong> there is nothing on the relay to export; anything you wrote lives in the room itself, which you already have access to while it exists.</li>
+    <li><strong>Deletion:</strong> delete the room (as its owner) to erase it immediately, or simply let it expire.</li>
+    <li><strong>Correction:</strong> edit the room directly, since it is a live document.</li>
+    <li><strong>Objection to processing:</strong> stop using the service; there is no persistent profile to object to.</li>
+  </ul>
 
   <h2>Changes</h2>
   <p>If this policy changes, the date at the top of this page changes with it. Material changes will be reflected on the site itself rather than announced by email, since there is no email list.</p>
 
   <h2>Contact</h2>
-  <p>Questions, corrections, or privacy concerns: <a href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20privacy">avishkarkedar+text@gmail.com</a></p>
+  <p>Questions, corrections, or privacy concerns: <a href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20privacy">avishkarkedar+text@gmail.com</a>, or open an issue on <a href="https://github.com/AvishkarKedar/textshare" target="_blank" rel="noopener">GitHub</a>.</p>
   <p>See also: <a href="security.html">how the encryption works</a> and the <a href="terms.html">terms &amp; conditions</a>.</p>
 
   <p class="foot">&copy; 2026 Avishkar Kedar. All rights reserved.</p>
