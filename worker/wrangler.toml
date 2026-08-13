@@ -11,6 +11,10 @@ class_name = "Room"
 name = "LIMIT"
 class_name = "Limiter"
 
+[[durable_objects.bindings]]
+name = "REGISTRY"
+class_name = "Registry"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room"]
@@ -19,5 +23,14 @@ new_sqlite_classes = ["Room"]
 tag = "v2"
 new_sqlite_classes = ["Limiter"]
 
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["Registry"]
+
 [observability]
 enabled = true
+
+# Required for /admin/* to work at all - set this once with:
+#   npx wrangler secret put ADMIN_PASSWORD
+# Never commit the actual password. If this secret is unset, every
+# /admin/* route returns 503 and the dashboard is fully disabled.
