@@ -448,6 +448,7 @@ let ydoc, awareness, relay, idb, KEY, AUTH, OWNER = null, view
 let ylist, ytexts, undoManager, activeId = null, following = null
 let typingTimer, actTimer, chatSeen = 0, markSig = '', startedAt = 0
 let roomLocked = false, canEdit = !VIEW_ONLY, killed = false, booted = false
+let shownKilled = false, killedInterval = null, adminSuspendNoted = false
 let scrollHandler = null, stopDemo = null
 const known = new Map()
 
@@ -808,20 +809,65 @@ function applyRoomState(s) {
   $('roBadge').hidden = !readOnlyNow()
   if ($('btnLock')) $('btnLock').textContent = roomLocked ? 'Allow everyone to edit again' : 'Make read-only for everyone else'
   if (view) view.dispatch({ effects: roComp.reconfigure(readOnlyExt()) })
+  // The owner isn't disconnected when an admin suspends their own room (only
+  // everyone else is, below), so this state flag is the only signal they
+  // otherwise get that it happened - make it unmistakable rather than silent.
+  if (s.suspendedByAdmin && OWNER && !adminSuspendNoted) {
+    adminSuspendNoted = true
+    banner('The site administrator has suspended this room. Nobody else can connect until it is resumed.', 'bad')
+  } else if (!s.suspended) {
+    adminSuspendNoted = false
+  }
   renderTabs()
 }
 
 function onKilled(reason) {
+  if (shownKilled) return
+  shownKilled = true
   killed = true
   try { relay.close() } catch (e) {}
-  const msg = reason === 'deleted'
-    ? 'This room was deleted by whoever created it. Nothing is left on the relay.'
-    : 'This room has been suspended by whoever created it.'
-  banner(msg, 'bad')
   canEdit = false
   if (view) view.dispatch({ effects: roComp.reconfigure(readOnlyExt()) })
   paintStatus()
+
+  const isAdmin = reason === 'admin_deleted' || reason === 'admin_suspended'
+  const isDelete = reason === 'deleted' || reason === 'admin_deleted'
+  const who = isAdmin ? 'the site administrator' : 'whoever created it'
+  openKilledOverlay(
+    isDelete ? 'Room deleted' : 'Room suspended',
+    isDelete
+      ? 'This room was deleted by ' + who + '. Nothing is left on the relay.'
+      : 'This room has been suspended by ' + who + '.'
+  )
 }
+
+function goHome() {
+  location.href = location.origin + location.pathname
+}
+
+// A clear, unmissable end state instead of a small banner: says plainly what
+// happened and counts down to an automatic return home, since there is
+// nothing left for this tab to usefully do once the room is gone.
+function openKilledOverlay(title, body) {
+  $('killedTitle').textContent = title
+  $('killedBody').textContent = body
+  $('modal').hidden = true
+  $('ask').hidden = true
+  $('pal').hidden = true
+  $('menu').hidden = true
+  $('killed').hidden = false
+
+  let secs = 10
+  const paint = () => { $('killedTimer').textContent = 'Returning to the home page in ' + secs + 's\u2026' }
+  paint()
+  clearInterval(killedInterval)
+  killedInterval = setInterval(() => {
+    secs -= 1
+    if (secs <= 0) { clearInterval(killedInterval); goHome() }
+    else paint()
+  }, 1000)
+}
+$('killedHome').onclick = goHome
 
 const files = () => ylist.toArray().map(m => ({ id: m.get('id'), name: m.get('name'), lang: m.get('lang'), map: m }))
 const newId = () => 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
@@ -1486,10 +1532,40 @@ $('chatForm').onsubmit = e => {
   $('chatInput').value = ''
 }
 
+function mobileSheet() {
+  return matchMedia('(max-width:720px)').matches
+}
+
+function hidePanelAnimated(el) {
+  if (el.hidden) return
+  if (!mobileSheet()) { el.hidden = true; return }
+  el.classList.add('closing')
+  clearTimeout(el._closeTimer)
+  el._closeTimer = setTimeout(() => {
+    el.hidden = true
+    el.classList.remove('closing')
+  }, 280)
+}
+
+function showPanelAnimated(el) {
+  clearTimeout(el._closeTimer)
+  el.classList.remove('closing')
+  el.hidden = false
+  if (mobileSheet()) {
+    // Force the browser to register the "closed" starting position before
+    // removing it - otherwise the sheet just snaps straight to open instead
+    // of sliding in.
+    el.classList.add('closing')
+    void el.offsetHeight
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('closing')))
+  }
+}
+
 function showPanel(el) {
   const other = el === $('chat') ? $('panel') : $('chat')
-  other.hidden = true
-  el.hidden = !el.hidden
+  hidePanelAnimated(other)
+  if (el.hidden) showPanelAnimated(el)
+  else hidePanelAnimated(el)
   if (el === $('chat') && !el.hidden) {
     $('chatDot').hidden = true
     chatSeen = ydoc.getArray('chat').length
@@ -1498,8 +1574,8 @@ function showPanel(el) {
   setTimeout(() => { if (view) view.requestMeasure() }, 60)
 }
 $('chatBtn').onclick = () => showPanel($('chat'))
-$('chatClose').onclick = () => { $('chat').hidden = true }
-$('panelClose').onclick = () => { $('panel').hidden = true }
+$('chatClose').onclick = () => hidePanelAnimated($('chat'))
+$('panelClose').onclick = () => hidePanelAnimated($('panel'))
 
 if ($('chatColorToggle')) {
   $('chatColorToggle').setAttribute('aria-pressed', String(chatColorText))
@@ -1698,8 +1774,7 @@ $('btnDelete').onclick = async () => {
   if (!r) return
   LS.del('ts.own.' + CODE)
   if (idb) { try { await idb.clearData() } catch (e) {} }
-  toast('Room ' + CODE + ' deleted')
-  setTimeout(() => { location.href = location.origin + location.pathname }, 900)
+  onKilled('deleted')
 }
 
 const COMMANDS = [
