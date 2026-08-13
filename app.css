@@ -450,12 +450,12 @@ aside{position:relative;width:300px;flex:none;background:var(--panel);border-lef
 #palList .none{padding:14px 10px;color:var(--mut);font:12px/1 var(--mono)}
 
 /* mobile bar */
-#mbar{display:none;height:46px;border-top:1px solid var(--line);background:var(--raise)}
+#mbar{display:none;height:calc(46px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);border-top:1px solid var(--line);background:var(--raise)}
 #mbar button{flex:1;font:10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
 #mbar button:active{color:var(--accent)}
 
 #toast{
-  position:fixed;left:50%;bottom:38px;transform:translate(-50%,8px);z-index:60;
+  position:fixed;left:50%;bottom:calc(38px + env(safe-area-inset-bottom));transform:translate(-50%,8px);z-index:60;
   background:var(--fg);color:var(--bg);padding:7px 12px;max-width:82vw;text-align:center;
   font:500 11px/1.4 var(--mono);opacity:0;transition:.2s var(--ease);pointer-events:none;
 }
@@ -483,7 +483,7 @@ body.doc-page{overflow:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:to
 
 /* --------------------------------------------------- sticky mobile CTA */
 .sticky-cta{
-  display:none;position:fixed;left:16px;right:16px;bottom:14px;z-index:45;
+  display:none;position:fixed;left:16px;right:16px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:45;
   height:46px;box-shadow:0 10px 28px rgba(0,0,0,.55);
   opacity:0;transform:translateY(8px);transition:opacity .2s var(--ease),transform .2s var(--ease);pointer-events:none;
 }
