@@ -13,6 +13,13 @@
  *   sockets are attached, message sizes, and timing. That is unavoidable for
  *   a relay and is documented for the user on the security page.
  *
+ *   As of v4.1, the relay also keeps a lightweight *index* of active room
+ *   codes and their creation time/TTL (the Registry Durable Object below),
+ *   purely so the owner-only admin dashboard can list and moderate rooms.
+ *   That index holds no content, no passwords, and no derived keys - only
+ *   the same code/timestamp information any participant already has just by
+ *   being in the room. See WHITEPAPER.md / COMPLIANCE.md for the disclosure.
+ *
  * Access control without knowledge of the password:
  *
  *   The client derives two independent values from the same PBKDF2 material -
@@ -39,7 +46,9 @@
  *   Whoever creates a room mints a 32-byte owner token in their browser and
  *   we register only its hash. That token is the sole proof of ownership, so
  *   it can suspend, lock, re-key the lifetime of, or destroy the room. We
- *   cannot recover it for them, by design.
+ *   cannot recover it for them, by design. The one exception is the site
+ *   owner's own admin dashboard, gated by a separate ADMIN_PASSWORD secret
+ *   that only the operator holds - see the /admin/* routes below.
  *
  * Scaling under concurrent load:
  *
@@ -55,7 +64,8 @@
  *   (CREATE_PER_MIN) below the general one, since each create spins up a
  *   brand-new Durable Object - cheap individually, but worth capping harder
  *   than ordinary connects/joins to stop one address from mass-provisioning
- *   empty rooms.
+ *   empty rooms. All of these caps are also adjustable at runtime from the
+ *   admin dashboard (see getConfig()/Registry below), without a redeploy.
  */
 
 /* ------------------------------------------------------------ protocol */
@@ -89,13 +99,14 @@ const IP_PER_MIN = 300
 const CREATE_PER_MIN = 20       // stricter: each create provisions a new Durable Object
 const AUTH_PER_MIN = 8          // stricter still: guards a locked room against password guessing
 const CODE_RE = /^[A-Z0-9]{4,12}$/
+const CONFIGURABLE_KEYS = ['IP_PER_MIN', 'CREATE_PER_MIN', 'AUTH_PER_MIN', 'MAX_CONNS']
 
 /* -------------------------------------------------------------- helpers */
 
 const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'GET,POST,OPTIONS',
-  'access-control-allow-headers': 'content-type',
+  'access-control-allow-headers': 'content-type,authorization',
   'access-control-max-age': '86400',
 }
 
@@ -140,6 +151,60 @@ function frame(type, payload) {
 
 const textFrame = (type, s) => frame(type, new TextEncoder().encode(s).buffer)
 const errorFrame = reason => textFrame(T_ERROR, reason)
+
+/* ---------------------------------------------------------- admin auth
+ *
+ * A single operator secret (ADMIN_PASSWORD, set with `wrangler secret put`,
+ * never committed to the repo) gates the whole /admin/* surface. Login
+ * exchanges the password for a short-lived, HMAC-signed bearer token so the
+ * password itself is only ever sent once, over HTTPS, and never stored
+ * anywhere after that - the dashboard keeps only the token.
+ */
+
+async function signToken(env, exp) {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(env.ADMIN_PASSWORD),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  )
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(String(exp)))
+  return exp + '.' + b64url(sig)
+}
+
+async function verifyToken(env, token) {
+  if (!token || !env.ADMIN_PASSWORD) return false
+  const dot = token.indexOf('.')
+  if (dot < 1) return false
+  const exp = Number(token.slice(0, dot))
+  if (!exp || Date.now() > exp) return false
+  const expected = await signToken(env, exp)
+  return constEq(expected, token)
+}
+
+async function adminAuthed(request, env) {
+  const auth = request.headers.get('Authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  return await verifyToken(env, token)
+}
+
+/* Runtime-adjustable limits, cached in-memory per isolate for a few seconds
+ * so the hot request path never blocks on a Durable Object round trip. Only
+ * the per-IP/per-room caps below are made live-configurable this way - the
+ * per-message RATE_PER_SEC stays fixed, since checking it happens on every
+ * single WebSocket message and a config lookup there would be a real
+ * latency regression, not just a nicety. */
+let configCache = { at: 0, data: {} }
+
+async function getConfig(env) {
+  if (Date.now() - configCache.at < 15000) return configCache.data
+  try {
+    const res = await env.REGISTRY.get(env.REGISTRY.idFromName('global')).fetch('https://registry/config')
+    const body = await res.json()
+    configCache = { at: Date.now(), data: body.config || {} }
+  } catch (e) {
+    // Keep serving the previous (or default) cache if the registry is briefly unreachable.
+  }
+  return configCache.data
+}
 
 /* ================================================================= room */
 
@@ -193,6 +258,10 @@ export class Room {
     }
   }
 
+  registry() {
+    try { return this.env.REGISTRY.get(this.env.REGISTRY.idFromName('global')) } catch (e) { return null }
+  }
+
   /* ------------------------------------------------------------- log */
 
   async clearLog() {
@@ -243,6 +312,8 @@ export class Room {
     const st = this.state.storage
     const q = url.searchParams
     let meta = await st.get('meta')
+    const codeMatch = url.pathname.match(/\/room\/([A-Za-z0-9]{4,12})/)
+    const code = codeMatch ? codeMatch[1].toUpperCase() : ''
 
     if (url.pathname.endsWith('/exists')) {
       return json({
@@ -262,9 +333,15 @@ export class Room {
       let body
       try { body = await request.json() } catch (e) { return json({ error: 'bad_body' }, 400) }
 
-      if (!meta.o) return json({ error: 'no_owner' }, 409)
-      if (!constEq(await sha256(body.token || ''), meta.o)) {
-        return json({ error: 'not_owner' }, 403)
+      // Two independent ways to prove you may administer this room: the
+      // owner token minted in the creator's browser, or - only for the site
+      // operator's own dashboard - the ADMIN_PASSWORD secret held server-side.
+      const masterOk = !!this.env.ADMIN_PASSWORD && !!body.masterKey && constEq(body.masterKey, this.env.ADMIN_PASSWORD)
+      if (!masterOk) {
+        if (!meta.o) return json({ error: 'no_owner' }, 409)
+        if (!constEq(await sha256(body.token || ''), meta.o)) {
+          return json({ error: 'not_owner' }, 403)
+        }
       }
 
       if (body.action === 'delete') {
@@ -273,6 +350,10 @@ export class Room {
           try { ws.close(4001, 'deleted') } catch (e) {}
         }
         await st.deleteAll()
+        const reg = this.registry()
+        if (reg && code) {
+          try { await reg.fetch('https://registry/remove', { method: 'POST', body: JSON.stringify({ code }) }) } catch (e) {}
+        }
         return json({ ok: true, deleted: true })
       }
 
@@ -319,6 +400,18 @@ export class Room {
         await st.put('meta', meta)
         await this.touch()
         await st.setAlarm(Date.now() + meta.ttl)
+
+        // Best-effort: index this room's code/timestamps for the admin
+        // dashboard. Never block or fail room creation if this doesn't work.
+        const reg = this.registry()
+        if (reg && code) {
+          try {
+            await reg.fetch('https://registry/register', {
+              method: 'POST',
+              body: JSON.stringify({ code, created: meta.c, ttl: meta.ttl, hasPassword: !!meta.p }),
+            })
+          } catch (e) {}
+        }
       }
     }
 
@@ -338,8 +431,10 @@ export class Room {
         // enforced before this request ever reached a Room object.
         try {
           const ip = request.headers.get('CF-Connecting-IP') || 'anon'
+          const cfg = await getConfig(this.env)
+          const cap = cfg.AUTH_PER_MIN
           const lim = this.env.LIMIT.get(this.env.LIMIT.idFromName(ip))
-          const verdict = await lim.fetch('https://limiter/check?scope=auth')
+          const verdict = await lim.fetch('https://limiter/check?scope=auth' + (cap ? '&cap=' + cap : ''))
           const body = await verdict.json()
           if (!body.ok) return json({ error: 'rate_limited', retryAfter: 60 }, 429)
         } catch (e) {}
@@ -349,7 +444,10 @@ export class Room {
 
     if (meta.s && !owner) return json({ error: 'suspended' }, 423)
     if (request.headers.get('Upgrade') !== 'websocket') return json({ error: 'expected_websocket' }, 426)
-    if (this.sockets().length >= MAX_CONNS) return json({ error: 'room_full' }, 429)
+
+    const cfg = await getConfig(this.env)
+    const maxConns = cfg.MAX_CONNS || MAX_CONNS
+    if (this.sockets().length >= maxConns) return json({ error: 'room_full' }, 429)
 
     const pair = new WebSocketPair()
     const client = pair[0], server = pair[1]
@@ -460,6 +558,11 @@ export class Room {
     const active = (await st.get('active')) || 0
     if (Date.now() - active >= ttl - 2000) {
       await st.deleteAll()
+      const reg = this.registry()
+      const url = new URL('https://internal/room/')
+      // best-effort cleanup of the index; code isn't available here directly,
+      // so this relies on the periodic pruning in Registry's /list handler
+      // as the guaranteed fallback for naturally-expired rooms.
     } else {
       await st.setAlarm(active + ttl)
     }
@@ -479,7 +582,9 @@ export class Room {
  * attempts against a room - so mass-provisioning empty rooms and guessing a
  * locked room's password are both throttled far harder than ordinary
  * joins/connects, without touching the generous default limit everyone else
- * relies on.
+ * relies on. Each bucket's cap can be overridden per-request via a `cap`
+ * query param (sourced from the admin-configurable Registry settings);
+ * omitting it falls back to the hardcoded default for that scope.
  *
  * Each bucket is a weighted blend of the current and immediately-previous
  * one-minute window, not a hard reset at the minute boundary - a plain reset
@@ -496,9 +601,12 @@ export class Limiter {
   constructor(state) { this.state = state }
 
   async fetch(request) {
-    const scopeParam = new URL(request.url).searchParams.get('scope')
+    const u = new URL(request.url)
+    const scopeParam = u.searchParams.get('scope')
     const scope = scopeParam === 'create' ? 'create' : scopeParam === 'auth' ? 'auth' : 'default'
-    const cap = scope === 'create' ? CREATE_PER_MIN : scope === 'auth' ? AUTH_PER_MIN : IP_PER_MIN
+    const defaultCap = scope === 'create' ? CREATE_PER_MIN : scope === 'auth' ? AUTH_PER_MIN : IP_PER_MIN
+    const capOverride = Number(u.searchParams.get('cap'))
+    const cap = capOverride > 0 ? capOverride : defaultCap
     const key = 'b:' + scope
     const prevKey = 'p:' + scope
 
@@ -525,6 +633,79 @@ export class Limiter {
   async alarm() { await this.state.storage.deleteAll() }
 }
 
+/* ============================================================= registry
+ *
+ * A single global Durable Object holding: (a) a lightweight index of
+ * currently-active room codes with their creation time and TTL, purely so
+ * the admin dashboard can list rooms without knowing their codes in
+ * advance, and (b) the admin-adjustable rate-limit overrides read by
+ * getConfig() above. It stores no room content, passwords, or keys - just
+ * what any participant already knows by virtue of being in the room.
+ * Entries are pruned opportunistically on every /list call once they are
+ * well past their TTL, so a Room's alarm-driven natural expiry (which does
+ * not itself call back into this object) can never leave the index growing
+ * unbounded.
+ */
+export class Registry {
+  constructor(state) { this.state = state }
+
+  async fetch(request) {
+    const url = new URL(request.url)
+    const st = this.state.storage
+
+    if (url.pathname === '/register' && request.method === 'POST') {
+      let body
+      try { body = await request.json() } catch (e) { return json({ error: 'bad_body' }, 400) }
+      if (!body.code) return json({ error: 'bad_body' }, 400)
+      await st.put('r:' + body.code, {
+        code: body.code,
+        created: body.created || Date.now(),
+        ttl: body.ttl || DEFAULT_TTL,
+        hasPassword: !!body.hasPassword,
+      })
+      return json({ ok: true })
+    }
+
+    if (url.pathname === '/remove' && request.method === 'POST') {
+      let body
+      try { body = await request.json() } catch (e) { body = {} }
+      if (body.code) await st.delete('r:' + body.code)
+      return json({ ok: true })
+    }
+
+    if (url.pathname === '/list') {
+      const all = [...(await st.list({ prefix: 'r:', limit: 3000 }))]
+      const now = Date.now()
+      const fresh = [], stale = []
+      for (const [k, v] of all) {
+        if (v && now - v.created < v.ttl + 5 * 60 * 1000) fresh.push(v)
+        else stale.push(k)
+      }
+      if (stale.length) await st.delete(stale.slice(0, 100))
+      fresh.sort((a, b) => b.created - a.created)
+      return json({ rooms: fresh.slice(0, 500), total: fresh.length })
+    }
+
+    if (url.pathname === '/config') {
+      if (request.method === 'POST') {
+        let body
+        try { body = await request.json() } catch (e) { return json({ error: 'bad_body' }, 400) }
+        const cur = (await st.get('config')) || {}
+        const next = { ...cur }
+        for (const k of CONFIGURABLE_KEYS) {
+          if (typeof body[k] === 'number' && body[k] > 0) next[k] = Math.floor(body[k])
+        }
+        await st.put('config', next)
+        return json({ ok: true, config: next })
+      }
+      const cur = (await st.get('config')) || {}
+      return json({ config: cur })
+    }
+
+    return json({ error: 'not_found' }, 404)
+  }
+}
+
 /* ================================================================ entry */
 
 export default {
@@ -537,6 +718,85 @@ export default {
       return json({ ok: true, service: 'anonshare-sync', version: 4 })
     }
 
+    /* -------------------------------------------------------- admin API */
+    if (url.pathname.startsWith('/admin/')) {
+      if (!env.ADMIN_PASSWORD) return json({ error: 'admin_disabled' }, 503)
+      const ip = request.headers.get('CF-Connecting-IP') || 'anon'
+
+      if (url.pathname === '/admin/login' && request.method === 'POST') {
+        let body
+        try { body = await request.json() } catch (e) { return json({ error: 'bad_body' }, 400) }
+        // Password guesses against the dashboard get the same hard throttle
+        // as password guesses against a locked room.
+        try {
+          const lim = env.LIMIT.get(env.LIMIT.idFromName(ip))
+          const verdict = await lim.fetch('https://limiter/check?scope=auth')
+          const v = await verdict.json()
+          if (!v.ok) return json({ error: 'rate_limited', retryAfter: 60 }, 429)
+        } catch (e) {}
+        if (!constEq(String(body.password || ''), env.ADMIN_PASSWORD)) {
+          return json({ error: 'bad_password' }, 403)
+        }
+        const exp = Date.now() + 12 * 60 * 60 * 1000
+        return json({ token: await signToken(env, exp), exp })
+      }
+
+      if (!(await adminAuthed(request, env))) return json({ error: 'unauthorized' }, 401)
+
+      const registry = env.REGISTRY.get(env.REGISTRY.idFromName('global'))
+
+      if (url.pathname === '/admin/rooms' && request.method === 'GET') {
+        const res = await registry.fetch('https://registry/list')
+        const body = await res.json()
+        return json(body)
+      }
+
+      const roomAction = url.pathname.match(/^\/admin\/rooms\/([A-Za-z0-9]{4,12})\/(suspend|unsuspend|lock|unlock|delete)$/)
+      if (roomAction && request.method === 'POST') {
+        const code = roomAction[1].toUpperCase()
+        const verb = roomAction[2]
+        const action = verb === 'unsuspend' ? 'suspend' : verb === 'unlock' ? 'lock' : verb
+        const value = verb === 'unsuspend' || verb === 'unlock' ? false : verb === 'suspend' || verb === 'lock' ? true : undefined
+        const roomRes = await env.ROOM.get(env.ROOM.idFromName(code)).fetch('https://room/room/' + code + '/admin', {
+          method: 'POST',
+          body: JSON.stringify({ action, value, masterKey: env.ADMIN_PASSWORD }),
+        })
+        const body = await roomRes.json()
+        return json(body, roomRes.status)
+      }
+
+      if (url.pathname === '/admin/metrics' && request.method === 'GET') {
+        const res = await registry.fetch('https://registry/list')
+        const { rooms } = await res.json()
+        const now = Date.now()
+        const hourAgo = now - 60 * 60 * 1000
+        const dayAgo = now - 24 * 60 * 60 * 1000
+        return json({
+          totalActiveRooms: rooms.length,
+          createdLastHour: rooms.filter(r => r.created >= hourAgo).length,
+          createdLastDay: rooms.filter(r => r.created >= dayAgo).length,
+          passwordProtected: rooms.filter(r => r.hasPassword).length,
+        })
+      }
+
+      if (url.pathname === '/admin/config') {
+        if (request.method === 'POST') {
+          let body
+          try { body = await request.json() } catch (e) { return json({ error: 'bad_body' }, 400) }
+          const res = await registry.fetch('https://registry/config', { method: 'POST', body: JSON.stringify(body) })
+          const out = await res.json()
+          configCache = { at: 0, data: {} } // force a fresh read on the next request
+          return json(out)
+        }
+        const res = await registry.fetch('https://registry/config')
+        const out = await res.json()
+        const defaults = { IP_PER_MIN, CREATE_PER_MIN, AUTH_PER_MIN, MAX_CONNS, RATE_PER_SEC }
+        return json({ config: out.config || {}, defaults })
+      }
+
+      return json({ error: 'not_found' }, 404)
+    }
+
     const match = url.pathname.match(/^\/room\/([A-Za-z0-9]{4,12})(?:\/(exists|admin))?$/)
     if (!match) return json({ error: 'not_found' }, 404)
 
@@ -546,14 +806,15 @@ export default {
     const ip = request.headers.get('CF-Connecting-IP') || 'anon'
     const isCreate = url.searchParams.get('create') === '1'
     try {
+      const cfg = await getConfig(env)
       const lim = env.LIMIT.get(env.LIMIT.idFromName(ip))
-      const verdict = await lim.fetch('https://limiter/check')
+      const verdict = await lim.fetch('https://limiter/check' + (cfg.IP_PER_MIN ? '?cap=' + cfg.IP_PER_MIN : ''))
       const body = await verdict.json()
       if (!body.ok) {
         return json({ error: 'rate_limited', retryAfter: 60 }, 429)
       }
       if (isCreate) {
-        const createVerdict = await lim.fetch('https://limiter/check?scope=create')
+        const createVerdict = await lim.fetch('https://limiter/check?scope=create' + (cfg.CREATE_PER_MIN ? '&cap=' + cfg.CREATE_PER_MIN : ''))
         const createBody = await createVerdict.json()
         if (!createBody.ok) {
           return json({ error: 'rate_limited', retryAfter: 60 }, 429)
