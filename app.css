@@ -362,4 +362,165 @@ select.in{-webkit-appearance:none;appearance:none;font-family:var(--mono);font-s
 
 /* remote carets, Docs style: name flag fades, returns on hover */
 .cm-ySelection{border-radius:0}
-.cm-ySelectionCaret{position:relative;border-left:2px solid;border-right:0;margin-left:-1px;margin-right
+.cm-ySelectionCaret{position:relative;border-left:2px solid;border-right:0;margin-left:-1px;margin-right:-1px;box-sizing:border-box}
+.cm-ySelectionCaretDot{display:none}
+.cm-ySelectionInfo{
+  position:absolute;top:-15px;left:-2px;z-index:8;
+  font:500 10px/14px var(--mono);color:#000;
+  padding:0 5px;white-space:nowrap;pointer-events:none;
+  opacity:1;transition:opacity .35s;
+  animation:flagfade .35s 3s forwards;
+}
+@keyframes flagfade{to{opacity:0}}
+.cm-ySelectionCaret:hover .cm-ySelectionInfo{opacity:1;animation:none}
+/* touch screens have no hover, so give the name flag longer to be seen */
+@media(hover:none){
+  .cm-ySelectionInfo{animation:flagfade .35s 6s forwards}
+}
+
+/* side panels */
+aside{position:relative;width:300px;flex:none;background:var(--panel);border-left:1px solid var(--line);padding:14px;overflow:auto;display:flex;flex-direction:column;z-index:20;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.resizer{position:absolute;left:-3px;top:0;bottom:0;width:6px;cursor:col-resize;z-index:5}
+.resizer:hover,.resizer.active{background:var(--accent)}
+.phead{display:flex;align-items:center;justify-content:space-between;font:500 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:12px}
+.rowu{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;border-bottom:1px solid var(--line)}
+.sw{width:8px;height:8px;border-radius:50%;flex:none}
+.rowu .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rowu .tag{margin-left:auto;font:10px/1 var(--mono);color:var(--mut);text-transform:uppercase;letter-spacing:.1em}
+.rowu .fbtn{font:10px/1 var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:.1em}
+#panel .btn{width:100%;margin-top:8px}
+#panel .mrow .btn{margin-top:0}
+.plinks{display:flex;flex-direction:column;gap:8px;margin-top:12px;align-items:flex-start}
+
+/* colour swatches */
+#swatches{display:flex;gap:7px;flex-wrap:wrap}
+#swatches .cs{width:20px;height:20px;border-radius:50%;cursor:pointer;box-shadow:0 0 0 2px var(--panel);transition:transform .14s var(--ease)}
+#swatches .cs:hover{transform:scale(1.12)}
+#swatches .cs.on{box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--fg)}
+
+/* dark / light segmented control, in Settings */
+.segrow{display:flex;border:1px solid var(--line2)}
+.seg{
+  flex:1;height:32px;background:var(--raise);color:var(--mut);
+  font:500 11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;
+  transition:background .16s var(--ease),color .16s var(--ease);
+}
+.seg+.seg{border-left:1px solid var(--line2)}
+.seg:hover{color:var(--fg)}
+.seg.on{background:var(--accent);color:#fff}
+
+#chatList{flex:1;overflow:auto;display:flex;flex-direction:column;gap:11px;padding-bottom:10px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scroll-behavior:smooth}
+.msg .head{display:flex;align-items:center;gap:6px}
+.msg .chip-av{width:16px;height:16px;border-radius:50%;flex:none;display:grid;place-items:center;font:600 8px/1 var(--mono);color:#000}
+.msg .who{font:600 11px/1 var(--mono)}
+.msg .when{color:var(--dim);font:10px/1 var(--mono);margin-left:auto;cursor:default}
+.msg .body{white-space:pre-wrap;word-break:break-word;font-size:12.5px;margin-top:3px}
+.msg .body .mention{color:var(--accent);font-weight:600}
+.msg.hit{border-left:2px solid var(--accent);padding-left:8px}
+.msg.sys{color:var(--mut);font:11px/1.5 var(--mono)}
+.msg.grouped{margin-top:-5px}
+#chatForm{flex:none;padding-top:8px;border-top:1px solid var(--line)}
+
+/* status bar */
+#statusbar{
+  display:flex;align-items:center;gap:8px;height:24px;padding:0 10px;flex:none;
+  border-top:1px solid var(--line);background:var(--raise);
+  font:10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mut);
+}
+#dot{width:6px;height:6px;border-radius:50%;background:var(--warn);flex:none}
+#dot.on{background:var(--ok)}
+#dot.off{background:var(--danger)}
+.sep{width:1px;height:11px;background:var(--line2)}
+.pill{padding:1px 6px;border:1px solid var(--line2);color:var(--mut)}
+.pill.act{border-color:var(--accent);color:var(--accent)}
+#lockBadge{border-color:var(--warn);color:var(--warn)}
+#encBadge{color:var(--ok)}
+
+/* ==================================================== command palette */
+#pal{position:fixed;inset:0;z-index:58;display:grid;place-items:start center;padding:12vh 20px 20px;background:rgba(0,0,0,.6);backdrop-filter:blur(2px)}
+[data-theme=light] #pal{background:rgba(255,255,255,.7)}
+.palBox{width:100%;max-width:480px;background:var(--raise);border:1px solid var(--line2);box-shadow:0 24px 60px rgba(0,0,0,.6);animation:rise .14s var(--ease)}
+.palIn{width:100%;height:44px;padding:0 14px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--fg);font:13px/1 var(--mono)}
+.palIn:focus{outline:0}
+#palList{max-height:46vh;overflow:auto;padding:4px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+#palList .pi{display:flex;align-items:center;gap:10px;padding:8px 10px;font:12px/1 var(--mono);color:var(--fg);cursor:pointer;transition:background .12s var(--ease)}
+#palList .pi .kb{margin-left:auto;color:var(--dim);font-size:10px}
+#palList .pi.on{background:var(--accent);color:#fff}
+#palList .pi.on .kb{color:rgba(255,255,255,.75)}
+#palList .none{padding:14px 10px;color:var(--mut);font:12px/1 var(--mono)}
+
+/* mobile bar */
+#mbar{display:none;height:calc(46px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);border-top:1px solid var(--line);background:var(--raise)}
+#mbar button{flex:1;font:10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+#mbar button:active{color:var(--accent)}
+
+#toast{
+  position:fixed;left:50%;bottom:calc(38px + env(safe-area-inset-bottom));transform:translate(-50%,8px);z-index:60;
+  background:var(--fg);color:var(--bg);padding:7px 12px;max-width:82vw;text-align:center;
+  font:500 11px/1.4 var(--mono);opacity:0;transition:.2s var(--ease);pointer-events:none;
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ================================================== standalone docs */
+/* privacy.html, terms.html and security.html share the app shell but
+   scroll like ordinary documents. */
+body.doc-page{overflow:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
+.doc{max-width:660px;margin:0 auto;padding:56px 24px 80px}
+.doc h1{font:600 24px/1.25 var(--sans);letter-spacing:-.02em;margin:20px 0 6px}
+.doc .updated{color:var(--dim);font:10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;margin:0 0 8px}
+.doc h2{font:600 13px/1 var(--mono);letter-spacing:.02em;margin:40px 0 12px;padding-top:18px;border-top:1px solid var(--line)}
+.doc p,.doc li{color:var(--mut);font-size:13px;line-height:1.75}
+.doc strong{color:var(--fg);font-weight:600}
+.doc code{font-family:var(--mono);font-size:12px;color:var(--fg);background:var(--panel);padding:1px 5px}
+.doc pre{background:var(--panel);border:1px solid var(--line);padding:14px;overflow:auto;font:12px/1.6 var(--mono);color:var(--fg)}
+.doc ul{padding-left:18px}
+.doc a{color:var(--accent)}
+.doc .back{display:inline-block;font:11px/1 var(--mono);color:var(--mut);text-decoration:none}
+.doc .back:hover{color:var(--accent)}
+.doc .warn{border-left:2px solid var(--warn);padding-left:14px}
+.doc .warn strong{color:var(--warn)}
+.doc .foot{margin-top:52px;padding-top:16px;border-top:1px solid var(--line);color:var(--dim);font:10px/1.7 var(--mono);letter-spacing:.06em}
+
+/* ======================================================= responsive */
+@media(min-width:1400px){
+  body{font-size:14px}
+  .btn{height:30px;padding:0 12px;font-size:12.5px}
+  .btn.ico{width:30px}
+  .in{height:38px}
+  :root{--bar:42px;--edfont:14px}
+}
+@media(max-width:1080px){
+  aside{position:absolute;top:0;right:0;bottom:0;width:300px!important}
+  .resizer{display:none}
+  .hero{grid-template-columns:1fr;gap:36px;padding:44px 24px 32px}
+  .gwrap{max-width:none}
+  .htitle{max-width:20ch}
+  .demoWrap{height:290px}
+  .strips{grid-template-columns:1fr}
+  #siteFoot{grid-template-columns:1fr 1fr}
+  .steps{grid-template-columns:1fr}
+  .howBlock,.faqBlock{padding:40px 24px}
+}
+@media(max-width:720px){
+  aside{left:0;width:auto!important;top:auto;height:64%;border-left:0;border-top:1px solid var(--line2);transform:translateY(0);transition:transform .28s var(--ease),opacity .22s var(--ease);will-change:transform}
+  aside.closing{transform:translateY(100%);opacity:.5;pointer-events:none}
+  #mbar{display:flex}
+  .hideS{display:none!important}
+  #topbar{gap:4px}
+  .cm-gutters{display:none}
+  #statusbar{overflow:hidden}
+  .hero{padding:32px 18px 24px}
+  .htitle{font-size:23px}
+  .demoWrap{height:230px}
+  .strip{padding:20px}
+  #siteFoot{grid-template-columns:1fr;gap:26px;padding:26px 18px 20px}
+  #footbar{padding:14px 18px 30px}
+  #pal{padding:8vh 14px 14px}
+  .cm-cursor{border-left-width:3px!important}
+  .cm-ySelectionCaret{border-left-width:3px}
+  .cm-activeLine{background:rgba(76,141,255,.14)!important}
+  .sectitle{font-size:17px}
+  .howBlock,.faqBlock{padding:32px 18px}
+  .step{padding:20px}
+  .faq summary{padding:14px 2px;font-size:12.5px}
+}
