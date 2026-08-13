@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://tx.avishkark.in/sitemap.xml
+Sitemap: https://code.avishkark.in/sitemap.xml
