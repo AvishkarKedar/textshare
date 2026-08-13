@@ -1,7 +1,7 @@
 import * as Y from 'yjs'
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from 'y-protocols/awareness'
 import { IndexeddbPersistence } from 'y-indexeddb'
-import { EditorState, Compartment, StateField, StateEffect, RangeSet, RangeSetBuilder } from '@codemirror/state'
+import { EditorState, Compartment, StateField, StateEffect, RangeSet, RangeSetBuilder, Transaction } from '@codemirror/state'
 import {
   EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter,
   drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightSpecialChars,
@@ -15,7 +15,7 @@ import {
 } from '@codemirror/language'
 import { tags as t } from '@lezer/highlight'
 import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from '@codemirror/autocomplete'
-import { yCollab, yUndoManagerKeymap, ySyncAnnotation } from 'y-codemirror.next'
+import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
 
 window.__ts_booted = true
 
@@ -1110,7 +1110,7 @@ function mount() {
         roComp.of(readOnlyExt()),
         yCollab(ytext, awareness, { undoManager }),
         EditorView.updateListener.of(u => {
-          const remote = u.transactions.some(tr => tr.annotation(ySyncAnnotation))
+          const remote = u.transactions.length > 0 && u.transactions.every(tr => tr.annotation(Transaction.userEvent) === undefined)
           if (u.docChanged) {
             paintCounts()
             autoLang()
