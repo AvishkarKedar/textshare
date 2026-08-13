@@ -323,25 +323,6 @@
 <noscript><p style="color:#e7e7e7;font-family:monospace;padding:24px">anonshare encrypts in the browser, so it needs JavaScript enabled.</p></noscript>
 
 <script type="module" src="app.js"></script>
-<script>
-// Register the offline/PWA shell. Scoped from root so it can control the
-// whole site, not just this page.
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('/sw.js').catch(function () {})
-  })
-}
-
-// If the module graph never executes, say so instead of showing black nothing.
-setTimeout(function () {
-  if (!window.__ts_booted) {
-    var e = document.getElementById('gErr')
-    if (e) {
-      e.textContent = 'Could not load the editor. Check your connection or any content blocker, then reload.'
-      e.hidden = false
-    }
-  }
-}, 12000)
-</script>
+<script src="/boot.js" defer></script>
 </body>
 </html>
