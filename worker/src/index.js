@@ -243,6 +243,10 @@ export class Room {
   stateFrame(meta, a) {
     return textFrame(T_STATE, JSON.stringify({
       suspended: !!(meta && meta.s),
+      // Only meaningful alongside `suspended: true` - tells a still-connected
+      // owner *who* suspended their room, since they are deliberately not
+      // disconnected by their own admin-triggered suspension below.
+      suspendedByAdmin: !!(meta && meta.s && meta.sa),
       locked: !!(meta && meta.r),
       owner: !!a.own,
       canEdit: !!a.edit,
@@ -345,9 +349,13 @@ export class Room {
       }
 
       if (body.action === 'delete') {
+        // Distinguishing the reason lets every connected browser show the
+        // right explanation (its own creator vs. the site operator) instead
+        // of a generic message that doesn't match what actually happened.
+        const reason = masterOk ? 'admin_deleted' : 'deleted'
         for (const ws of this.sockets()) {
-          try { ws.send(textFrame(T_KILLED, 'deleted')) } catch (e) {}
-          try { ws.close(4001, 'deleted') } catch (e) {}
+          try { ws.send(textFrame(T_KILLED, reason)) } catch (e) {}
+          try { ws.close(4001, reason) } catch (e) {}
         }
         await st.deleteAll()
         const reg = this.registry()
@@ -357,7 +365,7 @@ export class Room {
         return json({ ok: true, deleted: true })
       }
 
-      if (body.action === 'suspend') meta.s = !!body.value
+      if (body.action === 'suspend') { meta.s = !!body.value; meta.sa = masterOk && !!body.value }
       else if (body.action === 'lock') meta.r = !!body.value
       else if (body.action === 'ttl') meta.ttl = TTLS[body.value] || DEFAULT_TTL
       else return json({ error: 'bad_action' }, 400)
@@ -365,11 +373,16 @@ export class Room {
       await st.put('meta', meta)
 
       if (meta.s) {
+        // The owner's own socket is deliberately left connected here (either
+        // they just did this themselves, or - if the site operator did it -
+        // they are told via the state frame/banner instead of being kicked
+        // from their own room).
+        const reason = meta.sa ? 'admin_suspended' : 'suspended'
         for (const ws of this.sockets()) {
           const a = this.att(ws)
           if (a.own) continue
-          try { ws.send(textFrame(T_KILLED, 'suspended')) } catch (e) {}
-          try { ws.close(4002, 'suspended') } catch (e) {}
+          try { ws.send(textFrame(T_KILLED, reason)) } catch (e) {}
+          try { ws.close(4002, reason) } catch (e) {}
         }
       } else if (body.action === 'lock') {
         for (const ws of this.sockets()) {
