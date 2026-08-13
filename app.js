@@ -1736,4 +1736,202 @@ const ACTIONS = {
   find: () => { if (view) { view.focus(); openSearchPanel(view) } },
   download: () => {
     const f = files().find(x => x.id === activeId)
-    down
+    downloadBlob(new Blob([view.state.doc.toString()], { type: 'text/plain;charset=utf-8' }),
+      (f && f.name) || CODE + '.txt')
+  },
+  exportzip: async () => {
+    try {
+      const { makeZip } = await import('./zip.js')
+      const entries = files().map(f => ({ name: f.name, text: (ytexts.get(f.id) || { toString: () => '' }).toString() }))
+      downloadBlob(makeZip(entries), 'anonshare-' + CODE + '.zip')
+    } catch (e) { toast('Could not build the archive') }
+  },
+  invite: () => copy(inviteLink(), 'Invite link'),
+  viewlink: () => copy(viewLink(), 'View-only link'),
+  theme: () => {
+    LS.set('ts.theme', themePref() === 'dark' ? 'light' : 'dark')
+    applyTheme()
+  },
+  settings: () => showPanel($('panel')),
+  leave: () => leaveRoom(),
+  say: () => cursorChat(),
+  files: () => $('tabbar').scrollIntoView(),
+  chat: () => showPanel($('chat')),
+  undo: () => $('undoBtn').click(),
+  redo: () => $('redoBtn').click(),
+  more: () => $('moreBtn').click(),
+}
+
+$('menu').addEventListener('click', e => {
+  const b = e.target.closest('button')
+  if (!b) return
+  const fn = ACTIONS[b.dataset.a]
+  if (fn) fn()
+  if (b.dataset.a !== 'theme') setMenu(false)
+})
+$('mbar').addEventListener('click', e => {
+  const b = e.target.closest('button')
+  if (b && ACTIONS[b.dataset.a]) ACTIONS[b.dataset.a]()
+})
+
+async function leaveRoom() {
+  const ok = await ask({
+    title: 'Leave this room?',
+    body: 'Your offline copy stays on this device, and you can rejoin with the same code.',
+    confirmLabel: 'Leave',
+  })
+  if (!ok) return
+  try { relay.close() } catch (e) {}
+  location.href = location.origin + location.pathname
+}
+
+$('saveSettings').onclick = () => {
+  const n = $('nameInput').value.trim()
+  if (n) {
+    myName = n
+    LS.set('ts.name', n)
+    awareness.setLocalStateField('user', { name: n, color: myColor, view: VIEW_ONLY })
+  }
+  toast('Saved')
+  paintPeople()
+  $('panel').hidden = true
+}
+
+$('forgetRoom').onclick = async () => {
+  const ok = await ask({
+    title: 'Delete the offline copy?',
+    body: 'This removes the room from this browser only. Anyone still connected keeps theirs, and you can rejoin with the code.',
+    confirmLabel: 'Delete copy',
+    danger: true,
+  })
+  if (!ok) return
+  if (idb) { try { await idb.clearData() } catch (e) {} }
+  location.href = location.origin + location.pathname
+}
+
+/* ======================================================= owner controls */
+
+async function ownerAction(action, value, label) {
+  const r = await admin(relayHost(), CODE, OWNER, action, value)
+  if (!r.ok) {
+    toast(r.status === 403 ? 'This browser is not the owner of this room' : 'Could not reach the relay')
+    return null
+  }
+  if (label) toast(label)
+  return r
+}
+
+$('btnLock').onclick = async () => {
+  const next = !roomLocked
+  const r = await ownerAction('lock', next, next ? 'Room is now read-only for others' : 'Everyone can edit again')
+  if (r) { roomLocked = !!r.locked; applyRoomState({ locked: roomLocked, canEdit: true }) }
+}
+
+$('btnSuspend').onclick = async () => {
+  const ok = await ask({
+    title: 'Suspend this room?',
+    body: 'Everyone else is disconnected immediately. Nothing is deleted, and you can resume it later.',
+    confirmLabel: 'Suspend',
+    danger: true,
+  })
+  if (!ok) return
+  const r = await ownerAction('suspend', true, 'Room suspended')
+  if (r) banner('You have suspended this room. Others cannot connect until you resume it.', 'warn')
+}
+
+$('btnDelete').onclick = async () => {
+  const typed = await ask({
+    title: 'Delete room ' + CODE + '?',
+    body: 'This erases the room from the relay for everyone, immediately and permanently. Type the room code to confirm.',
+    input: true, placeholder: CODE, mustType: CODE,
+    confirmLabel: 'Delete forever',
+    danger: true,
+  })
+  if (!typed) return
+  const r = await ownerAction('delete', true)
+  if (!r) return
+  LS.del('ts.own.' + CODE)
+  if (idb) { try { await idb.clearData() } catch (e) {} }
+  toast('Room ' + CODE + ' deleted')
+  setTimeout(() => { location.href = location.origin + location.pathname }, 900)
+}
+
+/* ====================================================== command palette */
+
+const COMMANDS = [
+  ['New file', 'newfile', ''],
+  ['Rename this file', 'rename', ''],
+  ['Find and replace', 'find', 'Ctrl F'],
+  ['Download this file', 'download', ''],
+  ['Export all files as zip', 'exportzip', ''],
+  ['Copy invite link', 'invite', ''],
+  ['Copy view-only link', 'viewlink', ''],
+  ['Say something at my cursor', 'say', 'Alt /'],
+  ['Open chat', 'chat', ''],
+  ['Toggle theme', 'theme', ''],
+  ['Settings', 'settings', ''],
+  ['Undo', 'undo', 'Ctrl Z'],
+  ['Redo', 'redo', 'Ctrl Y'],
+  ['Leave room', 'leave', ''],
+]
+let palIndex = 0, palShown = []
+
+function openPalette() {
+  lastFocus = document.activeElement
+  $('pal').hidden = false
+  $('palInput').value = ''
+  renderPalette('')
+  setTimeout(() => $('palInput').focus(), 30)
+}
+function closePalette() {
+  $('pal').hidden = true
+  if (view) view.focus()
+}
+
+function renderPalette(q) {
+  const needle = q.toLowerCase().trim()
+  palShown = COMMANDS.filter(c => !needle || c[0].toLowerCase().includes(needle))
+  palIndex = 0
+  const list = $('palList')
+  list.innerHTML = ''
+  if (!palShown.length) {
+    const n = document.createElement('div')
+    n.className = 'none'
+    n.textContent = 'Nothing matches "' + q + '"'
+    list.appendChild(n)
+    return
+  }
+  palShown.forEach((c, i) => {
+    const el = document.createElement('div')
+    el.className = 'pi' + (i === 0 ? ' on' : '')
+    el.setAttribute('role', 'option')
+    el.textContent = c[0]
+    if (c[2]) {
+      const kb = document.createElement('span')
+      kb.className = 'kb'
+      kb.textContent = c[2]
+      el.appendChild(kb)
+    }
+    el.onclick = () => { closePalette(); if (ACTIONS[c[1]]) ACTIONS[c[1]]() }
+    list.appendChild(el)
+  })
+}
+
+function movePalette(d) {
+  const items = [...$('palList').children].filter(el => el.classList.contains('pi'))
+  if (!items.length) return
+  if (items[palIndex]) items[palIndex].classList.remove('on')
+  palIndex = (palIndex + d + items.length) % items.length
+  items[palIndex].classList.add('on')
+  items[palIndex].scrollIntoView({ block: 'nearest' })
+}
+
+$('palInput').addEventListener('input', e => renderPalette(e.target.value))
+$('palInput').addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); movePalette(1) }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); movePalette(-1) }
+  else if (e.key === 'Enter') {
+    e.preventDefault()
+    const c = palShown[palIndex]
+    closePalette()
+    if (c && ACTIONS[c[1]]
