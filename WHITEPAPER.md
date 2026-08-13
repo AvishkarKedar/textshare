@@ -12,6 +12,7 @@ anonshare ("textshare") is a live, end-to-end encrypted text and code sharing to
 - **Editor & sync engine**: CodeMirror 6 bound to a Yjs CRDT document (`yjs`, `y-codemirror.next`) for conflict-free concurrent editing, with `y-indexeddb` for local offline persistence.
 - **Relay**: a Cloudflare Worker (`textshare-sync`) that relays encrypted bytes between peers in a room over WebSockets. It performs no decryption and stores no plaintext.
 - **Presence**: `y-protocols/awareness` for cursors, names, colors, and typing indicators, propagated the same way as document updates.
+- **Admin dashboard** (optional, operator-only): a separate static site, deployed on its own subdomain (`admin.code.avishkark.in`), that talks directly to the relay's `/admin/*` API, gated by a single operator secret (`ADMIN_PASSWORD`). It is fully disabled unless that secret is set. See §8.
 
 ## 3. Encryption model
 
@@ -32,7 +33,7 @@ anonshare ("textshare") is a live, end-to-end encrypted text and code sharing to
 
 ## 5. Rate limiting & abuse controls
 
-The relay enforces connection- and message-level limits per room and per IP (max connections per room, messages/sec, requests/minute per IP, room-creation and auth attempts per minute) to reduce abuse and denial-of-service risk. These are intentionally conservative and tuned for a free-tier deployment.
+The relay enforces connection- and message-level limits per room and per IP (max connections per room, messages/sec, requests/minute per IP, room-creation and auth attempts per minute) to reduce abuse and denial-of-service risk. These are intentionally conservative and tuned for a free-tier deployment. Most of these caps (all except the per-message rate) can be adjusted at runtime by the operator from the admin dashboard, without a redeploy - see §8.
 
 ## 6. Threat model
 
@@ -51,5 +52,17 @@ The relay enforces connection- and message-level limits per room and per IP (max
 - No formal third-party security audit has been performed yet; this document is a self-assessment, not an independent certification.
 - PBKDF2 iteration count is planned to increase (see §3).
 - No SSO/identity-linked access control today — every room is anonymous by design. Identity-linked "private" rooms are a possible future addition for team/enterprise use, kept clearly separate from the anonymous public product.
+
+## 8. Admin dashboard & the room registry
+
+To let the site operator moderate abusive rooms and tune rate limits without redeploying, the relay maintains one additional, deliberately minimal data structure: a global index of currently-active room codes, each with only its creation timestamp, TTL, and whether a password is set. This index:
+
+- Contains **no** message content, chat text, passwords, password hashes, or derived/encryption keys.
+- Contains nothing that a participant doesn't already know just by being in the room (the code, roughly when it was created, and its lifetime).
+- Is written to on room creation and deletion on a best-effort basis; if the write fails, room creation and deletion still succeed normally.
+- Self-prunes entries once they are well past their TTL, so it cannot grow into a permanent historical log of every room ever created.
+- Is only reachable through the `/admin/*` API, itself gated by a single operator secret (`ADMIN_PASSWORD`) that is never committed to the repository and is set directly on the Worker. If that secret is not configured, the entire admin surface — including this index's read/write paths that back it — returns `503` and is inert.
+
+The admin dashboard itself is a separate static site on its own subdomain, so a bug or compromise of the public-facing marketing site cannot reach it, and vice versa. Room suspension/deletion performed from the dashboard uses the same underlying per-room administration path as an owner's own token, just authenticated with the operator secret instead.
 
 Questions about this document: `avishkarkedar+text@gmail.com`.
