@@ -59,20 +59,24 @@ export function runDemo(parent) {
   layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:4'
   parent.appendChild(layer)
 
+  // Positioned with `transform: translate3d(...)` instead of top/left so the
+  // browser can composite these moves on the GPU rather than re-running
+  // layout on every frame - this is what makes the flags/carets glide
+  // smoothly instead of stepping, especially on phones.
   const flags = CAST.map(p => {
     const el = document.createElement('div')
     el.textContent = p.name
     el.style.cssText =
-      'position:absolute;font:500 10px/14px var(--mono);color:#000;padding:0 5px;' +
-      'white-space:nowrap;opacity:0;transition:opacity .3s,top .18s cubic-bezier(.22,.61,.36,1),left .18s cubic-bezier(.22,.61,.36,1);background:' + p.color
+      'position:absolute;left:0;top:0;font:500 10px/14px var(--mono);color:#000;padding:0 5px;will-change:transform,opacity;' +
+      'white-space:nowrap;opacity:0;transition:opacity .3s,transform .16s cubic-bezier(.22,.61,.36,1);background:' + p.color
     const bar = document.createElement('div')
-    bar.style.cssText = 'position:absolute;width:2px;height:17px;opacity:0;transition:opacity .3s,top .18s cubic-bezier(.22,.61,.36,1),left .18s cubic-bezier(.22,.61,.36,1);background:' + p.color
+    bar.style.cssText = 'position:absolute;left:0;top:0;width:2px;height:17px;opacity:0;will-change:transform,opacity;transition:opacity .3s,transform .16s cubic-bezier(.22,.61,.36,1);background:' + p.color
     layer.append(bar, el)
     return { el, bar, p }
   })
 
   const full = SCRIPT.join('\n')
-  let n = 0, stopped = false, timer
+  let n = 0, stopped = false, raf, due = 0
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
 
   // Clamp each flag to whatever line currently exists so the name/caret
@@ -90,39 +94,46 @@ export function runDemo(parent) {
       try { c = view.coordsAtPos(pos) } catch (e) { c = null }
       if (!c) { f.el.style.opacity = '0'; f.bar.style.opacity = '0'; continue }
       const box = view.scrollDOM.getBoundingClientRect()
-      const left = c.left - box.left, top = c.top - box.top
-      f.bar.style.left = left + 'px'
-      f.bar.style.top = top + 'px'
-      f.el.style.left = left + 'px'
-      f.el.style.top = Math.max(0, top - 15) + 'px'
+      // Rounding to whole pixels avoids sub-pixel jitter when the transform
+      // is recomputed every frame while the panel is still settling.
+      const left = Math.round(c.left - box.left), top = Math.round(c.top - box.top)
+      f.bar.style.transform = 'translate3d(' + left + 'px,' + top + 'px,0)'
+      f.el.style.transform = 'translate3d(' + left + 'px,' + Math.max(0, top - 15) + 'px,0)'
       f.bar.style.opacity = '1'
       f.el.style.opacity = '1'
     }
   }
 
-  function restart() {
-    n = 0
-    timer = setTimeout(step, 3200)
+  function schedule(delay) {
+    due = performance.now() + delay
   }
 
-  function step() {
+  // Driven by requestAnimationFrame instead of setTimeout: it stays locked
+  // to the browser's paint cycle (no drift, no sub-tick jank) and pauses
+  // itself automatically in background tabs instead of burning CPU there.
+  function tick(now) {
     if (stopped) return
-    try {
-      if (n <= full.length) {
-        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: full.slice(0, n) } })
-        placeFlags()
-        n += 1
-        // Vary the cadence so it reads as a person, not a printer.
-        const ch = full[n - 1]
-        timer = setTimeout(step, ch === '\n' ? 190 : 26 + Math.random() * 45)
-      } else {
-        restart()
+    if (now >= due) {
+      try {
+        if (n <= full.length) {
+          view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: full.slice(0, n) } })
+          placeFlags()
+          n += 1
+          // Vary the cadence so it reads as a person, not a printer.
+          const ch = full[n - 1]
+          schedule(ch === '\n' ? 190 : 26 + Math.random() * 45)
+        } else {
+          n = 0
+          schedule(3200)
+        }
+      } catch (e) {
+        // Never let a transient dispatch/layout error permanently kill the
+        // loop - just start the next pass instead of stalling forever.
+        n = 0
+        schedule(3200)
       }
-    } catch (e) {
-      // Never let a transient dispatch/layout error permanently kill the
-      // loop - just start the next pass instead of stalling forever.
-      restart()
     }
+    raf = requestAnimationFrame(tick)
   }
 
   // Reduced motion still gets the demo - the finished script shown once,
@@ -132,7 +143,8 @@ export function runDemo(parent) {
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: full } })
     placeFlags()
   } else {
-    step()
+    schedule(3200)
+    raf = requestAnimationFrame(tick)
   }
 
   // On desktop the hero is a CSS grid whose column widths can keep
@@ -158,7 +170,7 @@ export function runDemo(parent) {
 
   return () => {
     stopped = true
-    clearTimeout(timer)
+    cancelAnimationFrame(raf)
     removeEventListener('resize', onResize)
     removeEventListener('load', placeFlags)
     if (ro) { try { ro.disconnect() } catch (e) {} }
