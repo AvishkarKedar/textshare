@@ -9,9 +9,10 @@
   # The boot script now lives at /boot.js instead of an inline <script>, so
   # script-src no longer needs 'unsafe-inline' at all - any future markup
   # injection can no longer execute an attacker-supplied inline script.
-  # Dependencies are bundled locally, so no CDN origin is allowed at all.
+  # Dependencies are bundled locally, so no CDN origin is allowed except the
+  # cookieless Cloudflare Web Analytics beacon.
   # connect-src stays open because the relay host is user-configurable.
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: wss:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: wss:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
 
 # Hashed filenames, so a new build is a new URL and this can be cached hard.
 /assets/*
