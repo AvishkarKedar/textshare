@@ -30,7 +30,7 @@
 
   <h2>Where the key comes from</h2>
   <p>Your room code and password are stretched with <strong>PBKDF2-SHA256 at
-  200,000 iterations</strong> into two separate values, using two different
+  600,000 iterations</strong> into two separate values, using two different
   salts:</p>
 <pre>key  = PBKDF2(code + ":" + password, salt = "textshare|CODE")
 auth = PBKDF2(code + ":" + password, salt = "textshare-auth|CODE")</pre>
@@ -99,7 +99,9 @@ auth = PBKDF2(code + ":" + password, salt = "textshare-auth|CODE")</pre>
 
   <h2>Reporting something</h2>
   <p>If you find a flaw, please email
-  <a href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20security">avishkarkedar+text@gmail.com</a>.
+  <a href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20security">avishkarkedar+text@gmail.com</a>,
+  or open a private security advisory on
+  <a href="https://github.com/AvishkarKedar/textshare" target="_blank" rel="noopener">GitHub</a>.
   Please give me a reasonable window to fix it before publishing. Corrections to
   this page are just as welcome as code.</p>
 
