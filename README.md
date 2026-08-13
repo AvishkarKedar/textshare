@@ -1,9 +1,11 @@
 # anonshare
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/AvishkarKedar/textshare/actions/workflows/ci.yml/badge.svg)](https://github.com/AvishkarKedar/textshare/actions/workflows/ci.yml)
+
 A live, end-to-end encrypted scratchpad for text and code. Open a room, share six
 characters, write together. Nothing is stored once everyone leaves.
 
-**[tx.avishkark.in](https://tx.avishkark.in)**
+**[code.avishkark.in](https://code.avishkark.in)**
 
 - No account, no email, no cookies, no analytics.
 - AES-GCM encryption in the browser. The relay only ever forwards sealed bytes.
@@ -32,7 +34,7 @@ relay is deliberately dumb: it appends opaque frames to a log and fans them out.
 
 ### The key and the token
 
-One password produces two unrelated values, via PBKDF2-SHA256 at 200,000
+One password produces two unrelated values, via PBKDF2-SHA256 at 600,000
 iterations with **different salts**:
 
 ```
@@ -141,6 +143,16 @@ before compaction. Per IP: 120 room lookups per minute.
 - The Content Security Policy still allows inline scripts, because the ES module
   import map must be inline on static hosting and there is no server to mint a
   nonce.
+
+---
+
+## Contributing
+
+Bug reports, feature ideas, and pull requests are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for how to run this locally, the test suite,
+and the pull request process, and the [Code of Conduct](CODE_OF_CONDUCT.md) that
+applies to all participation. Security issues should go through
+[SECURITY.md](SECURITY.md) rather than a public issue.
 
 ## Licence
 
