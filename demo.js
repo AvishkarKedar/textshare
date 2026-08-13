@@ -64,9 +64,9 @@ export function runDemo(parent) {
     el.textContent = p.name
     el.style.cssText =
       'position:absolute;font:500 10px/14px var(--mono);color:#000;padding:0 5px;' +
-      'white-space:nowrap;opacity:0;transition:opacity .3s,top .18s,left .18s;background:' + p.color
+      'white-space:nowrap;opacity:0;transition:opacity .3s,top .18s cubic-bezier(.22,.61,.36,1),left .18s cubic-bezier(.22,.61,.36,1);background:' + p.color
     const bar = document.createElement('div')
-    bar.style.cssText = 'position:absolute;width:2px;height:17px;opacity:0;transition:opacity .3s,top .18s,left .18s;background:' + p.color
+    bar.style.cssText = 'position:absolute;width:2px;height:17px;opacity:0;transition:opacity .3s,top .18s cubic-bezier(.22,.61,.36,1),left .18s cubic-bezier(.22,.61,.36,1);background:' + p.color
     layer.append(bar, el)
     return { el, bar, p }
   })
@@ -80,6 +80,7 @@ export function runDemo(parent) {
   // more of the script is typed, instead of popping in only once their
   // target line has fully arrived.
   function placeFlags() {
+    if (!view) return
     const doc = view.state.doc
     for (const f of flags) {
       const lineNo = Math.min(f.p.line + 1, doc.lines)
@@ -133,13 +134,34 @@ export function runDemo(parent) {
   } else {
     step()
   }
+
+  // On desktop the hero is a CSS grid whose column widths can keep
+  // settling for a frame or two after fonts/layout finish (grid track
+  // sizing, webfont swap, scrollbar reflow) - later than on the
+  // single-column mobile layout. If placeFlags() runs before that
+  // settles, coordsAtPos keeps landing off-panel and the flags/carets
+  // never recover because nothing re-triggers them. A ResizeObserver on
+  // the demo panel itself re-runs placeFlags() whenever its box actually
+  // changes size, so desktop catches up instead of freezing.
+  let ro
+  try {
+    ro = new ResizeObserver(() => placeFlags())
+    ro.observe(parent)
+  } catch (e) { ro = null }
+
   const onResize = () => placeFlags()
   addEventListener('resize', onResize)
+  addEventListener('load', placeFlags)
+  // requestAnimationFrame twice = "after the next paint has actually
+  // happened", which is when late webfont/grid layout settles.
+  requestAnimationFrame(() => requestAnimationFrame(placeFlags))
 
   return () => {
     stopped = true
     clearTimeout(timer)
     removeEventListener('resize', onResize)
+    removeEventListener('load', placeFlags)
+    if (ro) { try { ro.disconnect() } catch (e) {} }
     try { view.destroy() } catch (e) {}
   }
 }
