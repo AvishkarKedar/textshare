@@ -29,3 +29,13 @@
 
 /boot.js
   Cache-Control: no-cache
+
+# Unhashed, hand-edited files served straight from the repo root - a stale
+# cached copy of either has previously caused phones to keep showing a UI
+# element that was already removed from source, so both must always
+# revalidate instead of relying on a default heuristic cache lifetime.
+/app.css
+  Cache-Control: no-cache
+
+/app.js
+  Cache-Control: no-cache
