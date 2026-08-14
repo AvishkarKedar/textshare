@@ -24,6 +24,8 @@ body{
   background:var(--bg);color:var(--fg);
   font:13px/1.55 var(--sans);
   -webkit-font-smoothing:antialiased;overflow:hidden;
+  -webkit-tap-highlight-color:transparent;
+  transition:background-color .2s var(--ease),color .2s var(--ease);
 }
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;background:none;border:0;padding:0}
@@ -166,7 +168,8 @@ select.in{-webkit-appearance:none;appearance:none;font-family:var(--mono);font-s
   grid-template-columns:repeat(3,1fr);
   border-top:1px solid var(--line);border-bottom:1px solid var(--line);
 }
-.strip{background:var(--bg);padding:24px 28px}
+.strip{background:var(--bg);padding:24px 28px;transition:transform .18s var(--ease)}
+.strip:hover{transform:translateY(-2px)}
 .strip .si{font-size:15px;line-height:1}
 .strip b{display:block;margin:12px 0 6px;font:600 12px/1 var(--mono);letter-spacing:.02em}
 .strip p{margin:0;color:var(--mut);font-size:12px;line-height:1.65;max-width:34ch}
@@ -175,7 +178,8 @@ select.in{-webkit-appearance:none;appearance:none;font-family:var(--mono);font-s
 .sectitle{margin:0 0 30px;font:600 20px/1.25 var(--sans);letter-spacing:-.02em}
 .howBlock{max-width:1120px;width:100%;margin:0 auto;padding:52px 28px;border-bottom:1px solid var(--line)}
 .steps{display:grid;gap:1px;background:var(--line);grid-template-columns:repeat(3,1fr);border:1px solid var(--line)}
-.step{background:var(--bg);padding:24px 26px}
+.step{background:var(--bg);padding:24px 26px;transition:transform .18s var(--ease)}
+.step:hover{transform:translateY(-2px)}
 .stepno{
   display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;
   border:1px solid var(--line2);font:600 12px/1 var(--mono);color:var(--accent);margin-bottom:14px;
@@ -190,10 +194,13 @@ select.in{-webkit-appearance:none;appearance:none;font-family:var(--mono);font-s
   list-style:none;cursor:pointer;padding:16px 2px;
   font:600 13px/1.4 var(--sans);color:var(--fg);
   display:flex;align-items:center;justify-content:space-between;gap:14px;
+  transition:color .15s var(--ease);
 }
+.faq summary:hover{color:var(--accent)}
 .faq summary::-webkit-details-marker{display:none}
-.faq summary::after{content:"+";flex:none;color:var(--mut);font:400 17px/1 var(--mono)}
+.faq summary::after{content:"+";flex:none;color:var(--mut);font:400 17px/1 var(--mono);transition:color .15s var(--ease)}
 .faq[open] summary::after{content:"\2212"}
+.faq summary:hover::after{color:var(--accent)}
 .faq p{margin:0 0 18px;padding:0 2px;color:var(--mut);font-size:12.5px;line-height:1.7;max-width:66ch}
 
 /* ---- site footer ---- */
@@ -523,4 +530,5 @@ body.doc-page{overflow:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:to
   .howBlock,.faqBlock{padding:32px 18px}
   .step{padding:20px}
   .faq summary{padding:14px 2px;font-size:12.5px}
+  .strip:hover,.step:hover{transform:none}
 }
