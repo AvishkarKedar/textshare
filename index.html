@@ -426,6 +426,10 @@
   <nav id="tabbar" aria-label="Files">
     <div id="tabs"></div>
     <button class="btn ico flat" id="newFile" title="New file" aria-label="New file">+</button>
+    <span class="grow"></span>
+    <button class="btn sm flat hub-tab-btn" id="hubFilesBtn" title="Shared Files (Videos, PDFs, Images, Documents)">
+      📁 Shared Files <span class="pill" id="hubFilesCount">0</span>
+    </button>
   </nav>
 
   <div id="stage">
@@ -437,17 +441,31 @@
       </div>
 
       <div id="previewWrap" hidden>
-        <div class="phead preview-head"><span>Live Preview</span><button class="btn ico flat" id="previewClose">&times;</button></div>
-        <div id="mdPreview" class="preview-pane"></div>
-        <iframe id="htmlPreview" class="preview-pane" sandbox="allow-scripts" title="Preview" hidden></iframe>
+        <div class="phead preview-head">
+          <span class="preview-title">✨ Artifact Preview</span>
+          <div class="segrow sm" id="prevModeGroup" role="radiogroup" aria-label="Preview Mode">
+            <button type="button" class="seg active" id="prevModeWeb" role="radio" aria-checked="true">Interactive</button>
+            <button type="button" class="seg" id="prevModeMd" role="radio" aria-checked="false">Markdown</button>
+          </div>
+          <span class="grow"></span>
+          <button class="btn sm flat" id="prevReload" title="Reload preview">🔄 Reload</button>
+          <button class="btn sm flat" id="prevPopout" title="Open in new window">⛶ Pop out</button>
+          <button class="btn ico flat" id="previewClose" title="Close preview">&times;</button>
+        </div>
+        <div id="mdPreview" class="preview-pane" hidden></div>
+        <iframe id="htmlPreview" class="preview-pane" sandbox="allow-scripts allow-modals" title="Preview"></iframe>
       </div>
     </div>
 
-    <!-- Bottom Drawer: Terminal / Code Runner Output -->
+    <!-- Bottom Drawer: Terminal / Code Runner Output & Stdin Input -->
     <div id="terminal" hidden aria-label="Terminal output">
       <div class="resizer" id="termResizer" aria-hidden="true"></div>
       <div class="term-head">
         <span class="term-title">Console / Runner</span>
+        <div class="segrow sm" id="termTabGroup" role="radiogroup">
+          <button type="button" class="seg active" id="termTabOut" role="radio" aria-checked="true">Output</button>
+          <button type="button" class="seg" id="termTabIn" role="radio" aria-checked="false">Input (stdin) <span id="termInBadge" class="pill" hidden>Set</span></button>
+        </div>
         <span class="pill" id="termStatus">Ready</span>
         <span class="pill" id="termTime" hidden></span>
         <span class="pill" id="termLang"></span>
@@ -455,29 +473,52 @@
         <button class="btn sm flat" id="termClear">Clear</button>
         <button class="btn ico flat" id="termClose">&times;</button>
       </div>
-      <pre id="termOut" class="term-body" tabindex="0"></pre>
+      <div id="termOutWrap" class="term-content-pane">
+        <div id="termPromptBanner" class="term-prompt-banner" hidden>
+          <span>💡 Program requested input (<code>input()</code>). Enter values in the Input tab and click Run!</span>
+          <button class="btn sm primary" id="termGoInput">Go to Input</button>
+        </div>
+        <pre id="termOut" class="term-body" tabindex="0"></pre>
+      </div>
+      <div id="termInWrap" class="term-content-pane" hidden>
+        <div class="term-stdin-header">
+          <span>Program Input (Passed to <code>input()</code>, <code>scanf</code>, <code>cin</code>, <code>readline</code>):</span>
+          <button class="btn sm flat" id="termClearStdin">Clear input</button>
+        </div>
+        <textarea id="termStdinArea" class="term-stdin-area" placeholder="Enter input values here (one entry per prompt)...&#10;Alice&#10;25&#10;yes" spellcheck="false"></textarea>
+      </div>
       <div class="term-foot">
-        <input id="termStdin" class="in sm" placeholder="Optional stdin input for program..." autocomplete="off">
-        <button id="termRerun" class="btn sm primary">Rerun</button>
+        <button id="termRerun" class="btn sm primary">▶ Run Code (Ctrl+Enter)</button>
+        <button id="termSwitchIn" class="btn sm">⌨️ Stdin: <span id="stdinStatus">0 lines</span></button>
+        <span class="term-stdin-hint hideS">Enter program input in the Input tab</span>
       </div>
     </div>
 
-    <!-- Bottom Drawer: Encrypted 25MB File Sharing -->
-    <aside id="fileDrawer" hidden aria-label="Encrypted File Sharing">
+    <!-- Media & File Sharing Hub -->
+    <aside id="fileDrawer" hidden aria-label="Encrypted File Sharing & Media Hub">
       <div class="resizer" id="fileResizer" aria-hidden="true"></div>
-      <div class="phead">
-        <span>Encrypted Files (up to 25MB)</span>
+      <div class="phead file-hub-head">
+        <div class="file-hub-title-wrap">
+          <span class="file-hub-title">📁 Shared Files &amp; Media</span>
+          <span class="file-hub-subtitle">End-to-End Encrypted (AES-GCM 256) &middot; Up to 25MB</span>
+        </div>
         <button class="btn ico flat" id="fileDrawerClose">&times;</button>
       </div>
       <div class="file-body">
         <div class="dropzone" id="fileDropzone">
-          <svg class="ic lg" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <p>Drag &amp; drop any file up to 25MB or <label for="fileInput" class="lnk">browse</label></p>
+          <svg class="ic lg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p class="drop-lead">Drag &amp; drop any <strong>Video, PDF, Image, Audio, or Document</strong> (up to 25MB)</p>
+          <p class="drop-sub">or <label for="fileInput" class="btn sm primary file-browse-btn">Browse files</label></p>
           <input type="file" id="fileInput" hidden>
           <div class="progress-bar-wrap" id="uploadProgWrap" hidden>
             <div class="progress-bar" id="uploadProgBar" style="width: 0%"></div>
             <span id="uploadProgText">0%</span>
           </div>
+        </div>
+        <div class="file-filter-bar">
+          <span class="file-filter-lbl">Files in this room:</span>
+          <span class="grow"></span>
+          <span id="fileCountBadge" class="pill">0 files</span>
         </div>
         <div id="sharedFileList" class="shared-list"></div>
       </div>

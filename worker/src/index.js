@@ -118,7 +118,7 @@ const json = (body, status) => new Response(JSON.stringify(body), {
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer',
-    'permissions-policy': 'geolocation=(), camera=(), microphone=()',
+    'permissions-policy': 'geolocation=(), camera=(), microphone=(self)',
     ...CORS,
   },
 })

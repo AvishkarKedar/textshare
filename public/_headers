@@ -4,7 +4,7 @@
   Referrer-Policy: no-referrer
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Resource-Policy: same-origin
-  Permissions-Policy: geolocation=(), camera=(), microphone=(), payment=(), usb=(), interest-cohort=()
+  Permissions-Policy: geolocation=(), camera=(), microphone=(self), payment=(), usb=(), interest-cohort=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   # The boot script now lives at /boot.js instead of an inline <script>, so
   # script-src no longer needs 'unsafe-inline' at all - any future markup

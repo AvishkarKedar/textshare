@@ -10,7 +10,7 @@
  * handler below the first time they are fetched.
  */
 
-const VERSION = 'anonshare-v12'
+const VERSION = 'anonshare-v13'
 const SHELL = [
   './',
   './index.html',
