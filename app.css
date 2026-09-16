@@ -698,17 +698,94 @@ body.doc-page{overflow:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:to
 .shared-card-foot{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--raise)}
 .shared-card-foot .grow{flex:1}
 
-/* --------------------------------------------------- revision history */
-#historyDrawer{
-  position:absolute;left:0;right:0;bottom:0;height:240px;z-index:20;
-  background:var(--raise);border-top:1px solid var(--line);
-  display:flex;flex-direction:column;box-shadow:0 -4px 16px rgba(0,0,0,.4);
+/* Standardized, prominent close button for panels, drawers & modals */
+.pclose-btn, .panel-close-btn{
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--raise);
+  border: 1px solid var(--line2);
+  border-radius: 4px;
+  color: var(--mut);
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+  line-height: 1;
+  transition: all .15s var(--ease);
 }
+.pclose-btn:hover, .panel-close-btn:hover{
+  background: var(--line);
+  color: var(--fg);
+  border-color: var(--mut);
+  transform: scale(1.05);
+}
+.pclose-btn:active, .panel-close-btn:active{
+  transform: scale(0.92);
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.pclose-btn svg, .panel-close-btn svg{
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  fill: none;
+  pointer-events: none;
+}
+.phead-actions{display:flex;align-items:center;gap:6px;margin-left:auto}
+
+/* --------------------------------------------------- revision history / time machine */
+#historyDrawer{
+  position:absolute;left:0;right:0;bottom:0;height:290px;z-index:22;
+  background:var(--raise);border-top:1px solid var(--line);
+  display:flex;flex-direction:column;box-shadow:0 -6px 24px rgba(0,0,0,.5);
+}
+.hist-phead{
+  display:flex;align-items:center;gap:12px;padding:8px 14px;
+  border-bottom:1px solid var(--line);background:var(--panel);min-height:40px;margin-bottom:0;
+}
+.hist-title-wrap{display:flex;align-items:center;gap:8px}
+.hist-title{font:700 12px/1 var(--mono);color:var(--fg);letter-spacing:.04em}
+.hist-view-switch{display:flex;border:1px solid var(--line2);border-radius:3px;overflow:hidden}
+.hist-view-switch .seg{padding:0 8px;height:24px;font-size:10px}
 .hist-body{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.hist-controls{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);font:11px/1 var(--mono)}
-.hist-controls .slider{flex:1;-webkit-appearance:none;appearance:none;height:4px;background:var(--line2);outline:0}
-.hist-controls .slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--accent);cursor:pointer}
-.hist-view{flex:1;margin:0;padding:10px;overflow-y:auto;font:12px/1.5 var(--mono);background:var(--bg)}
+.hist-controls{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--raise);border-bottom:1px solid var(--line)}
+.hist-slider-wrap{flex:1;display:flex;flex-direction:column;gap:4px}
+.hist-slider-wrap .slider{
+  width:100%;-webkit-appearance:none;appearance:none;height:6px;
+  background:var(--line2);outline:0;border-radius:3px;cursor:pointer;
+}
+.hist-slider-wrap .slider::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--accent);cursor:grab;box-shadow:0 0 6px rgba(76,141,255,.6);
+  border:2px solid #fff;
+}
+.hist-slider-wrap .slider::-webkit-slider-thumb:active{cursor:grabbing;transform:scale(1.15)}
+.hist-slider-meta{display:flex;justify-content:space-between;align-items:center;font:11px/1 var(--mono);color:var(--mut)}
+.hist-view{flex:1;margin:0;padding:12px;overflow-y:auto;font:12px/1.5 var(--mono);background:var(--bg)}
+.hist-snap-view{white-space:pre-wrap;word-break:break-all;color:var(--fg)}
+
+/* Inactivity countdown warning modal */
+#inactivity{
+  position:fixed;inset:0;background:rgba(0,0,0,.75);
+  display:grid;place-items:center;padding:16px;z-index:99;
+  backdrop-filter:blur(4px);
+}
+.inactivitySheet{
+  border:1px solid var(--warn, #ffb347)!important;
+  max-width:440px;width:100%;
+  box-shadow:0 16px 48px rgba(0,0,0,.7);
+  animation:pop-in .2s ease-out;
+}
+.inactivity-countdown{
+  font:700 38px/1.2 var(--mono);color:var(--warn, #ffb347);text-align:center;
+  margin:16px 0;letter-spacing:.08em;padding:14px;background:var(--raise);
+  border:1px solid var(--line2);border-radius:4px;
+  box-shadow:inset 0 0 12px rgba(255,179,71,.15);
+}
 
 /* --------------------------------------------------- mobile accessory keys */
 .mobile-keys-bar{

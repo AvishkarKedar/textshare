@@ -482,9 +482,11 @@ let CODE = norm(location.hash.slice(1))
 let ydoc, awareness, relay, idb, KEY, AUTH, OWNER = null, view
 let ylist, ytexts, undoManager, activeId = null, following = null
 let ysharedFiles = null, p2pMesh = null, voiceMesh = null, voiceActive = false
-let previewOpen = false
-const historySnapshots = []
+const fileSnapshots = new Map()
+let histViewMode = 'diff'
 let histTimer = null
+let lastUserActivity = Date.now()
+let inactivityWarnActive = false
 let typingTimer, actTimer, chatSeen = 0, markSig = '', startedAt = 0
 let roomLocked = false, canEdit = !VIEW_ONLY, killed = false, booted = false
 let shownKilled = false, killedInterval = null, adminSuspendNoted = false
@@ -797,6 +799,7 @@ async function enterRoom(code, locked) {
   startedAt = Date.now()
   try {
     boot(host)
+    initInactivityTracker()
   } catch (e) {
     banner('Something went wrong setting up this room. Please reload and try again.', 'bad')
   }
@@ -988,6 +991,8 @@ function openFile(id) {
   mount()
   renderTabs()
   $('lang').value = currentLang()
+  recordHistorySnapshot(id, true)
+  if ($('historyDrawer') && !$('historyDrawer').hidden) updateHistoryView()
 }
 
 async function closeFile(id) {
@@ -1806,6 +1811,12 @@ function updateButtonActiveStates() {
     $('chatBtn').classList.toggle('active', chatOpen)
     $('chatBtn').setAttribute('aria-pressed', chatOpen ? 'true' : 'false')
   }
+
+  const histOpen = $('historyDrawer') && !$('historyDrawer').hidden
+  if ($('hubHistBtn')) {
+    $('hubHistBtn').classList.toggle('active', histOpen)
+    $('hubHistBtn').setAttribute('aria-pressed', histOpen ? 'true' : 'false')
+  }
 }
 
 // --- Feature 1: Code Runner with Stdin Input ---
@@ -2196,52 +2207,151 @@ async function toggleVoiceChat() {
 }
 
 // --- Feature 4: Time Machine / Revisions ---
-function recordHistorySnapshot() {
+function getFileSnapshots(fileId) {
+  if (!fileId) return []
+  if (!fileSnapshots.has(fileId)) fileSnapshots.set(fileId, [])
+  return fileSnapshots.get(fileId)
+}
+
+function recordHistorySnapshot(fileId = activeId, force = false) {
+  if (!fileId || !ytexts.get(fileId)) return
+  const txt = ytexts.get(fileId).toString()
+  const snaps = getFileSnapshots(fileId)
+
+  if (!snaps.length) {
+    snaps.push({ time: Date.now(), text: txt })
+    return
+  }
+
+  if (force) {
+    if (snaps[snaps.length - 1].text !== txt) {
+      snaps.push({ time: Date.now(), text: txt })
+      if (snaps.length > 100) snaps.shift()
+      if (!$('historyDrawer').hidden && activeId === fileId) updateHistoryView()
+    }
+    return
+  }
+
   clearTimeout(histTimer)
   histTimer = setTimeout(() => {
     if (!activeId || !ytexts.get(activeId)) return
-    const txt = ytexts.get(activeId).toString()
-    if (!historySnapshots.length || historySnapshots[historySnapshots.length - 1].text !== txt) {
-      historySnapshots.push({
-        time: Date.now(),
-        text: txt,
-        fileId: activeId,
-      })
-      if (historySnapshots.length > 100) historySnapshots.shift()
+    const currentTxt = ytexts.get(activeId).toString()
+    const currentSnaps = getFileSnapshots(activeId)
+    if (!currentSnaps.length || currentSnaps[currentSnaps.length - 1].text !== currentTxt) {
+      currentSnaps.push({ time: Date.now(), text: currentTxt })
+      if (currentSnaps.length > 100) currentSnaps.shift()
       if (!$('historyDrawer').hidden) updateHistoryView()
     }
-  }, 1000)
+  }, 800)
 }
 
 function toggleHistoryDrawer(force) {
   const next = typeof force === 'boolean' ? !force : $('historyDrawer').hidden
   $('historyDrawer').hidden = next
-  if (!next) updateHistoryView()
-}
-
-function updateHistoryView() {
-  const slider = $('histSlider')
-  slider.max = Math.max(0, historySnapshots.length - 1)
-  const idx = parseInt(slider.value, 10)
-  const snap = historySnapshots[idx]
-  const cur = (activeId && ytexts.get(activeId)) ? ytexts.get(activeId).toString() : ''
-  if (snap) {
-    $('histTimestamp').textContent = new Date(snap.time).toLocaleTimeString()
-    $('histCount').textContent = `${idx + 1}/${historySnapshots.length}`
-    $('histDiff').innerHTML = renderVisualDiff(snap.text, cur)
-  } else {
-    $('histDiff').innerHTML = `<div class="diff-container"><div class="diff-line diff-same">${cur || 'Current document'}</div></div>`
+  updateButtonActiveStates()
+  if (!next) {
+    recordHistorySnapshot(activeId, true)
+    const snaps = getFileSnapshots(activeId)
+    const slider = $('histSlider')
+    slider.max = Math.max(0, snaps.length - 1)
+    slider.value = Math.max(0, snaps.length - 1)
+    updateHistoryView()
   }
 }
 
-function restoreHistoryRevision() {
-  if (readOnlyNow()) return toast('This room is read-only')
+function updateHistoryView() {
+  const snaps = getFileSnapshots(activeId)
   const slider = $('histSlider')
-  const idx = parseInt(slider.value, 10)
-  const snap = historySnapshots[idx]
+  const cur = (activeId && ytexts.get(activeId)) ? ytexts.get(activeId).toString() : ''
+  const curName = activeName() || 'file'
+
+  if ($('histActiveFileBadge')) $('histActiveFileBadge').textContent = curName
+  slider.max = Math.max(0, snaps.length - 1)
+
+  let idx = parseInt(slider.value, 10)
+  if (isNaN(idx) || idx < 0 || idx >= snaps.length) {
+    idx = Math.max(0, snaps.length - 1)
+    slider.value = idx
+  }
+
+  const snap = snaps[idx]
+  if (snap) {
+    const elapsedSec = Math.max(0, Math.round((Date.now() - snap.time) / 1000))
+    const timeAgo = elapsedSec < 60 ? `${elapsedSec}s ago` : `${Math.round(elapsedSec / 60)}m ago`
+    $('histTimestamp').textContent = `${new Date(snap.time).toLocaleTimeString()} (${timeAgo})`
+    $('histCount').textContent = `Revision ${idx + 1}/${snaps.length}`
+
+    const snapLines = snap.text ? snap.text.split('\n').length : 0
+    const curLines = cur ? cur.split('\n').length : 0
+    const delta = snapLines - curLines
+    $('histDelta').textContent = delta === 0 ? 'same line count' : (delta > 0 ? `+${delta} lines` : `${delta} lines`)
+
+    if (histViewMode === 'snap') {
+      $('histDiff').hidden = true
+      $('histSnapshot').hidden = false
+      $('histSnapshot').textContent = snap.text || '(empty document)'
+      if ($('histModeDiff')) $('histModeDiff').classList.remove('on')
+      if ($('histModeSnap')) $('histModeSnap').classList.add('on')
+    } else {
+      $('histSnapshot').hidden = true
+      $('histDiff').hidden = false
+      $('histDiff').innerHTML = renderVisualDiff(snap.text, cur)
+      if ($('histModeSnap')) $('histModeSnap').classList.remove('on')
+      if ($('histModeDiff')) $('histModeDiff').classList.add('on')
+    }
+  } else {
+    $('histTimestamp').textContent = 'Live document'
+    $('histCount').textContent = '1/1'
+    $('histDelta').textContent = '0 changes'
+    $('histDiff').innerHTML = `<div class="diff-container"><div class="diff-line diff-same">${cur || '(empty document)'}</div></div>`
+  }
+
+  if ($('histStepOldest')) $('histStepOldest').disabled = (idx <= 0)
+  if ($('histStepBack')) $('histStepBack').disabled = (idx <= 0)
+  if ($('histStepFwd')) $('histStepFwd').disabled = (idx >= snaps.length - 1)
+  if ($('histStepLatest')) $('histStepLatest').disabled = (idx >= snaps.length - 1)
+}
+
+async function revertCurrentFile() {
+  if (readOnlyNow()) return toast('This room is read-only')
+  const snaps = getFileSnapshots(activeId)
+  const idx = parseInt($('histSlider').value, 10)
+  const snap = snaps[idx]
   if (!snap) return
-  addFile('restored-' + new Date(snap.time).toISOString().slice(11, 19).replace(/:/g, '-') + '.txt', snap.text)
-  toast('Restored as a new file tab')
+
+  const ok = await ask({
+    title: 'Revert to this revision?',
+    body: `Replace contents of "${activeName()}" with Revision ${idx + 1} (${new Date(snap.time).toLocaleTimeString()})? You can still undo with Ctrl+Z.`,
+    confirmLabel: 'Revert file',
+  })
+  if (!ok) return
+
+  const yt = ytexts.get(activeId)
+  if (yt) {
+    ydoc.transact(() => {
+      yt.delete(0, yt.length)
+      yt.insert(0, snap.text)
+    }, 'local')
+    toast(`Reverted to revision ${idx + 1}`)
+    toggleHistoryDrawer(false)
+  }
+}
+
+function restoreAsNewTab() {
+  if (readOnlyNow()) return toast('This room is read-only')
+  const snaps = getFileSnapshots(activeId)
+  const idx = parseInt($('histSlider').value, 10)
+  const snap = snaps[idx]
+  if (!snap) return
+
+  const name = activeName() || 'file'
+  const dot = name.lastIndexOf('.')
+  const base = dot !== -1 ? name.slice(0, dot) : name
+  const ext = dot !== -1 ? name.slice(dot) : '.txt'
+  const newName = `${base}-rev${idx + 1}${ext}`
+
+  addFile(newName, snap.text)
+  toast(`Opened "${newName}" in a new tab`)
   toggleHistoryDrawer(false)
 }
 
@@ -2423,6 +2533,81 @@ $('btnDelete').onclick = async () => {
   onKilled('deleted')
 }
 
+// --- Feature 16: Room Inactivity Auto-Deletion (15m idle + 5m warning) ---
+const IDLE_WARN_MS = 15 * 60 * 1000 // 15 minutes
+const IDLE_KILL_MS = 20 * 60 * 1000 // 20 minutes (15m + 5m countdown)
+let inactivityInterval = null
+
+function noteActivity() {
+  lastUserActivity = Date.now()
+  if (inactivityWarnActive) {
+    inactivityWarnActive = false
+    if ($('inactivity')) $('inactivity').hidden = true
+  }
+}
+
+function initInactivityTracker() {
+  if (inactivityInterval) return
+  lastUserActivity = Date.now()
+
+  const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'pointerdown']
+  for (const ev of events) {
+    window.addEventListener(ev, () => {
+      if (Date.now() - lastUserActivity > 1500) noteActivity()
+    }, { passive: true })
+  }
+
+  if ($('inactivityResume')) {
+    $('inactivityResume').onclick = () => {
+      noteActivity()
+      toast('Room session resumed')
+    }
+  }
+
+  inactivityInterval = setInterval(async () => {
+    if ($('app').hidden || !CODE || killed) return
+    const idleMs = Date.now() - lastUserActivity
+
+    if (idleMs >= IDLE_KILL_MS) {
+      if ($('inactivity')) $('inactivity').hidden = true
+      inactivityWarnActive = false
+      clearInterval(inactivityInterval)
+      inactivityInterval = null
+
+      const isOwner = !!ownerToken(CODE)
+      if (isOwner) {
+        try { await ownerAction('delete', true) } catch (e) {}
+      }
+      LS.del('ts.own.' + CODE)
+      if (idb) { try { await idb.clearData() } catch (e) {} }
+      try { if (relay) relay.close() } catch (e) {}
+
+      onKilled('inactivity_deleted')
+      openKilledOverlay(
+        'Room deleted due to inactivity',
+        'This room was automatically deleted because no activity was detected for 20 minutes (15m idle + 5m countdown).'
+      )
+      return
+    }
+
+    if (idleMs >= IDLE_WARN_MS) {
+      if ($('inactivity') && $('inactivity').hidden) {
+        $('inactivity').hidden = false
+        inactivityWarnActive = true
+      }
+      const remainSec = Math.max(0, Math.ceil((IDLE_KILL_MS - idleMs) / 1000))
+      const m = Math.floor(remainSec / 60)
+      const s = remainSec % 60
+      if ($('inactivityCountdown')) {
+        $('inactivityCountdown').textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+      }
+    } else if (inactivityWarnActive) {
+      if ($('inactivity')) $('inactivity').hidden = true
+      inactivityWarnActive = false
+    }
+  }, 1000)
+}
+
 const COMMANDS = [
   ['Run code', 'runcode', 'Ctrl Enter'],
   ['Format document', 'format', 'Shift Alt F'],
@@ -2526,13 +2711,16 @@ async function cursorChat() {
 addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (document.body.classList.contains('zen-mode')) { toggleZenMode(false); return }
-    if (!$('bookmarksDrawer').hidden) { $('bookmarksDrawer').hidden = true; return }
     if (!$('ask').hidden) return closeAsk(null)
     if (!$('pal').hidden) return closePalette()
     if (!$('modal').hidden) return $('mBack').click()
-    if (!$('terminal').hidden) { $('terminal').hidden = true; return }
-    if (!$('fileDrawer').hidden) { $('fileDrawer').hidden = true; return }
-    if (!$('historyDrawer').hidden) { $('historyDrawer').hidden = true; return }
+    if (!$('inactivity').hidden) { noteActivity(); return }
+    if (!$('bookmarksDrawer').hidden) { toggleBookmarksDrawer(false); return }
+    if (!$('fileDrawer').hidden) { toggleFileDrawer(false); return }
+    if (!$('historyDrawer').hidden) { toggleHistoryDrawer(false); return }
+    if (!$('terminal').hidden) { $('terminal').hidden = true; updateButtonActiveStates(); return }
+    if (!$('chat').hidden) { $('chat').hidden = true; updateButtonActiveStates(); return }
+    if (!$('panel').hidden) { $('panel').hidden = true; updateButtonActiveStates(); return }
     if (previewOpen) { toggleLivePreview(false); return }
     setMenu(false)
     return
@@ -2709,6 +2897,7 @@ if ($('previewClose')) $('previewClose').onclick = () => toggleLivePreview(false
 if ($('filesBtn')) $('filesBtn').onclick = () => toggleFileDrawer()
 if ($('hubFilesBtn')) $('hubFilesBtn').onclick = () => toggleFileDrawer()
 if ($('fileDrawerClose')) $('fileDrawerClose').onclick = () => toggleFileDrawer(false)
+if ($('hubHistBtn')) $('hubHistBtn').onclick = () => toggleHistoryDrawer()
 if ($('voiceBtn')) $('voiceBtn').onclick = toggleVoiceChat
 if ($('bookmarksBtn')) $('bookmarksBtn').onclick = () => toggleBookmarksDrawer()
 if ($('bookmarksClose')) $('bookmarksClose').onclick = () => toggleBookmarksDrawer(false)
@@ -2720,9 +2909,23 @@ if ($('termClear')) $('termClear').onclick = () => { $('termOut').textContent = 
 if ($('termRerun')) $('termRerun').onclick = triggerRunCode
 if ($('fileDropzone')) $('fileDropzone').onclick = e => { if (e.target.tagName !== 'INPUT') $('fileInput').click() }
 if ($('fileInput')) $('fileInput').onchange = e => { if (e.target.files && e.target.files[0]) handleFileUpload(e.target.files[0]) }
-if ($('histClose')) $('histClose').onclick = () => { toggleHistoryDrawer(false); updateButtonActiveStates() }
+
+// Time Machine controls
+if ($('histClose')) $('histClose').onclick = () => toggleHistoryDrawer(false)
 if ($('histSlider')) $('histSlider').oninput = updateHistoryView
-if ($('histRestore')) $('histRestore').onclick = restoreHistoryRevision
+if ($('histStepOldest')) $('histStepOldest').onclick = () => { $('histSlider').value = 0; updateHistoryView() }
+if ($('histStepBack')) $('histStepBack').onclick = () => { $('histSlider').value = Math.max(0, parseInt($('histSlider').value, 10) - 1); updateHistoryView() }
+if ($('histStepFwd')) $('histStepFwd').onclick = () => { $('histSlider').value = parseInt($('histSlider').value, 10) + 1; updateHistoryView() }
+if ($('histStepLatest')) $('histStepLatest').onclick = () => {
+  const snaps = getFileSnapshots(activeId)
+  $('histSlider').value = Math.max(0, snaps.length - 1)
+  updateHistoryView()
+}
+if ($('histModeDiff')) $('histModeDiff').onclick = () => { histViewMode = 'diff'; updateHistoryView() }
+if ($('histModeSnap')) $('histModeSnap').onclick = () => { histViewMode = 'snap'; updateHistoryView() }
+if ($('histRevertBtn')) $('histRevertBtn').onclick = revertCurrentFile
+if ($('histRestoreTabBtn')) $('histRestoreTabBtn').onclick = restoreAsNewTab
+
 if ($('chatClose')) $('chatClose').onclick = () => { $('chat').hidden = true; updateButtonActiveStates() }
 if ($('panelClose')) $('panelClose').onclick = () => { $('panel').hidden = true; updateButtonActiveStates() }
 

@@ -87,7 +87,7 @@ const errorFrame = reason => textFrame(T_ERROR, reason)
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization,x-room-auth,Range,*',
   'Access-Control-Max-Age': '86400',
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
