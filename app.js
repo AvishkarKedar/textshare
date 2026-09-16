@@ -19,7 +19,7 @@ import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
 import { runCode, parseErrorPositions } from './lib/runner.js'
 import { uploadEncryptedFile, downloadAndDecryptFile, saveBlobAsFile } from './lib/file-sharing.js'
 import { formatCode } from './lib/formatter.js'
-import { renderMarkdown, updateHtmlPreview, renderVisualDiff } from './lib/preview.js'
+import { renderMarkdown, updateHtmlPreview, buildStandaloneHtml, renderVisualDiff } from './lib/preview.js'
 import { VoiceMesh } from './lib/voice.js'
 import { P2PMesh } from './lib/p2p.js'
 import { detectLanguage } from './lib/detector.js'
@@ -847,7 +847,12 @@ function boot(host) {
     voiceMesh = new VoiceMesh(String(ydoc.clientID), (targetCid, sig) => {
       if (relay) relay.sendP2P(targetCid, sig)
     })
-    voiceMesh.onSpeaking = () => { paintPeople() }
+    voiceMesh.onSpeaking = (cid, isSpeaking) => {
+      paintPeople()
+      if (cid === String(ydoc.clientID) && $('voiceBtn')) {
+        $('voiceBtn').classList.toggle('speaking', isSpeaking)
+      }
+    }
     relay.onp2p = signal => {
       if (signal && signal.type && signal.type.startsWith('voice-')) {
         voiceMesh?.handleSignal(signal.senderCid, signal)
@@ -1747,24 +1752,85 @@ function jumpToLine(lineNum) {
   toast(`Jumped to line ${lineNum}`)
 }
 
-// --- Feature 1: Code Runner ---
+// --- Global Active Button States ---
+function updateButtonActiveStates() {
+  const termOpen = $('terminal') && !$('terminal').hidden
+  if ($('runBtn')) {
+    $('runBtn').classList.toggle('active', termOpen)
+    $('runBtn').setAttribute('aria-pressed', termOpen ? 'true' : 'false')
+  }
+
+  if ($('previewBtn')) {
+    $('previewBtn').classList.toggle('active', previewOpen)
+    $('previewBtn').setAttribute('aria-pressed', previewOpen ? 'true' : 'false')
+  }
+
+  const fileOpen = $('fileDrawer') && !$('fileDrawer').hidden
+  if ($('filesBtn')) {
+    $('filesBtn').classList.toggle('active', fileOpen)
+    $('filesBtn').setAttribute('aria-pressed', fileOpen ? 'true' : 'false')
+  }
+  if ($('hubFilesBtn')) {
+    $('hubFilesBtn').classList.toggle('active', fileOpen)
+  }
+
+  if ($('voiceBtn')) {
+    $('voiceBtn').classList.toggle('active', voiceActive)
+    $('voiceBtn').setAttribute('aria-pressed', voiceActive ? 'true' : 'false')
+    if (voiceActive && voiceMesh && voiceMesh.isMuted) {
+      $('voiceBtn').style.opacity = '0.7'
+      $('voiceBtn').title = 'Microphone Muted (Click to speak)'
+    } else if (voiceActive) {
+      $('voiceBtn').style.opacity = '1'
+      $('voiceBtn').title = 'Voice Active (Click to mute)'
+    } else {
+      $('voiceBtn').style.opacity = ''
+      $('voiceBtn').title = 'Voice Chat / Walkie-Talkie'
+    }
+  }
+
+  const bookmarksOpen = $('bookmarksDrawer') && !$('bookmarksDrawer').hidden
+  if ($('bookmarksBtn')) {
+    $('bookmarksBtn').classList.toggle('active', bookmarksOpen)
+    $('bookmarksBtn').setAttribute('aria-pressed', bookmarksOpen ? 'true' : 'false')
+  }
+
+  const zenActive = document.body.classList.contains('zen-mode')
+  if ($('zenBtn')) {
+    $('zenBtn').classList.toggle('active', zenActive)
+    $('zenBtn').setAttribute('aria-pressed', zenActive ? 'true' : 'false')
+  }
+
+  const chatOpen = $('chat') && !$('chat').hidden
+  if ($('chatBtn')) {
+    $('chatBtn').classList.toggle('active', chatOpen)
+    $('chatBtn').setAttribute('aria-pressed', chatOpen ? 'true' : 'false')
+  }
+}
+
+// --- Feature 1: Code Runner with Stdin Input ---
 async function triggerRunCode() {
   if (!activeId || !ytexts.get(activeId)) return
   const code = ytexts.get(activeId).toString()
   const lang = currentLang()
 
   $('terminal').hidden = false
+  updateButtonActiveStates()
+  if ($('termTabOut')) $('termTabOut').click()
   $('termStatus').textContent = 'Running...'
   $('termStatus').style.background = 'var(--warn)'
   $('termTime').hidden = true
   $('termLang').textContent = lang
   $('termOut').textContent = ''
+  if ($('termPromptBanner')) $('termPromptBanner').hidden = true
+
+  const stdinVal = $('termStdinArea') ? $('termStdinArea').value : ($('termStdin') ? $('termStdin').value : '')
 
   try {
     const res = await runCode({
       language: lang,
       code,
-      stdin: $('termStdin').value,
+      stdin: stdinVal,
       relayHost: relayHost(),
     })
 
@@ -1772,6 +1838,12 @@ async function triggerRunCode() {
     if (res.stderr) {
       if ($('termOut').textContent && !$('termOut').textContent.startsWith('(')) $('termOut').textContent += '\n'
       $('termOut').textContent += res.stderr
+    }
+
+    const needsInput = res.stderr && (res.stderr.includes('EOFError') || res.stderr.includes('EOF when reading a line') || res.stderr.includes('NoSuchElementException'))
+    if ($('termPromptBanner')) $('termPromptBanner').hidden = !needsInput
+    if (needsInput && !stdinVal) {
+      toast('💡 Program requested input. Enter input in the Input tab and click Run.')
     }
 
     if (res.errorPositions && res.errorPositions.length > 0) {
@@ -1816,10 +1888,13 @@ function triggerFormatCode() {
   }
 }
 
-// --- Feature 6: Split Screen & Live Preview ---
+// --- Feature 6: Artifacts-Style Split Screen & Live Preview ---
+let previewMode = 'auto' // 'auto' | 'web' | 'markdown'
+
 function toggleLivePreview(force) {
   previewOpen = typeof force === 'boolean' ? force : !previewOpen
   $('previewWrap').hidden = !previewOpen
+  updateButtonActiveStates()
   if (previewOpen) updateLivePreview()
 }
 
@@ -1827,22 +1902,52 @@ function updateLivePreview() {
   if (!previewOpen || !activeId || !ytexts.get(activeId)) return
   const lang = currentLang()
   const content = ytexts.get(activeId).toString()
-  if (lang === 'html') {
+
+  const looksLikeHtml = /<!doctype\s+html|<html[\s>]|<div|<p[\s>]|<span|<svg|<button|<canvas|<script|<style/i.test(content)
+  const isWeb = previewMode === 'web' || (previewMode === 'auto' && (lang === 'html' || lang === 'svg' || looksLikeHtml))
+
+  if (isWeb) {
     $('mdPreview').hidden = true
     $('htmlPreview').hidden = false
-    updateHtmlPreview($('htmlPreview'), content)
+    if ($('prevModeWeb')) { $('prevModeWeb').classList.add('active'); $('prevModeWeb').setAttribute('aria-checked', 'true') }
+    if ($('prevModeMd')) { $('prevModeMd').classList.remove('active'); $('prevModeMd').setAttribute('aria-checked', 'false') }
+
+    // Bundle multi-file CSS & JS in the room
+    let extraCss = '', extraJs = ''
+    try {
+      for (const f of files()) {
+        if (f.id !== activeId) {
+          const fText = (ytexts.get(f.id) || '').toString()
+          if (f.name.endsWith('.css') || f.name.includes('style')) extraCss += fText + '\n'
+          else if (f.name.endsWith('.js') && !f.name.includes('test')) extraJs += fText + '\n'
+        }
+      }
+    } catch (e) {}
+
+    updateHtmlPreview($('htmlPreview'), content, { extraCss, extraJs })
   } else {
     $('htmlPreview').hidden = true
     $('mdPreview').hidden = false
+    if ($('prevModeMd')) { $('prevModeMd').classList.add('active'); $('prevModeMd').setAttribute('aria-checked', 'true') }
+    if ($('prevModeWeb')) { $('prevModeWeb').classList.remove('active'); $('prevModeWeb').setAttribute('aria-checked', 'false') }
     $('mdPreview').innerHTML = renderMarkdown(content)
   }
 }
 
-// --- Feature 2: Encrypted 25MB File Sharing ---
+// --- Feature 2: Dedicated Media & File Sharing Hub (up to 25MB) ---
 function toggleFileDrawer(force) {
   const next = typeof force === 'boolean' ? !force : $('fileDrawer').hidden
   $('fileDrawer').hidden = next
+  updateButtonActiveStates()
   if (!next) renderSharedFiles()
+}
+
+function updateFileCountBadges() {
+  const arr = (ysharedFiles || (ydoc ? ydoc.getArray('shared_files') : null))?.toArray() || []
+  const count = arr.length
+  if ($('hubFilesCount')) $('hubFilesCount').textContent = count
+  if ($('fileCountBadge')) $('fileCountBadge').textContent = count + (count === 1 ? ' file' : ' files')
+  if ($('filesDot')) $('filesDot').hidden = count === 0
 }
 
 function renderSharedFiles() {
@@ -1850,22 +1955,60 @@ function renderSharedFiles() {
   if (!list || !ydoc) return
   list.innerHTML = ''
   const arr = (ysharedFiles || ydoc.getArray('shared_files')).toArray()
+  updateFileCountBadges()
+
   if (!arr.length) {
-    list.innerHTML = '<p class="fineprint" style="text-align:center">No files shared yet in this room.</p>'
+    list.innerHTML = `
+      <div style="text-align:center;padding:28px 12px;color:var(--mut);">
+        <p style="font:600 13px/1.4 var(--sans);margin-bottom:6px">No files shared yet in this room</p>
+        <p class="fineprint">Drag and drop any Video, PDF, Image, Audio, or Archive above to share it with everyone here.</p>
+      </div>`
     return
   }
-  for (const f of arr) {
-    const el = document.createElement('div')
-    el.className = 'shared-item'
+
+  for (let idx = 0; idx < arr.length; idx++) {
+    const f = arr[idx]
+    const card = document.createElement('div')
+    card.className = 'shared-card'
+
     const sizeStr = f.size < 1024 * 1024
       ? (f.size / 1024).toFixed(1) + ' KB'
       : (f.size / (1024 * 1024)).toFixed(2) + ' MB'
-    el.innerHTML = `
-      <div class="fname" title="${f.name}">${f.name}</div>
-      <div class="fsize">${sizeStr}</div>
-      <button class="btn sm dl-btn">Download</button>
+
+    const ext = (f.name.split('.').pop() || '').toLowerCase()
+    const mime = (f.type || '').toLowerCase()
+    const isVideo = mime.startsWith('video/') || ['mp4', 'webm', 'mov', 'mkv'].includes(ext)
+    const isImage = mime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext)
+    const isAudio = mime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'm4a'].includes(ext)
+    const isPdf = mime === 'application/pdf' || ext === 'pdf'
+
+    let typeTag = 'FILE'
+    let typeClass = ''
+    if (isVideo) { typeTag = 'VIDEO'; typeClass = 'video' }
+    else if (isImage) { typeTag = 'IMAGE'; typeClass = 'image' }
+    else if (isPdf) { typeTag = 'PDF'; typeClass = 'pdf' }
+    else if (isAudio) { typeTag = 'AUDIO'; typeClass = 'audio' }
+
+    card.innerHTML = `
+      <div class="shared-card-head">
+        <span class="file-type-badge ${typeClass}">${typeTag}</span>
+        <span class="shared-card-name" title="${f.name}">${f.name}</span>
+        <span class="shared-card-size">${sizeStr}</span>
+      </div>
+      <div class="shared-media-container" id="media_wrap_${f.id}" hidden></div>
+      <div class="shared-card-foot">
+        ${isVideo ? `<button class="btn sm primary play-video-btn" id="play_btn_${f.id}">▶ Play Video</button>` : ''}
+        ${isImage ? `<button class="btn sm view-img-btn" id="view_img_${f.id}">👁️ Preview Image</button>` : ''}
+        ${isAudio ? `<button class="btn sm play-audio-btn" id="play_audio_${f.id}">▶ Play Audio</button>` : ''}
+        ${isPdf ? `<button class="btn sm view-pdf-btn" id="view_pdf_${f.id}">📄 View PDF</button>` : ''}
+        <span class="grow"></span>
+        <button class="btn sm dl-btn" id="dl_${f.id}">⬇ Download</button>
+        <button class="btn sm flat del-btn" title="Remove file" id="del_${f.id}">&times;</button>
+      </div>
     `
-    el.querySelector('.dl-btn').onclick = async () => {
+
+    // Download handler
+    card.querySelector(`#dl_${f.id}`).onclick = async () => {
       try {
         toast('Decrypting ' + f.name + '...')
         const blob = await downloadAndDecryptFile({
@@ -1881,7 +2024,108 @@ function renderSharedFiles() {
         toast('Download failed: ' + err.message)
       }
     }
-    list.appendChild(el)
+
+    // Play Video handler
+    if (isVideo) {
+      card.querySelector(`#play_btn_${f.id}`).onclick = async () => {
+        const wrap = card.querySelector(`#media_wrap_${f.id}`)
+        if (!wrap.hidden) { wrap.hidden = true; wrap.innerHTML = ''; return }
+        try {
+          toast('Decrypting video for playback...')
+          const blob = await downloadAndDecryptFile({
+            fileMeta: f,
+            roomCode: CODE,
+            relayHost: relayHost(),
+            roomKey: KEY,
+            authToken: AUTH,
+          })
+          const url = URL.createObjectURL(blob)
+          wrap.hidden = false
+          wrap.innerHTML = `<div class="shared-media-preview"><video class="shared-video-player" controls autoplay src="${url}"></video></div>`
+        } catch (err) {
+          toast('Could not play video: ' + err.message)
+        }
+      }
+    }
+
+    // View Image handler
+    if (isImage) {
+      card.querySelector(`#view_img_${f.id}`).onclick = async () => {
+        const wrap = card.querySelector(`#media_wrap_${f.id}`)
+        if (!wrap.hidden) { wrap.hidden = true; wrap.innerHTML = ''; return }
+        try {
+          toast('Decrypting image preview...')
+          const blob = await downloadAndDecryptFile({
+            fileMeta: f,
+            roomCode: CODE,
+            relayHost: relayHost(),
+            roomKey: KEY,
+            authToken: AUTH,
+          })
+          const url = URL.createObjectURL(blob)
+          wrap.hidden = false
+          wrap.innerHTML = `<div class="shared-media-preview"><img class="shared-img-preview" src="${url}" alt="${f.name}"></div>`
+        } catch (err) {
+          toast('Could not load image: ' + err.message)
+        }
+      }
+    }
+
+    // Play Audio handler
+    if (isAudio) {
+      card.querySelector(`#play_audio_${f.id}`).onclick = async () => {
+        const wrap = card.querySelector(`#media_wrap_${f.id}`)
+        if (!wrap.hidden) { wrap.hidden = true; wrap.innerHTML = ''; return }
+        try {
+          toast('Decrypting audio...')
+          const blob = await downloadAndDecryptFile({
+            fileMeta: f,
+            roomCode: CODE,
+            relayHost: relayHost(),
+            roomKey: KEY,
+            authToken: AUTH,
+          })
+          const url = URL.createObjectURL(blob)
+          wrap.hidden = false
+          wrap.innerHTML = `<div style="padding:10px;background:#18181b"><audio controls autoplay style="width:100%" src="${url}"></audio></div>`
+        } catch (err) {
+          toast('Could not play audio: ' + err.message)
+        }
+      }
+    }
+
+    // View PDF handler
+    if (isPdf) {
+      card.querySelector(`#view_pdf_${f.id}`).onclick = async () => {
+        try {
+          toast('Decrypting PDF...')
+          const blob = await downloadAndDecryptFile({
+            fileMeta: f,
+            roomCode: CODE,
+            relayHost: relayHost(),
+            roomKey: KEY,
+            authToken: AUTH,
+          })
+          const url = URL.createObjectURL(blob)
+          window.open(url, '_blank')
+        } catch (err) {
+          toast('Could not open PDF: ' + err.message)
+        }
+      }
+    }
+
+    // Delete handler
+    card.querySelector(`#del_${f.id}`).onclick = () => {
+      const yArr = ysharedFiles || ydoc.getArray('shared_files')
+      const targetIdx = yArr.toArray().findIndex(item => item.id === f.id)
+      if (targetIdx !== -1) {
+        yArr.delete(targetIdx, 1)
+        toast('Removed ' + f.name)
+        renderSharedFiles()
+      }
+    }
+
+    list.appendChild(card)
   }
 }
 
@@ -1918,27 +2162,36 @@ async function handleFileUpload(file) {
 
 // --- Feature 8: Ephemeral WebRTC Voice Chat ---
 async function toggleVoiceChat() {
-  if (!voiceMesh) return
+  if (!voiceMesh) {
+    toast('Voice mesh initializing...')
+    return
+  }
   if (!voiceActive) {
-    const ok = await voiceMesh.start()
-    if (ok) {
-      voiceActive = true
-      voiceMesh.setMuted(false)
-      $('voiceBtn').classList.add('primary')
-      toast('Voice connected (Unmuted)')
-    } else {
-      toast('Microphone access denied')
+    try {
+      toast('Connecting voice... please allow microphone access')
+      const ok = await voiceMesh.start()
+      if (ok) {
+        voiceActive = true
+        voiceMesh.setMuted(false)
+        updateButtonActiveStates()
+        toast('🎤 Microphone connected (Live in room)')
+      }
+    } catch (err) {
+      console.warn('Microphone permission error:', err)
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        toast('⚠️ Microphone access was denied. Click the lock icon in your browser address bar to allow microphone access.')
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        toast('⚠️ No microphone found on this device.')
+      } else {
+        toast('⚠️ Microphone error: ' + (err.message || err))
+      }
+      updateButtonActiveStates()
     }
   } else {
     const nextMuted = !voiceMesh.isMuted
     voiceMesh.setMuted(nextMuted)
-    if (nextMuted) {
-      $('voiceBtn').classList.remove('primary')
-      toast('Microphone muted')
-    } else {
-      $('voiceBtn').classList.add('primary')
-      toast('Microphone unmuted')
-    }
+    updateButtonActiveStates()
+    toast(nextMuted ? '🔇 Microphone muted' : '🎤 Microphone unmuted')
   }
 }
 
@@ -2380,11 +2633,81 @@ function maybeAutoDetectLanguage(text) {
   }
 }
 
+// Terminal / Runner Tabs & Stdin
+if ($('termTabOut')) $('termTabOut').onclick = () => {
+  $('termTabOut').classList.add('active')
+  $('termTabIn').classList.remove('active')
+  $('termOutWrap').hidden = false
+  $('termInWrap').hidden = true
+}
+if ($('termTabIn')) $('termTabIn').onclick = () => {
+  $('termTabIn').classList.add('active')
+  $('termTabOut').classList.remove('active')
+  $('termOutWrap').hidden = true
+  $('termInWrap').hidden = false
+  if ($('termStdinArea')) $('termStdinArea').focus()
+}
+if ($('termSwitchIn')) $('termSwitchIn').onclick = () => {
+  if ($('termInWrap').hidden) {
+    $('termTabIn').click()
+  } else {
+    $('termTabOut').click()
+  }
+}
+if ($('termGoInput')) $('termGoInput').onclick = () => {
+  if ($('termTabIn')) $('termTabIn').click()
+}
+if ($('termClearStdin')) $('termClearStdin').onclick = () => {
+  if ($('termStdinArea')) {
+    $('termStdinArea').value = ''
+    syncStdinCount()
+  }
+}
+function syncStdinCount() {
+  const val = $('termStdinArea')?.value || ''
+  const lines = val ? val.split('\n').filter(Boolean).length : 0
+  if ($('stdinStatus')) $('stdinStatus').textContent = lines ? `${lines} lines` : '0 lines'
+  if ($('termInBadge')) $('termInBadge').hidden = !val.trim()
+}
+if ($('termStdinArea')) $('termStdinArea').oninput = syncStdinCount
+
+// Artifacts Live Preview Controls
+if ($('prevModeWeb')) $('prevModeWeb').onclick = () => {
+  previewMode = 'web'
+  updateLivePreview()
+}
+if ($('prevModeMd')) $('prevModeMd').onclick = () => {
+  previewMode = 'markdown'
+  updateLivePreview()
+}
+if ($('prevReload')) $('prevReload').onclick = () => {
+  updateLivePreview()
+  toast('🔄 Preview reloaded')
+}
+if ($('prevPopout')) $('prevPopout').onclick = () => {
+  if (!activeId || !ytexts.get(activeId)) return
+  const content = ytexts.get(activeId).toString()
+  let extraCss = '', extraJs = ''
+  try {
+    for (const f of files()) {
+      if (f.id !== activeId) {
+        const fText = (ytexts.get(f.id) || '').toString()
+        if (f.name.endsWith('.css') || f.name.includes('style')) extraCss += fText + '\n'
+        else if (f.name.endsWith('.js') && !f.name.includes('test')) extraJs += fText + '\n'
+      }
+    }
+  } catch (e) {}
+  const html = buildStandaloneHtml(content, { extraCss, extraJs })
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  window.open(URL.createObjectURL(blob), '_blank')
+}
+
 // Wire up topbar and drawer controls
 if ($('runBtn')) $('runBtn').onclick = triggerRunCode
 if ($('previewBtn')) $('previewBtn').onclick = () => toggleLivePreview()
 if ($('previewClose')) $('previewClose').onclick = () => toggleLivePreview(false)
 if ($('filesBtn')) $('filesBtn').onclick = () => toggleFileDrawer()
+if ($('hubFilesBtn')) $('hubFilesBtn').onclick = () => toggleFileDrawer()
 if ($('fileDrawerClose')) $('fileDrawerClose').onclick = () => toggleFileDrawer(false)
 if ($('voiceBtn')) $('voiceBtn').onclick = toggleVoiceChat
 if ($('bookmarksBtn')) $('bookmarksBtn').onclick = () => toggleBookmarksDrawer()
@@ -2392,15 +2715,16 @@ if ($('bookmarksClose')) $('bookmarksClose').onclick = () => toggleBookmarksDraw
 if ($('bookmarksClear')) $('bookmarksClear').onclick = () => { clearBookmarks(); renderBookmarksList() }
 if ($('zenBtn')) $('zenBtn').onclick = () => toggleZenMode()
 if ($('zenExit')) $('zenExit').onclick = () => toggleZenMode(false)
-if ($('termClose')) $('termClose').onclick = () => { $('terminal').hidden = true }
+if ($('termClose')) $('termClose').onclick = () => { $('terminal').hidden = true; updateButtonActiveStates() }
 if ($('termClear')) $('termClear').onclick = () => { $('termOut').textContent = '' }
 if ($('termRerun')) $('termRerun').onclick = triggerRunCode
-if ($('termStdin')) $('termStdin').onkeydown = e => { if (e.key === 'Enter') triggerRunCode() }
 if ($('fileDropzone')) $('fileDropzone').onclick = e => { if (e.target.tagName !== 'INPUT') $('fileInput').click() }
 if ($('fileInput')) $('fileInput').onchange = e => { if (e.target.files && e.target.files[0]) handleFileUpload(e.target.files[0]) }
-if ($('histClose')) $('histClose').onclick = () => toggleHistoryDrawer(false)
+if ($('histClose')) $('histClose').onclick = () => { toggleHistoryDrawer(false); updateButtonActiveStates() }
 if ($('histSlider')) $('histSlider').oninput = updateHistoryView
 if ($('histRestore')) $('histRestore').onclick = restoreHistoryRevision
+if ($('chatClose')) $('chatClose').onclick = () => { $('chat').hidden = true; updateButtonActiveStates() }
+if ($('panelClose')) $('panelClose').onclick = () => { $('panel').hidden = true; updateButtonActiveStates() }
 
 // Mobile accessory toolbar quick keys
 document.querySelectorAll('#mobileKeys button[data-key]').forEach(b => {
