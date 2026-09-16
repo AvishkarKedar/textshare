@@ -3,6 +3,7 @@ import { detectLanguage } from '../lib/detector.js'
 import { parseErrorPositions } from '../lib/runner.js'
 import { computeDiff, renderVisualDiff } from '../lib/preview.js'
 import { getBookmarks, saveBookmark, removeBookmark, clearBookmarks } from '../lib/bookmarks.js'
+import { parseDocxXmlToHtml } from '../lib/docx-viewer.js'
 
 describe('Auto-Language Detector', () => {
   it('detects Python via shebang or syntax', () => {
@@ -93,5 +94,74 @@ describe('Inactivity Countdown Formatter', () => {
     expect(formatCountdown(65)).toBe('01:05')
     expect(formatCountdown(9)).toBe('00:09')
     expect(formatCountdown(0)).toBe('00:00')
+  })
+})
+
+describe('Word (.docx) In-Browser XML Parser', () => {
+  it('parses headings and styled paragraphs', () => {
+    const xml = `
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+          <w:p>
+            <w:pPr><w:pStyle w:val="Heading1"/></w:pPr>
+            <w:r><w:t>Assignment 1: Algorithms</w:t></w:r>
+          </w:p>
+          <w:p>
+            <w:r>
+              <w:rPr><w:b/></w:rPr>
+              <w:t>Problem Statement:</w:t>
+            </w:r>
+            <w:r>
+              <w:t> Find the shortest path.</w:t>
+            </w:r>
+          </w:p>
+        </w:body>
+      </w:document>
+    `
+    const html = parseDocxXmlToHtml(xml)
+    expect(html).toContain('<h1 class="docx-h1">Assignment 1: Algorithms</h1>')
+    expect(html).toContain('<strong>Problem Statement:</strong>')
+    expect(html).toContain('Find the shortest path.')
+  })
+
+  it('parses assignment requirement tables', () => {
+    const xml = `
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+          <w:tbl>
+            <w:tr>
+              <w:tc><w:p><w:r><w:t>Input</w:t></w:r></w:p></w:tc>
+              <w:tc><w:p><w:r><w:t>Output</w:t></w:r></w:p></w:tc>
+            </w:tr>
+            <w:tr>
+              <w:tc><w:p><w:r><w:t>5</w:t></w:r></w:p></w:tc>
+              <w:tc><w:p><w:r><w:t>120</w:t></w:r></w:p></w:tc>
+            </w:tr>
+          </w:tbl>
+        </w:body>
+      </w:document>
+    `
+    const html = parseDocxXmlToHtml(xml)
+    expect(html).toContain('<table class="docx-table">')
+    expect(html).toContain('<td>Input</td>')
+    expect(html).toContain('<td>Output</td>')
+    expect(html).toContain('<td>5</td>')
+    expect(html).toContain('<td>120</td>')
+  })
+})
+
+describe('Java Compiler Class Extractor', () => {
+  function getJavaClassName(code) {
+    const classMatch = code.match(/public\s+class\s+([A-Za-z0-9_]+)/)
+    return classMatch ? classMatch[1] : 'Main'
+  }
+
+  it('extracts custom public class names', () => {
+    expect(getJavaClassName('public class Solution { public static void main(String[] args) {} }')).toBe('Solution')
+    expect(getJavaClassName('import java.util.*;\npublic class LabAssignment2 {\n}')).toBe('LabAssignment2')
+  })
+
+  it('defaults to Main when no public class is declared', () => {
+    expect(getJavaClassName('class Helper { public static void main(String[] args) {} }')).toBe('Main')
   })
 })
