@@ -1,0 +1,6 @@
+# Caddyfile for AnonShare Relay on VPS
+# If using Caddy, simply run: caddy run --config Caddyfile
+
+relay.yourdomain.com {
+    reverse_proxy localhost:8787
+}

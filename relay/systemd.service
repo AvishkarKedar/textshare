@@ -1,0 +1,22 @@
+[Unit]
+Description=AnonShare VPS Sync Relay Service
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/anonshare-relay
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=8787
+Environment=HOST=0.0.0.0
+Environment=ADMIN_PASSWORD=change-this-secret
+
+# Security sandbox
+NoNewPrivileges=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
