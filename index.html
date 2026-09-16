@@ -355,6 +355,12 @@
 
     <div class="stack" id="people" aria-label="People in this room"></div>
 
+    <button class="btn primary ico-text" id="runBtn" title="Run Code (Ctrl+Enter)" aria-label="Run code"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span class="hideS">Run</span></button>
+    <button class="btn ico" id="previewBtn" title="Toggle Live Preview" aria-label="Toggle Live Preview"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button class="btn ico" id="filesBtn" title="Encrypted File Sharing (up to 25MB)" aria-label="Share Files"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span class="nd" id="filesDot" hidden></span></button>
+    <button class="btn ico" id="bookmarksBtn" title="Recent Rooms / History" aria-label="Recent Rooms"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
+    <button class="btn ico" id="zenBtn" title="Zen Mode / Fullscreen (F11)" aria-label="Zen Mode"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
+    <button class="btn ico" id="voiceBtn" title="Voice Chat / Walkie-Talkie" aria-label="Voice Chat"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
     <select id="lang" class="btn sel" title="Language" aria-label="Language"></select>
     <button class="btn ico" id="undoBtn" title="Undo" aria-label="Undo"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 7 4 12l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <button class="btn ico" id="redoBtn" title="Redo" aria-label="Redo"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M15 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 12H10a6 6 0 0 0 0 12h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -362,6 +368,15 @@
     <button class="btn ico" id="moreBtn" title="More" aria-label="More" aria-haspopup="true" aria-expanded="false">&#8943;</button>
 
     <div id="menu" role="menu" hidden>
+      <button data-a="runcode" role="menuitem">Run code <kbd>Ctrl Enter</kbd></button>
+      <button data-a="format" role="menuitem">Format document <kbd>Shift Alt F</kbd></button>
+      <button data-a="preview" role="menuitem">Toggle live preview</button>
+      <button data-a="fileshare" role="menuitem">Shared files (25MB)</button>
+      <button data-a="recentrooms" role="menuitem">Recent rooms / history</button>
+      <button data-a="zenmode" role="menuitem">Zen mode <kbd>F11</kbd></button>
+      <button data-a="history" role="menuitem">Time machine / history</button>
+      <button data-a="importgit" role="menuitem">Import from GitHub / Gist</button>
+      <div class="msep"></div>
       <button data-a="palette" role="menuitem">Command palette <kbd>Ctrl K</kbd></button>
       <button data-a="find" role="menuitem">Find and replace <kbd>Ctrl F</kbd></button>
       <div class="msep"></div>
@@ -370,7 +385,7 @@
       <button data-a="download" role="menuitem">Download file</button>
       <button data-a="exportzip" role="menuitem">Export all files</button>
       <div class="msep"></div>
-      <button data-a="invite" role="menuitem">Copy invite link</button>
+      <button data-a="invite" role="menuitem">Share room (one-tap)</button>
       <button data-a="viewlink" role="menuitem">Copy view-only link</button>
       <div class="msep"></div>
       <button data-a="theme" role="menuitem">Theme: <span id="themeVal">dark</span></button>
@@ -387,11 +402,90 @@
   </nav>
 
   <div id="stage">
-    <div id="editorWrap">
-      <div id="editor"></div>
-      <div id="overlay" aria-hidden="true"></div>
-      <button id="jump" hidden></button>
+    <div id="editorContainer">
+      <div id="editorWrap">
+        <div id="editor"></div>
+        <div id="overlay" aria-hidden="true"></div>
+        <button id="jump" hidden></button>
+      </div>
+
+      <div id="previewWrap" hidden>
+        <div class="phead preview-head"><span>Live Preview</span><button class="btn ico flat" id="previewClose">&times;</button></div>
+        <div id="mdPreview" class="preview-pane"></div>
+        <iframe id="htmlPreview" class="preview-pane" sandbox="allow-scripts" title="Preview" hidden></iframe>
+      </div>
     </div>
+
+    <!-- Bottom Drawer: Terminal / Code Runner Output -->
+    <div id="terminal" hidden aria-label="Terminal output">
+      <div class="resizer" id="termResizer" aria-hidden="true"></div>
+      <div class="term-head">
+        <span class="term-title">Console / Runner</span>
+        <span class="pill" id="termStatus">Ready</span>
+        <span class="pill" id="termTime" hidden></span>
+        <span class="pill" id="termLang"></span>
+        <span class="grow"></span>
+        <button class="btn sm flat" id="termClear">Clear</button>
+        <button class="btn ico flat" id="termClose">&times;</button>
+      </div>
+      <pre id="termOut" class="term-body" tabindex="0"></pre>
+      <div class="term-foot">
+        <input id="termStdin" class="in sm" placeholder="Optional stdin input for program..." autocomplete="off">
+        <button id="termRerun" class="btn sm primary">Rerun</button>
+      </div>
+    </div>
+
+    <!-- Bottom Drawer: Encrypted 25MB File Sharing -->
+    <aside id="fileDrawer" hidden aria-label="Encrypted File Sharing">
+      <div class="resizer" id="fileResizer" aria-hidden="true"></div>
+      <div class="phead">
+        <span>Encrypted Files (up to 25MB)</span>
+        <button class="btn ico flat" id="fileDrawerClose">&times;</button>
+      </div>
+      <div class="file-body">
+        <div class="dropzone" id="fileDropzone">
+          <svg class="ic lg" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p>Drag &amp; drop any file up to 25MB or <label for="fileInput" class="lnk">browse</label></p>
+          <input type="file" id="fileInput" hidden>
+          <div class="progress-bar-wrap" id="uploadProgWrap" hidden>
+            <div class="progress-bar" id="uploadProgBar" style="width: 0%"></div>
+            <span id="uploadProgText">0%</span>
+          </div>
+        </div>
+        <div id="sharedFileList" class="shared-list"></div>
+      </div>
+    </aside>
+
+    <!-- Bottom Drawer: Time Machine / History Replay -->
+    <div id="historyDrawer" hidden aria-label="Revision History">
+      <div class="resizer" id="histResizer" aria-hidden="true"></div>
+      <div class="phead">
+        <span>Time Machine &middot; Document Revisions</span>
+        <button class="btn sm primary" id="histRestore">Restore Revision</button>
+        <button class="btn ico flat" id="histClose">&times;</button>
+      </div>
+      <div class="hist-body">
+        <div class="hist-controls">
+          <span id="histTimestamp">Current</span>
+          <input type="range" id="histSlider" min="0" max="100" value="100" class="slider">
+          <span id="histCount">Live</span>
+        </div>
+        <div id="histDiff" class="hist-view"></div>
+      </div>
+    </div>
+
+    <!-- Recent Rooms Drawer -->
+    <aside id="bookmarksDrawer" hidden aria-label="Recent Rooms & History">
+      <div class="resizer" id="bookmarksResizer" aria-hidden="true"></div>
+      <div class="phead">
+        <span>Recent Rooms &middot; Bookmarks</span>
+        <button class="btn sm flat" id="bookmarksClear">Clear All</button>
+        <button class="btn ico flat" id="bookmarksClose">&times;</button>
+      </div>
+      <div id="bookmarksList" class="bookmarks-body"></div>
+    </aside>
+
+    <button id="zenExit" class="btn sm primary floating-zen-btn" hidden>Exit Zen Mode (Esc)</button>
 
     <aside id="chat" hidden aria-label="Room chat">
       <div class="resizer" id="chatResizer" aria-hidden="true"></div>
@@ -415,9 +509,12 @@
 
       <div class="sec">Appearance</div>
       <label class="lbl" id="themeLbl">Theme</label>
-      <div id="themeSeg" class="segrow" role="radiogroup" aria-labelledby="themeLbl">
+      <div id="themeSeg" class="segrow flex-wrap" role="radiogroup" aria-labelledby="themeLbl">
         <button type="button" class="seg" data-theme-choice="dark" role="radio" aria-checked="false">&#127769; Dark</button>
         <button type="button" class="seg" data-theme-choice="light" role="radio" aria-checked="false">&#9728; Light</button>
+        <button type="button" class="seg" data-theme-choice="dracula" role="radio" aria-checked="false">&#129499; Dracula</button>
+        <button type="button" class="seg" data-theme-choice="nord" role="radio" aria-checked="false">&#10052; Nord</button>
+        <button type="button" class="seg" data-theme-choice="monokai" role="radio" aria-checked="false">&#128160; Monokai</button>
       </div>
 
       <label class="lbl" for="chatColorToggle">Chat text</label>
@@ -472,7 +569,24 @@
     <span id="counts"></span>
   </footer>
 
+  <div id="mobileKeys" class="mobile-keys-bar" aria-label="Quick syntax keys">
+    <button type="button" data-key="{">{</button>
+    <button type="button" data-key="}">}</button>
+    <button type="button" data-key="(">(</button>
+    <button type="button" data-key=")">)</button>
+    <button type="button" data-key="[">[</button>
+    <button type="button" data-key="]">]</button>
+    <button type="button" data-key=";">;</button>
+    <button type="button" data-key="=">=</button>
+    <button type="button" data-key="&quot;">"</button>
+    <button type="button" data-key="'">'</button>
+    <button type="button" data-key="/">/</button>
+    <button type="button" data-key="Tab">Tab</button>
+    <button type="button" data-key="=&gt;">=&gt;</button>
+  </div>
+
   <nav id="mbar" aria-label="Actions">
+    <button data-a="run">run</button>
     <button data-a="files">files</button>
     <button data-a="chat">chat</button>
     <button data-a="undo">undo</button>

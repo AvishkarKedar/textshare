@@ -16,6 +16,18 @@
   --bg:#fff; --raise:#fafafa; --panel:#f7f7f7; --line:#e5e5e5; --line2:#d8d8d8;
   --fg:#111; --mut:#767676; --dim:#c2c2c2; --accent:#0b62e0;
 }
+[data-theme=dracula]{
+  --bg:#282a36; --raise:#21222c; --panel:#1e1f29; --line:#44475a; --line2:#6272a4;
+  --fg:#f8f8f2; --mut:#6272a4; --dim:#44475a; --accent:#bd93f9; --ok:#50fa7b; --warn:#ffb86c; --danger:#ff5555;
+}
+[data-theme=nord]{
+  --bg:#2e3440; --raise:#3b4252; --panel:#434c5e; --line:#4c566a; --line2:#4c566a;
+  --fg:#eceff4; --mut:#d8dee9; --dim:#4c566a; --accent:#88c0d0; --ok:#a3be8c; --warn:#ebcb8b; --danger:#bf616a;
+}
+[data-theme=monokai]{
+  --bg:#272822; --raise:#1e1f1c; --panel:#171814; --line:#3e3d32; --line2:#49483e;
+  --fg:#f8f8f2; --mut:#75715e; --dim:#49483e; --accent:#66d9ef; --ok:#a6e22e; --warn:#fd971f; --danger:#f92672;
+}
 
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -532,3 +544,158 @@ body.doc-page{overflow:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:to
   .faq summary{padding:14px 2px;font-size:12.5px}
   .strip:hover,.step:hover{transform:none}
 }
+
+/* -------------------------------------------------- stage & split preview */
+#editorContainer{display:flex;flex:1;min-height:0;min-width:0;position:relative}
+#editorWrap{flex:1;min-width:0;position:relative;height:100%}
+#previewWrap{
+  flex:1;min-width:0;height:100%;border-left:1px solid var(--line);
+  display:flex;flex-direction:column;background:var(--bg);overflow:hidden;
+}
+.preview-head{border-bottom:1px solid var(--line);padding:8px 12px;display:flex;align-items:center;background:var(--raise)}
+.preview-pane{flex:1;overflow-y:auto;padding:16px;font-family:var(--sans);color:var(--fg)}
+.preview-pane iframe{width:100%;height:100%;border:0}
+.md-rendered{font-size:13px;line-height:1.6}
+.md-rendered h1,.md-rendered h2,.md-rendered h3{margin:16px 0 8px;font-family:var(--mono)}
+.md-rendered code{background:var(--panel);padding:2px 5px;font-family:var(--mono);font-size:12px;border-radius:3px}
+.md-rendered pre{background:var(--panel);padding:12px;border:1px solid var(--line);border-radius:4px;overflow-x:auto}
+.md-rendered pre code{background:transparent;padding:0}
+
+/* ---------------------------------------------------- console / runner */
+#terminal{
+  position:absolute;left:0;right:0;bottom:0;height:240px;z-index:20;
+  background:#09090b;color:#f4f4f5;border-top:1px solid var(--line);
+  display:flex;flex-direction:column;box-shadow:0 -4px 16px rgba(0,0,0,.4);
+}
+.term-head{
+  height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;
+  background:#121215;border-bottom:1px solid #202025;font:11px/1 var(--mono);
+}
+.term-title{font-weight:600;letter-spacing:.05em;color:#a1a1aa}
+.term-body{
+  flex:1;margin:0;padding:10px 12px;font:12px/1.5 var(--mono);
+  overflow-y:auto;white-space:pre-wrap;word-break:break-all;color:#e4e4e7;
+}
+.term-body:empty::before{content:"Program output will appear here...";color:#52525b}
+.term-foot{
+  height:34px;display:flex;align-items:center;gap:6px;padding:0 8px;
+  background:#121215;border-top:1px solid #202025;
+}
+.in.sm{height:26px;font-size:11px;padding:0 8px;border-color:#27272a;background:#09090b}
+.btn.sm{height:22px;padding:0 8px;font-size:10px}
+
+/* --------------------------------------------------- file sharing drawer */
+#fileDrawer{
+  position:absolute;top:0;right:0;bottom:0;width:340px;z-index:25;
+  background:var(--panel);border-left:1px solid var(--line);
+  display:flex;flex-direction:column;box-shadow:-4px 0 16px rgba(0,0,0,.3);
+}
+.file-body{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+.dropzone{
+  border:2px dashed var(--line2);padding:20px;text-align:center;
+  background:var(--raise);cursor:pointer;transition:border-color .15s;
+}
+.dropzone:hover{border-color:var(--accent)}
+.dropzone p{margin:8px 0 0;font-size:11px;color:var(--mut)}
+.progress-bar-wrap{margin-top:10px;background:var(--bg);height:14px;position:relative;border:1px solid var(--line)}
+.progress-bar{height:100%;background:var(--accent);transition:width .1s}
+.progress-bar-wrap span{position:absolute;top:0;left:0;right:0;bottom:0;font:9px/14px var(--mono);text-align:center;color:#fff}
+.shared-list{display:flex;flex-direction:column;gap:6px}
+.shared-item{
+  display:flex;align-items:center;gap:8px;padding:8px 10px;
+  background:var(--raise);border:1px solid var(--line);font-size:11px;
+}
+.shared-item .fname{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.shared-item .fsize{color:var(--mut);font-size:10px}
+
+/* --------------------------------------------------- revision history */
+#historyDrawer{
+  position:absolute;left:0;right:0;bottom:0;height:240px;z-index:20;
+  background:var(--raise);border-top:1px solid var(--line);
+  display:flex;flex-direction:column;box-shadow:0 -4px 16px rgba(0,0,0,.4);
+}
+.hist-body{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.hist-controls{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);font:11px/1 var(--mono)}
+.hist-controls .slider{flex:1;-webkit-appearance:none;appearance:none;height:4px;background:var(--line2);outline:0}
+.hist-controls .slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--accent);cursor:pointer}
+.hist-view{flex:1;margin:0;padding:10px;overflow-y:auto;font:12px/1.5 var(--mono);background:var(--bg)}
+
+/* --------------------------------------------------- mobile accessory keys */
+.mobile-keys-bar{
+  display:none;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  height:32px;background:var(--raise);border-top:1px solid var(--line);
+  padding:0 4px;gap:4px;align-items:center;
+}
+.mobile-keys-bar button{
+  height:24px;min-width:28px;padding:0 6px;flex:none;
+  background:var(--panel);border:1px solid var(--line2);
+  font:600 12px/1 var(--mono);color:var(--fg);border-radius:2px;
+}
+.mobile-keys-bar button:active{background:var(--accent);color:#fff}
+@media(max-width:720px){
+  .mobile-keys-bar{display:flex}
+}
+
+/* --------------------------------------------------- recent rooms drawer */
+#bookmarksDrawer{
+  position:absolute;top:0;right:0;bottom:0;width:320px;z-index:25;
+  background:var(--panel);border-left:1px solid var(--line);
+  display:flex;flex-direction:column;box-shadow:-4px 0 16px rgba(0,0,0,.3);
+}
+.bookmarks-body{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.bookmark-card{
+  display:flex;flex-direction:column;gap:4px;padding:10px;
+  background:var(--raise);border:1px solid var(--line);border-radius:4px;
+  cursor:pointer;transition:border-color .15s, background .15s;
+}
+.bookmark-card:hover{border-color:var(--accent);background:var(--bg)}
+.bookmark-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.bookmark-code{font:700 12px/1 var(--mono);color:var(--accent)}
+.bookmark-role{font:9px/1 var(--mono);padding:2px 5px;border-radius:2px;background:var(--line);color:var(--fg)}
+.bookmark-role.owner{background:rgba(255,165,0,.2);color:#ffa500}
+.bookmark-meta{font-size:10px;color:var(--mut);display:flex;justify-content:space-between}
+.bookmark-del{color:var(--mut);background:none;border:none;cursor:pointer;padding:2px 4px;font-size:12px}
+.bookmark-del:hover{color:#ff4d4f}
+
+/* --------------------------------------------------- zen mode */
+body.zen-mode #topbar,
+body.zen-mode #tabbar,
+body.zen-mode #statusbar,
+body.zen-mode #mobileKeys,
+body.zen-mode #mbar{
+  display:none !important;
+}
+body.zen-mode #stage{
+  height:100vh !important;
+}
+.floating-zen-btn{
+  position:fixed;bottom:18px;right:18px;z-index:100;
+  backdrop-filter:blur(8px);box-shadow:0 4px 16px rgba(0,0,0,.5);
+  opacity:.7;transition:opacity .2s;
+}
+.floating-zen-btn:hover{opacity:1}
+
+/* --------------------------------------------------- visual diff viewer */
+.diff-container{display:flex;flex-direction:column;font:12px/1.5 var(--mono);background:var(--bg)}
+.diff-line{display:flex;align-items:flex-start;padding:1px 6px;white-space:pre-wrap;word-break:break-all}
+.diff-marker{width:16px;flex:none;font-weight:bold;user-select:none}
+.diff-content{flex:1}
+.diff-add{background:rgba(46,160,67,.18);color:#56d364}
+.diff-add .diff-marker{color:#3fb950}
+.diff-del{background:rgba(248,81,73,.18);color:#ff7b72;text-decoration:line-through}
+.diff-del .diff-marker{color:#f85149}
+.diff-same{color:var(--fg);opacity:.75}
+
+/* --------------------------------------------------- compiler error highlights */
+.cm-error-line{background:rgba(255,77,79,.12) !important;border-left:3px solid #ff4d4f !important}
+.term-err-link{
+  color:#4c8dff;text-decoration:underline;cursor:pointer;font-weight:600;
+}
+.term-err-link:hover{color:#79a9ff}
+
+/* --------------------------------------------------- drag & drop active */
+#editorWrap.editor-drop-active{
+  outline:2px dashed var(--accent);outline-offset:-4px;background:rgba(76,141,255,.05);
+}
+
+

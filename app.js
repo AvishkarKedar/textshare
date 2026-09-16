@@ -16,6 +16,14 @@ import {
 import { tags as t } from '@lezer/highlight'
 import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from '@codemirror/autocomplete'
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
+import { runCode, parseErrorPositions } from './lib/runner.js'
+import { uploadEncryptedFile, downloadAndDecryptFile, saveBlobAsFile } from './lib/file-sharing.js'
+import { formatCode } from './lib/formatter.js'
+import { renderMarkdown, updateHtmlPreview, renderVisualDiff } from './lib/preview.js'
+import { VoiceMesh } from './lib/voice.js'
+import { P2PMesh } from './lib/p2p.js'
+import { detectLanguage } from './lib/detector.js'
+import { getBookmarks, saveBookmark, removeBookmark, clearBookmarks } from './lib/bookmarks.js'
 
 window.__ts_booted = true
 
@@ -27,7 +35,8 @@ const LS = {
   del(k) { try { localStorage.removeItem(k) } catch (e) {} },
 }
 
-const DEFAULT_RELAY = 'textshare-sync.avishkarkedar.workers.dev'
+const DEFAULT_RELAY = 'relay.avishkark.in'
+const FALLBACK_RELAY = 'textshare-sync.avishkarkedar.workers.dev'
 const CONTACT = 'avishkarkedar+text@gmail.com'
 const AL = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
 const LEN = 6
@@ -39,7 +48,7 @@ const CHAT_MAX = 400, CHAT_KEEP = 300
 const PALETTE = ['#4c8dff', '#3ddc84', '#ffb347', '#c792ea', '#ff87b5', '#4fd6d2', '#ff6b5b', '#e8d44d']
 
 const T_UPDATE = 0, T_AWARE = 1, T_SNAPSHOT = 2, T_SYNCED = 3,
-      T_ERROR = 4, T_COMPACT = 5, T_STATE = 6, T_KILLED = 7, T_GRANT = 8
+      T_ERROR = 4, T_COMPACT = 5, T_STATE = 6, T_KILLED = 7, T_GRANT = 8, T_P2P = 9
 
 const norm = v => (v || '').toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, LEN)
 const cleanHost = v => (v || '').trim().replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/+$/, '')
@@ -149,7 +158,7 @@ $('ask').addEventListener('click', e => { if (e.target === $('ask')) closeAsk(nu
 
 function themePref() {
   const saved = LS.get('ts.theme', '')
-  if (saved === 'dark' || saved === 'light') return saved
+  if (['dark', 'light', 'dracula', 'nord', 'monokai'].includes(saved)) return saved
   const guess = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
   LS.set('ts.theme', guess)
   return guess
@@ -360,6 +369,18 @@ class Relay {
         return
       }
 
+      if (type === T_P2P) {
+        try {
+          const targetLen = body[0]
+          const targetCid = TD.decode(body.subarray(1, 1 + targetLen))
+          if (targetCid === String(this.doc.clientID)) {
+            const signal = JSON.parse(TD.decode(body.subarray(1 + targetLen)))
+            if (this.onp2p) this.onp2p(signal)
+          }
+        } catch (e) {}
+        return
+      }
+
       let plain
       try { plain = await unseal(this.key, body) }
       catch (e) { return }
@@ -387,6 +408,20 @@ class Relay {
     removeEventListener('pagehide', this._bye)
     try { this._bye() } catch (e) {}
     try { this.ws.close() } catch (e) {}
+  }
+
+  sendP2P(targetCid, signal) {
+    if (!this.ws || this.ws.readyState !== 1) return
+    try {
+      const cidBytes = TE.encode(String(targetCid))
+      const sigBytes = TE.encode(JSON.stringify(signal))
+      const out = new Uint8Array(2 + cidBytes.length + sigBytes.length)
+      out[0] = T_P2P
+      out[1] = cidBytes.length
+      out.set(cidBytes, 2)
+      out.set(sigBytes, 2 + cidBytes.length)
+      this.ws.send(out.buffer)
+    } catch (e) {}
   }
 
   async send(type, payload, raw) {
@@ -446,6 +481,10 @@ function sniff(text) {
 let CODE = norm(location.hash.slice(1))
 let ydoc, awareness, relay, idb, KEY, AUTH, OWNER = null, view
 let ylist, ytexts, undoManager, activeId = null, following = null
+let ysharedFiles = null, p2pMesh = null, voiceMesh = null, voiceActive = false
+let previewOpen = false
+const historySnapshots = []
+let histTimer = null
 let typingTimer, actTimer, chatSeen = 0, markSig = '', startedAt = 0
 let roomLocked = false, canEdit = !VIEW_ONLY, killed = false, booted = false
 let shownKilled = false, killedInterval = null, adminSuspendNoted = false
@@ -742,6 +781,15 @@ async function enterRoom(code, locked) {
   $('lockIcon').hidden = !locked
   $('nameInput').value = myName
   $('ownerOnly').hidden = !OWNER
+
+  try {
+    saveBookmark({
+      code,
+      role: OWNER ? 'owner' : 'peer',
+      title: 'Room ' + code,
+      language: currentLang() || 'markdown'
+    })
+  } catch (e) {}
   $('privacyNote').textContent =
     'Everything is encrypted in this browser before it is sent. The relay ' +
     'only ever sees sealed bytes it has no key for, and destroys the room once everyone has left.'
@@ -785,9 +833,42 @@ function boot(host) {
 
   ylist.observeDeep(() => { renderTabs(); keepActiveValid() })
   ydoc.getArray('chat').observe(renderChat)
-  awareness.on('change', onPresence)
+  ysharedFiles = ydoc.getArray('shared_files')
+  ysharedFiles.observe(renderSharedFiles)
+  ydoc.on('update', () => {
+    recordHistorySnapshot()
+    if (previewOpen) updateLivePreview()
+  })
+
+  try {
+    p2pMesh = new P2PMesh(String(ydoc.clientID), (targetCid, sig) => {
+      if (relay) relay.sendP2P(targetCid, sig)
+    })
+    voiceMesh = new VoiceMesh(String(ydoc.clientID), (targetCid, sig) => {
+      if (relay) relay.sendP2P(targetCid, sig)
+    })
+    voiceMesh.onSpeaking = () => { paintPeople() }
+    relay.onp2p = signal => {
+      if (signal && signal.type && signal.type.startsWith('voice-')) {
+        voiceMesh?.handleSignal(signal.senderCid, signal)
+      } else if (p2pMesh) {
+        p2pMesh?.handleSignal(signal.senderCid, signal)
+      }
+    }
+  } catch (e) {}
+
+  awareness.on('change', () => {
+    onPresence()
+    // Trigger P2P connection to discovered peers
+    if (p2pMesh) {
+      for (const [clientId] of awareness.getStates()) {
+        if (clientId !== ydoc.clientID) p2pMesh.connectToPeer(String(clientId))
+      }
+    }
+  })
 
   renderChat()
+  renderSharedFiles()
   onPresence()
   buildSwatches()
   setInterval(() => { paintPeople(); paintStatus() }, 15000)
@@ -1653,8 +1734,307 @@ function downloadBlob(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000)
 }
 
+function jumpToLine(lineNum) {
+  if (!view) return
+  const doc = view.state.doc
+  if (lineNum < 1 || lineNum > doc.lines) return
+  const line = doc.line(lineNum)
+  view.dispatch({
+    selection: { anchor: line.from },
+    scrollIntoView: true
+  })
+  view.focus()
+  toast(`Jumped to line ${lineNum}`)
+}
+
+// --- Feature 1: Code Runner ---
+async function triggerRunCode() {
+  if (!activeId || !ytexts.get(activeId)) return
+  const code = ytexts.get(activeId).toString()
+  const lang = currentLang()
+
+  $('terminal').hidden = false
+  $('termStatus').textContent = 'Running...'
+  $('termStatus').style.background = 'var(--warn)'
+  $('termTime').hidden = true
+  $('termLang').textContent = lang
+  $('termOut').textContent = ''
+
+  try {
+    const res = await runCode({
+      language: lang,
+      code,
+      stdin: $('termStdin').value,
+      relayHost: relayHost(),
+    })
+
+    $('termOut').textContent = res.stdout || (res.stderr ? '' : '(Program exited with no output)')
+    if (res.stderr) {
+      if ($('termOut').textContent && !$('termOut').textContent.startsWith('(')) $('termOut').textContent += '\n'
+      $('termOut').textContent += res.stderr
+    }
+
+    if (res.errorPositions && res.errorPositions.length > 0) {
+      const errBar = document.createElement('div')
+      errBar.style.cssText = 'padding:6px 10px;background:rgba(255,77,79,0.12);border-bottom:1px solid rgba(255,77,79,0.3);display:flex;align-items:center;gap:8px;font-size:11px'
+      errBar.innerHTML = '<span style="color:#ff7b72;font-weight:600">&#9888;&#65039; Detected errors:</span> ' +
+        res.errorPositions.slice(0, 5).map(p => `<button class="btn sm" data-jump-line="${p.line}" style="color:#ff7b72;border-color:rgba(255,77,79,0.4)">Line ${p.line}</button>`).join(' ')
+      $('termOut').prepend(errBar)
+      errBar.querySelectorAll('button[data-jump-line]').forEach(b => {
+        b.onclick = () => jumpToLine(parseInt(b.dataset.jumpLine, 10))
+      })
+    }
+
+    $('termStatus').textContent = res.ok ? 'Exit: 0' : `Exit: ${res.exitCode ?? 1}`
+    $('termStatus').style.background = res.ok ? 'var(--ok)' : 'var(--danger)'
+    if (res.executionTime != null) {
+      $('termTime').textContent = `${res.executionTime}ms`
+      $('termTime').hidden = false
+    }
+  } catch (err) {
+    $('termOut').textContent = String(err.message || err)
+    $('termStatus').textContent = 'Error'
+    $('termStatus').style.background = 'var(--danger)'
+  }
+}
+
+// --- Feature 7: Code Formatter ---
+function triggerFormatCode() {
+  if (readOnlyNow()) return toast('This room is read-only')
+  if (!activeId || !ytexts.get(activeId)) return
+  const yt = ytexts.get(activeId)
+  const src = yt.toString()
+  const formatted = formatCode(src, currentLang())
+  if (formatted !== src) {
+    ydoc.transact(() => {
+      yt.delete(0, yt.length)
+      yt.insert(0, formatted)
+    }, 'local')
+    toast('Document formatted')
+  } else {
+    toast('Already formatted')
+  }
+}
+
+// --- Feature 6: Split Screen & Live Preview ---
+function toggleLivePreview(force) {
+  previewOpen = typeof force === 'boolean' ? force : !previewOpen
+  $('previewWrap').hidden = !previewOpen
+  if (previewOpen) updateLivePreview()
+}
+
+function updateLivePreview() {
+  if (!previewOpen || !activeId || !ytexts.get(activeId)) return
+  const lang = currentLang()
+  const content = ytexts.get(activeId).toString()
+  if (lang === 'html') {
+    $('mdPreview').hidden = true
+    $('htmlPreview').hidden = false
+    updateHtmlPreview($('htmlPreview'), content)
+  } else {
+    $('htmlPreview').hidden = true
+    $('mdPreview').hidden = false
+    $('mdPreview').innerHTML = renderMarkdown(content)
+  }
+}
+
+// --- Feature 2: Encrypted 25MB File Sharing ---
+function toggleFileDrawer(force) {
+  const next = typeof force === 'boolean' ? !force : $('fileDrawer').hidden
+  $('fileDrawer').hidden = next
+  if (!next) renderSharedFiles()
+}
+
+function renderSharedFiles() {
+  const list = $('sharedFileList')
+  if (!list || !ydoc) return
+  list.innerHTML = ''
+  const arr = (ysharedFiles || ydoc.getArray('shared_files')).toArray()
+  if (!arr.length) {
+    list.innerHTML = '<p class="fineprint" style="text-align:center">No files shared yet in this room.</p>'
+    return
+  }
+  for (const f of arr) {
+    const el = document.createElement('div')
+    el.className = 'shared-item'
+    const sizeStr = f.size < 1024 * 1024
+      ? (f.size / 1024).toFixed(1) + ' KB'
+      : (f.size / (1024 * 1024)).toFixed(2) + ' MB'
+    el.innerHTML = `
+      <div class="fname" title="${f.name}">${f.name}</div>
+      <div class="fsize">${sizeStr}</div>
+      <button class="btn sm dl-btn">Download</button>
+    `
+    el.querySelector('.dl-btn').onclick = async () => {
+      try {
+        toast('Decrypting ' + f.name + '...')
+        const blob = await downloadAndDecryptFile({
+          fileMeta: f,
+          roomCode: CODE,
+          relayHost: relayHost(),
+          roomKey: KEY,
+          authToken: AUTH,
+        })
+        saveBlobAsFile(blob, f.name)
+        toast(f.name + ' downloaded')
+      } catch (err) {
+        toast('Download failed: ' + err.message)
+      }
+    }
+    list.appendChild(el)
+  }
+}
+
+async function handleFileUpload(file) {
+  if (readOnlyNow()) return toast('This room is read-only')
+  if (file.size > 25 * 1024 * 1024) return toast('File exceeds 25 MB limit')
+
+  $('uploadProgWrap').hidden = false
+  $('uploadProgBar').style.width = '0%'
+  $('uploadProgText').textContent = 'Encrypting & uploading 0%...'
+
+  try {
+    const meta = await uploadEncryptedFile({
+      file,
+      roomCode: CODE,
+      relayHost: relayHost(),
+      roomKey: KEY,
+      authToken: AUTH,
+      onProgress: p => {
+        $('uploadProgBar').style.width = p.percent + '%'
+        $('uploadProgText').textContent = p.percent + '%'
+      },
+    })
+
+    ;(ysharedFiles || ydoc.getArray('shared_files')).push([meta])
+    toast(file.name + ' encrypted & shared')
+    $('uploadProgWrap').hidden = true
+    renderSharedFiles()
+  } catch (err) {
+    $('uploadProgWrap').hidden = true
+    toast('Upload failed: ' + err.message)
+  }
+}
+
+// --- Feature 8: Ephemeral WebRTC Voice Chat ---
+async function toggleVoiceChat() {
+  if (!voiceMesh) return
+  if (!voiceActive) {
+    const ok = await voiceMesh.start()
+    if (ok) {
+      voiceActive = true
+      voiceMesh.setMuted(false)
+      $('voiceBtn').classList.add('primary')
+      toast('Voice connected (Unmuted)')
+    } else {
+      toast('Microphone access denied')
+    }
+  } else {
+    const nextMuted = !voiceMesh.isMuted
+    voiceMesh.setMuted(nextMuted)
+    if (nextMuted) {
+      $('voiceBtn').classList.remove('primary')
+      toast('Microphone muted')
+    } else {
+      $('voiceBtn').classList.add('primary')
+      toast('Microphone unmuted')
+    }
+  }
+}
+
+// --- Feature 4: Time Machine / Revisions ---
+function recordHistorySnapshot() {
+  clearTimeout(histTimer)
+  histTimer = setTimeout(() => {
+    if (!activeId || !ytexts.get(activeId)) return
+    const txt = ytexts.get(activeId).toString()
+    if (!historySnapshots.length || historySnapshots[historySnapshots.length - 1].text !== txt) {
+      historySnapshots.push({
+        time: Date.now(),
+        text: txt,
+        fileId: activeId,
+      })
+      if (historySnapshots.length > 100) historySnapshots.shift()
+      if (!$('historyDrawer').hidden) updateHistoryView()
+    }
+  }, 1000)
+}
+
+function toggleHistoryDrawer(force) {
+  const next = typeof force === 'boolean' ? !force : $('historyDrawer').hidden
+  $('historyDrawer').hidden = next
+  if (!next) updateHistoryView()
+}
+
+function updateHistoryView() {
+  const slider = $('histSlider')
+  slider.max = Math.max(0, historySnapshots.length - 1)
+  const idx = parseInt(slider.value, 10)
+  const snap = historySnapshots[idx]
+  const cur = (activeId && ytexts.get(activeId)) ? ytexts.get(activeId).toString() : ''
+  if (snap) {
+    $('histTimestamp').textContent = new Date(snap.time).toLocaleTimeString()
+    $('histCount').textContent = `${idx + 1}/${historySnapshots.length}`
+    $('histDiff').innerHTML = renderVisualDiff(snap.text, cur)
+  } else {
+    $('histDiff').innerHTML = `<div class="diff-container"><div class="diff-line diff-same">${cur || 'Current document'}</div></div>`
+  }
+}
+
+function restoreHistoryRevision() {
+  if (readOnlyNow()) return toast('This room is read-only')
+  const slider = $('histSlider')
+  const idx = parseInt(slider.value, 10)
+  const snap = historySnapshots[idx]
+  if (!snap) return
+  addFile('restored-' + new Date(snap.time).toISOString().slice(11, 19).replace(/:/g, '-') + '.txt', snap.text)
+  toast('Restored as a new file tab')
+  toggleHistoryDrawer(false)
+}
+
+// --- Feature 12: GitHub / Gist Direct Import ---
+async function importFromGitHub() {
+  if (readOnlyNow()) return toast('This room is read-only')
+  const url = await ask({
+    title: 'Import from GitHub or Gist',
+    body: 'Paste any GitHub file URL or raw Gist URL to import its contents.',
+    input: true,
+    placeholder: 'https://github.com/user/repo/blob/main/index.js',
+    confirmLabel: 'Import',
+  })
+  if (!url) return
+
+  let rawUrl = url.trim()
+  if (rawUrl.includes('github.com') && rawUrl.includes('/blob/')) {
+    rawUrl = rawUrl.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
+  }
+
+  try {
+    toast('Fetching file...')
+    const res = await fetch(rawUrl)
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const text = await res.text()
+    const parts = rawUrl.split('/')
+    const filename = parts[parts.length - 1].split('?')[0] || 'imported.txt'
+    const fid = addFile(filename, text)
+    openFile(fid)
+    toast('Imported ' + filename)
+  } catch (e) {
+    toast('Failed to fetch from URL: ' + e.message)
+  }
+}
+
 const ACTIONS = {
   palette: () => openPalette(),
+  runcode: () => triggerRunCode(),
+  run: () => triggerRunCode(),
+  format: () => triggerFormatCode(),
+  preview: () => toggleLivePreview(),
+  fileshare: () => toggleFileDrawer(),
+  recentrooms: () => toggleBookmarksDrawer(),
+  zenmode: () => toggleZenMode(),
+  history: () => toggleHistoryDrawer(),
+  importgit: () => importFromGitHub(),
   newfile: () => $('newFile').click(),
   rename: () => renameFile(activeId),
   find: () => { if (view) { view.focus(); openSearchPanel(view) } },
@@ -1670,10 +2050,23 @@ const ACTIONS = {
       downloadBlob(makeZip(entries), 'anonshare-' + CODE + '.zip')
     } catch (e) { toast('Could not build the archive') }
   },
-  invite: () => copy(inviteLink(), 'Invite link'),
+  invite: async () => {
+    const shareUrl = inviteLink()
+    const text = `Join my encrypted scratchpad on anonshare: ${CODE}${typeof PASS !== 'undefined' && PASS ? ' (Password: ' + PASS + ')' : ''}`
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'anonshare ' + CODE, text, url: shareUrl })
+        return
+      } catch (e) {}
+    }
+    copy(shareUrl, 'Invite link')
+  },
   viewlink: () => copy(viewLink(), 'View-only link'),
   theme: () => {
-    LS.set('ts.theme', themePref() === 'dark' ? 'light' : 'dark')
+    const themes = ['dark', 'light', 'dracula', 'nord', 'monokai']
+    const cur = themePref()
+    const next = themes[(themes.indexOf(cur) + 1) % themes.length]
+    LS.set('ts.theme', next)
     applyTheme()
   },
   settings: () => showPanel($('panel')),
@@ -1778,12 +2171,18 @@ $('btnDelete').onclick = async () => {
 }
 
 const COMMANDS = [
+  ['Run code', 'runcode', 'Ctrl Enter'],
+  ['Format document', 'format', 'Shift Alt F'],
+  ['Toggle live preview', 'preview', ''],
+  ['Shared files (25MB)', 'fileshare', ''],
+  ['Time machine / history', 'history', ''],
+  ['Import from GitHub / Gist', 'importgit', ''],
   ['New file', 'newfile', ''],
   ['Rename this file', 'rename', ''],
   ['Find and replace', 'find', 'Ctrl F'],
   ['Download this file', 'download', ''],
   ['Export all files as zip', 'exportzip', ''],
-  ['Copy invite link', 'invite', ''],
+  ['Share room (one-tap)', 'invite', ''],
   ['Copy view-only link', 'viewlink', ''],
   ['Say something at my cursor', 'say', 'Alt /'],
   ['Open chat', 'chat', ''],
@@ -1873,10 +2272,35 @@ async function cursorChat() {
 
 addEventListener('keydown', e => {
   if (e.key === 'Escape') {
+    if (document.body.classList.contains('zen-mode')) { toggleZenMode(false); return }
+    if (!$('bookmarksDrawer').hidden) { $('bookmarksDrawer').hidden = true; return }
     if (!$('ask').hidden) return closeAsk(null)
     if (!$('pal').hidden) return closePalette()
     if (!$('modal').hidden) return $('mBack').click()
+    if (!$('terminal').hidden) { $('terminal').hidden = true; return }
+    if (!$('fileDrawer').hidden) { $('fileDrawer').hidden = true; return }
+    if (!$('historyDrawer').hidden) { $('historyDrawer').hidden = true; return }
+    if (previewOpen) { toggleLivePreview(false); return }
     setMenu(false)
+    return
+  }
+  if (e.key === 'F11') {
+    if (!$('app').hidden) {
+      e.preventDefault()
+      toggleZenMode()
+      return
+    }
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    if ($('app').hidden) return
+    e.preventDefault()
+    triggerRunCode()
+    return
+  }
+  if (e.shiftKey && e.altKey && (e.key === 'F' || e.key === 'f')) {
+    if ($('app').hidden) return
+    e.preventDefault()
+    triggerFormatCode()
     return
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -1891,6 +2315,142 @@ addEventListener('keydown', e => {
   }
 })
 
+// --- Feature: Zen Mode ---
+function toggleZenMode(force) {
+  const isZen = document.body.classList.toggle('zen-mode', force)
+  if ($('zenExit')) $('zenExit').hidden = !isZen
+  if (isZen) {
+    toast('Zen Mode enabled. Press Esc to exit.')
+  }
+}
+
+// --- Feature: Recent Rooms & Bookmarks ---
+function toggleBookmarksDrawer(force) {
+  const next = typeof force === 'boolean' ? !force : $('bookmarksDrawer').hidden
+  $('bookmarksDrawer').hidden = next
+  if (!next) renderBookmarksList()
+}
+
+function renderBookmarksList() {
+  const container = $('bookmarksList')
+  if (!container) return
+  const list = getBookmarks()
+  if (!list.length) {
+    container.innerHTML = '<p class="fineprint" style="text-align:center;padding:24px">No recent rooms yet.<br>Rooms you visit are bookmarked here automatically.</p>'
+    return
+  }
+
+  container.innerHTML = ''
+  for (const item of list) {
+    const card = document.createElement('div')
+    card.className = 'bookmark-card'
+    const timeStr = new Date(item.lastVisited).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    const roleCls = item.role === 'owner' ? 'bookmark-role owner' : 'bookmark-role'
+    card.innerHTML = `
+      <div class="bookmark-head">
+        <span class="bookmark-code">${item.code}</span>
+        <span class="${roleCls}">${item.role}</span>
+        <button class="bookmark-del" title="Remove">&times;</button>
+      </div>
+      <div class="bookmark-meta">
+        <span>${item.language || 'markdown'}</span>
+        <span>${timeStr}</span>
+      </div>
+    `
+    card.onclick = (e) => {
+      if (e.target.classList.contains('bookmark-del')) {
+        e.stopPropagation()
+        removeBookmark(item.code)
+        renderBookmarksList()
+        return
+      }
+      location.hash = item.code
+      if (item.code !== CODE) location.reload()
+    }
+    container.appendChild(card)
+  }
+}
+
+// --- Feature: Auto-Language Detection ---
+function maybeAutoDetectLanguage(text) {
+  const detected = detectLanguage(text)
+  if (detected && detected !== currentLang()) {
+    setLang(detected)
+    toast(`Auto-detected: ${detected.toUpperCase()}`)
+  }
+}
+
+// Wire up topbar and drawer controls
+if ($('runBtn')) $('runBtn').onclick = triggerRunCode
+if ($('previewBtn')) $('previewBtn').onclick = () => toggleLivePreview()
+if ($('previewClose')) $('previewClose').onclick = () => toggleLivePreview(false)
+if ($('filesBtn')) $('filesBtn').onclick = () => toggleFileDrawer()
+if ($('fileDrawerClose')) $('fileDrawerClose').onclick = () => toggleFileDrawer(false)
+if ($('voiceBtn')) $('voiceBtn').onclick = toggleVoiceChat
+if ($('bookmarksBtn')) $('bookmarksBtn').onclick = () => toggleBookmarksDrawer()
+if ($('bookmarksClose')) $('bookmarksClose').onclick = () => toggleBookmarksDrawer(false)
+if ($('bookmarksClear')) $('bookmarksClear').onclick = () => { clearBookmarks(); renderBookmarksList() }
+if ($('zenBtn')) $('zenBtn').onclick = () => toggleZenMode()
+if ($('zenExit')) $('zenExit').onclick = () => toggleZenMode(false)
+if ($('termClose')) $('termClose').onclick = () => { $('terminal').hidden = true }
+if ($('termClear')) $('termClear').onclick = () => { $('termOut').textContent = '' }
+if ($('termRerun')) $('termRerun').onclick = triggerRunCode
+if ($('termStdin')) $('termStdin').onkeydown = e => { if (e.key === 'Enter') triggerRunCode() }
+if ($('fileDropzone')) $('fileDropzone').onclick = e => { if (e.target.tagName !== 'INPUT') $('fileInput').click() }
+if ($('fileInput')) $('fileInput').onchange = e => { if (e.target.files && e.target.files[0]) handleFileUpload(e.target.files[0]) }
+if ($('histClose')) $('histClose').onclick = () => toggleHistoryDrawer(false)
+if ($('histSlider')) $('histSlider').oninput = updateHistoryView
+if ($('histRestore')) $('histRestore').onclick = restoreHistoryRevision
+
+// Mobile accessory toolbar quick keys
+document.querySelectorAll('#mobileKeys button[data-key]').forEach(b => {
+  b.onclick = () => {
+    if (!view) return
+    const k = b.dataset.key
+    const text = k === 'Tab' ? '  ' : k
+    view.dispatch(view.state.replaceSelection(text))
+    view.focus()
+  }
+})
+
+// Enhanced Drag & Drop for Text & Encrypted File Sharing
+const edWrap = $('editorWrap')
+if (edWrap) {
+  edWrap.addEventListener('dragover', e => {
+    e.preventDefault()
+    edWrap.classList.add('editor-drop-active')
+  })
+  edWrap.addEventListener('dragleave', () => {
+    edWrap.classList.remove('editor-drop-active')
+  })
+  edWrap.addEventListener('drop', async e => {
+    e.preventDefault()
+    edWrap.classList.remove('editor-drop-active')
+    if ($('app').hidden || readOnlyNow()) return
+    const file = e.dataTransfer?.files?.[0]
+    if (!file) return
+
+    if (file.size > 25 * 1024 * 1024) return toast(file.name + ' is too large (25 MB max)')
+
+    const isText = file.type.startsWith('text/') || /\.(txt|md|js|ts|py|c|cpp|h|hpp|go|rs|sh|json|html|css|yaml|yml|toml)$/i.test(file.name)
+    if (!isText && file.size > 1024) {
+      toggleFileDrawer(true)
+      handleFileUpload(file)
+      return
+    }
+
+    try {
+      const text = await file.text()
+      const newFid = addFile(file.name.slice(0, 40), text)
+      if (newFid) openFile(newFid)
+      maybeAutoDetectLanguage(text)
+      toast('Imported ' + file.name)
+    } catch (err) {
+      toast('Failed to read file: ' + err.message)
+    }
+  })
+}
+
 ;['dragover', 'drop'].forEach(ev => addEventListener(ev, e => {
   if ($('app').hidden) return
   e.preventDefault()
@@ -1900,7 +2460,15 @@ addEventListener('drop', async e => {
   const list = [...(e.dataTransfer ? e.dataTransfer.files : [])].slice(0, 8)
   let last = null, added = 0
   for (const file of list) {
-    if (file.size > 512 * 1024) { toast(file.name + ' is too large (512 KB max)'); continue }
+    if (file.size > 512 * 1024) {
+      if (file.size <= 25 * 1024 * 1024) {
+        toggleFileDrawer(true)
+        handleFileUpload(file)
+        continue
+      }
+      toast(file.name + ' is too large (25 MB max)')
+      continue
+    }
     try { last = addFile(file.name.slice(0, 40), await file.text()); added++ } catch (err) {}
   }
   if (last) { openFile(last); toast('Imported ' + added + ' file' + (added === 1 ? '' : 's')) }
