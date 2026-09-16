@@ -23,10 +23,14 @@
   section first.</p>
 
   <h2>What is encrypted</h2>
-  <p>Every document edit, every cursor position, every chat message and every
-  display name is encrypted with <strong>AES-GCM 256</strong> in your browser
-  before it touches the network. The relay receives a 12-byte nonce followed by
-  ciphertext it has no key for.</p>
+  <p>Every document edit, every cursor position, every chat message, every
+  display name, and every <strong>shared file (up to 25MB)</strong> is encrypted
+  with <strong>AES-GCM 256</strong> in your browser before it touches the network.
+  Files are chunked and encrypted with unique 12-byte nonces. The relay receives
+  only ciphertext it has no key for.</p>
+  <p>Live voice chat runs over WebRTC with standard <strong>DTLS-SRTP</strong>
+  encryption direct between browser peers, bypassing relay servers entirely once
+  the P2P connection is formed.</p>
 
   <h2>Where the key comes from</h2>
   <p>Your room code and password are stretched with <strong>PBKDF2-SHA256 at
@@ -43,11 +47,28 @@ auth = PBKDF2(code + ":" + password, salt = "textshare-auth|CODE")</pre>
   constants rather than branding, and changing them would lock every existing
   room out of its own data.</p>
 
+  <h2>Sandboxed code execution</h2>
+  <p>When you click "Run Code" to compile or execute snippets (Python, JavaScript,
+  C, C++, Rust, Go, Java, Bash), user-provided code must run on backend hardware
+  without risking the host or leaking data across rooms:</p>
+  <ul>
+    <li><strong>Bubblewrap isolation:</strong> Code is sandboxed inside unprivileged
+    Linux user namespaces (<code>--unshare-all</code>). The system root is mounted strictly read-only.</li>
+    <li><strong>Network isolation (<code>--unshare-net</code>):</strong> Sandboxed processes
+    have no network namespace or socket connectivity. Outbound network traffic, reverse
+    shells, botnet pingbacks, and data exfiltration are physically blocked by the kernel.</li>
+    <li><strong>Hard resource caps:</strong> Linux <code>prlimit</code> restricts each run to
+    <strong>256MB RAM</strong>, 10 seconds of CPU execution, and a strict process limit (<code>nproc=32</code>)
+    that neutralizes fork bombs (<code>:(){ :|:& };:</code>).</li>
+    <li><strong>Disposable scratchpads:</strong> Code is compiled and run on ephemeral
+    in-memory <code>tmpfs</code> directories that are wiped clean the millisecond execution completes.</li>
+  </ul>
+
   <h2>What the relay can see</h2>
-  <p>It genuinely cannot read your text. It can see:</p>
+  <p>It genuinely cannot read your text or your files. It can see:</p>
   <ul>
     <li>that a room with a given code exists, and how many sockets are attached</li>
-    <li>the size and timing of each frame, so it knows roughly when someone is typing</li>
+    <li>the size and timing of each frame, so it knows roughly when someone is typing or sharing a file</li>
     <li>the IP address of everyone connected, as any web server would</li>
   </ul>
   <p>It keeps no request log tying those together, but traffic analysis is a real
