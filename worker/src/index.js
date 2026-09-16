@@ -319,6 +319,57 @@ export class Room {
     const codeMatch = url.pathname.match(/\/room\/([A-Za-z0-9]{4,12})/)
     const code = codeMatch ? codeMatch[1].toUpperCase() : ''
 
+    const fileMatch = url.pathname.match(/\/room\/[A-Za-z0-9]{4,12}\/files(?:\/([a-zA-Z0-9_-]+)\/chunk\/(\d+))?/)
+    if (fileMatch) {
+      if (request.method === 'OPTIONS') {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type,Authorization,x-room-auth,Range',
+            'Access-Control-Max-Age': '86400',
+          },
+        })
+      }
+      if (!meta) return json({ error: 'no_room' }, 404)
+      const token = q.get('a') || request.headers.get('x-room-auth')
+      if (meta.a && (!token || !constEq(await sha256(token), meta.a))) {
+        return json({ error: 'unauthorized' }, 403)
+      }
+      const fileId = fileMatch[1]
+      const chunkIdx = fileMatch[2]
+
+      if (request.method === 'PUT' && fileId && chunkIdx != null) {
+        const body = await request.arrayBuffer()
+        if (body.byteLength > 1024 * 1024) return json({ error: 'chunk_too_large' }, 413)
+        await st.put('cf:' + fileId + ':' + chunkIdx, body)
+        await this.touch()
+        return json({ ok: true, fileId, chunkIndex: Number(chunkIdx) })
+      }
+
+      if (request.method === 'GET' && fileId && chunkIdx != null) {
+        const chunk = await st.get('cf:' + fileId + ':' + chunkIdx)
+        if (!chunk) return json({ error: 'chunk_not_found' }, 404)
+        return new Response(chunk, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'Cache-Control': 'no-store',
+            'Access-Control-Allow-Origin': '*',
+          },
+        })
+      }
+
+      if (request.method === 'DELETE' && fileId) {
+        const list = await st.list({ prefix: 'cf:' + fileId + ':' })
+        for (const k of list.keys()) await st.delete(k)
+        return json({ ok: true, deleted: fileId })
+      }
+
+      return json({ ok: true })
+    }
+
     if (url.pathname.endsWith('/exists')) {
       return json({
         exists: !!meta,
@@ -810,7 +861,7 @@ export default {
       return json({ error: 'not_found' }, 404)
     }
 
-    const match = url.pathname.match(/^\/room\/([A-Za-z0-9]{4,12})(?:\/(exists|admin))?$/)
+    const match = url.pathname.match(/^\/room\/([A-Za-z0-9]{4,12})(?:\/(exists|admin|files.*))?$/)
     if (!match) return json({ error: 'not_found' }, 404)
 
     const code = match[1].toUpperCase()

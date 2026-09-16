@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { detectLanguage } from '../lib/detector.js'
 import { parseErrorPositions } from '../lib/runner.js'
 import { computeDiff, renderVisualDiff } from '../lib/preview.js'
@@ -77,5 +77,21 @@ describe('Recent Rooms & Bookmarks', () => {
     const list = getBookmarks()
     expect(list.length).toBe(1)
     expect(list[0].code).toBe('WXYZ99')
+  })
+})
+
+describe('Inactivity Countdown Formatter', () => {
+  function formatCountdown(remainSec) {
+    const m = Math.floor(remainSec / 60)
+    const s = remainSec % 60
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
+
+  it('formats remaining seconds into MM:SS correctly', () => {
+    expect(formatCountdown(300)).toBe('05:00')
+    expect(formatCountdown(299)).toBe('04:59')
+    expect(formatCountdown(65)).toBe('01:05')
+    expect(formatCountdown(9)).toBe('00:09')
+    expect(formatCountdown(0)).toBe('00:00')
   })
 })
