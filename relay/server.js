@@ -376,12 +376,13 @@ async function runSandboxedProcess({ cmd, args = [], input = '', workspaceDir = 
   }
 
   // Bubblewrap + prlimit container arguments
+  const isJvm = cmd === 'java' || cmd === 'javac'
   const maxMemBytes = isCompile ? 512 * 1024 * 1024 : 256 * 1024 * 1024
-  const maxNproc = isCompile ? 64 : 32
+  const maxNproc = isCompile || isJvm ? 64 : 32
   const maxCpuSec = isCompile ? 12 : 6
 
   const prlimitArgs = [
-    `--as=${maxMemBytes}`,
+    isJvm ? `--data=${512 * 1024 * 1024}` : `--as=${maxMemBytes}`,
     `--nproc=${maxNproc}`,
     `--fsize=10485760`,
     `--cpu=${maxCpuSec}`,
@@ -598,7 +599,7 @@ async function executeCodeInternal({ language, code, stdin = '' }) {
       await fs.promises.writeFile(srcPath, code, 'utf8')
       const compile = await runSandboxedProcess({
         cmd: 'javac',
-        args: ['-encoding', 'UTF-8', HAS_BWRAP ? `/workspace/${className}.java` : srcPath],
+        args: ['-J-Xmx256m', '-J-Xms32m', '-encoding', 'UTF-8', HAS_BWRAP ? `/workspace/${className}.java` : srcPath],
         workspaceDir,
         isCompile: true,
         timeoutMs: 12000
@@ -614,7 +615,7 @@ async function executeCodeInternal({ language, code, stdin = '' }) {
       }
       const runRes = await runSandboxedProcess({
         cmd: 'java',
-        args: ['-cp', HAS_BWRAP ? '/workspace' : workspaceDir, className],
+        args: ['-Xmx128m', '-Xms32m', '-XX:+UseSerialGC', '-cp', HAS_BWRAP ? '/workspace' : workspaceDir, className],
         input: stdin,
         workspaceDir,
         timeoutMs: 10000
