@@ -20,6 +20,7 @@ import { runCode, parseErrorPositions } from './lib/runner.js'
 import { uploadEncryptedFile, downloadAndDecryptFile, saveBlobAsFile } from './lib/file-sharing.js'
 import { formatCode } from './lib/formatter.js'
 import { renderMarkdown, updateHtmlPreview, buildStandaloneHtml, renderVisualDiff } from './lib/preview.js'
+import { renderDocxToHtml } from './lib/docx-viewer.js'
 import { VoiceMesh } from './lib/voice.js'
 import { P2PMesh } from './lib/p2p.js'
 import { detectLanguage } from './lib/detector.js'
@@ -1900,7 +1901,7 @@ function triggerFormatCode() {
 }
 
 // --- Feature 6: Artifacts-Style Split Screen & Live Preview ---
-let previewMode = 'auto' // 'auto' | 'web' | 'markdown'
+let previewMode = 'auto' // 'auto' | 'web' | 'markdown' | 'doc'
 
 function toggleLivePreview(force) {
   previewOpen = typeof force === 'boolean' ? force : !previewOpen
@@ -1910,18 +1911,40 @@ function toggleLivePreview(force) {
 }
 
 function updateLivePreview() {
-  if (!previewOpen || !activeId || !ytexts.get(activeId)) return
+  if (!previewOpen) return
   const lang = currentLang()
-  const content = ytexts.get(activeId).toString()
+  const content = (activeId && ytexts.get(activeId)) ? ytexts.get(activeId).toString() : ''
+
+  if (previewMode === 'doc') {
+    if ($('prevModeDoc')) { $('prevModeDoc').classList.add('active'); $('prevModeDoc').setAttribute('aria-checked', 'true') }
+    if ($('prevModeWeb')) { $('prevModeWeb').classList.remove('active'); $('prevModeWeb').setAttribute('aria-checked', 'false') }
+    if ($('prevModeMd')) { $('prevModeMd').classList.remove('active'); $('prevModeMd').setAttribute('aria-checked', 'false') }
+    $('htmlPreview').hidden = true
+    $('mdPreview').hidden = true
+    if ($('pdfPreview').hidden && (!$('docPreview').innerHTML || $('docPreview').hidden)) {
+      $('docPreview').hidden = false
+      $('docPreview').innerHTML = `
+        <div class="docx-document" style="text-align:center;padding:40px 20px;color:var(--mut)">
+          <h2 style="color:var(--fg);margin-bottom:8px">📄 Assignment Document Viewer</h2>
+          <p style="max-width:440px;margin:0 auto 16px">Open any assignment <strong>PDF</strong> or <strong>Word (.docx)</strong> file from the Shared Files Hub to read the problem statement side-by-side with your code.</p>
+          <button class="btn primary sm" onclick="document.getElementById('hubFilesBtn').click()">Open Shared Files Hub</button>
+        </div>
+      `
+    }
+    return
+  }
 
   const looksLikeHtml = /<!doctype\s+html|<html[\s>]|<div|<p[\s>]|<span|<svg|<button|<canvas|<script|<style/i.test(content)
   const isWeb = previewMode === 'web' || (previewMode === 'auto' && (lang === 'html' || lang === 'svg' || looksLikeHtml))
 
   if (isWeb) {
     $('mdPreview').hidden = true
+    $('docPreview').hidden = true
+    $('pdfPreview').hidden = true
     $('htmlPreview').hidden = false
     if ($('prevModeWeb')) { $('prevModeWeb').classList.add('active'); $('prevModeWeb').setAttribute('aria-checked', 'true') }
     if ($('prevModeMd')) { $('prevModeMd').classList.remove('active'); $('prevModeMd').setAttribute('aria-checked', 'false') }
+    if ($('prevModeDoc')) { $('prevModeDoc').classList.remove('active'); $('prevModeDoc').setAttribute('aria-checked', 'false') }
 
     // Bundle multi-file CSS & JS in the room
     let extraCss = '', extraJs = ''
@@ -1938,9 +1961,12 @@ function updateLivePreview() {
     updateHtmlPreview($('htmlPreview'), content, { extraCss, extraJs })
   } else {
     $('htmlPreview').hidden = true
+    $('docPreview').hidden = true
+    $('pdfPreview').hidden = true
     $('mdPreview').hidden = false
     if ($('prevModeMd')) { $('prevModeMd').classList.add('active'); $('prevModeMd').setAttribute('aria-checked', 'true') }
     if ($('prevModeWeb')) { $('prevModeWeb').classList.remove('active'); $('prevModeWeb').setAttribute('aria-checked', 'false') }
+    if ($('prevModeDoc')) { $('prevModeDoc').classList.remove('active'); $('prevModeDoc').setAttribute('aria-checked', 'false') }
     $('mdPreview').innerHTML = renderMarkdown(content)
   }
 }
@@ -1992,12 +2018,14 @@ function renderSharedFiles() {
     const isImage = mime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext)
     const isAudio = mime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'm4a'].includes(ext)
     const isPdf = mime === 'application/pdf' || ext === 'pdf'
+    const isDocx = ext === 'docx' || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
     let typeTag = 'FILE'
     let typeClass = ''
     if (isVideo) { typeTag = 'VIDEO'; typeClass = 'video' }
     else if (isImage) { typeTag = 'IMAGE'; typeClass = 'image' }
     else if (isPdf) { typeTag = 'PDF'; typeClass = 'pdf' }
+    else if (isDocx) { typeTag = 'DOCX'; typeClass = 'docx' }
     else if (isAudio) { typeTag = 'AUDIO'; typeClass = 'audio' }
 
     card.innerHTML = `
@@ -2011,7 +2039,8 @@ function renderSharedFiles() {
         ${isVideo ? `<button class="btn sm primary play-video-btn" id="play_btn_${f.id}">▶ Play Video</button>` : ''}
         ${isImage ? `<button class="btn sm view-img-btn" id="view_img_${f.id}">👁️ Preview Image</button>` : ''}
         ${isAudio ? `<button class="btn sm play-audio-btn" id="play_audio_${f.id}">▶ Play Audio</button>` : ''}
-        ${isPdf ? `<button class="btn sm view-pdf-btn" id="view_pdf_${f.id}">📄 View PDF</button>` : ''}
+        ${isDocx ? `<button class="btn sm primary split-view-btn" id="view_docx_split_${f.id}" title="Read assignment Word document side-by-side with your code">📖 Read in Split View</button>` : ''}
+        ${isPdf ? `<button class="btn sm primary split-view-btn" id="view_pdf_split_${f.id}" title="Read assignment PDF side-by-side with your code">📖 Read in Split View</button><button class="btn sm view-pdf-btn" id="view_pdf_${f.id}" title="Open PDF in a new browser tab">📄 Open Tab</button>` : ''}
         <span class="grow"></span>
         <button class="btn sm dl-btn" id="dl_${f.id}">⬇ Download</button>
         <button class="btn sm flat del-btn" title="Remove file" id="del_${f.id}">&times;</button>
@@ -2105,11 +2134,11 @@ function renderSharedFiles() {
       }
     }
 
-    // View PDF handler
-    if (isPdf) {
-      card.querySelector(`#view_pdf_${f.id}`).onclick = async () => {
+    // Word (.docx) Split View handler
+    if (isDocx && card.querySelector(`#view_docx_split_${f.id}`)) {
+      card.querySelector(`#view_docx_split_${f.id}`).onclick = async () => {
         try {
-          toast('Decrypting PDF...')
+          toast('Decrypting & rendering ' + f.name + '...')
           const blob = await downloadAndDecryptFile({
             fileMeta: f,
             roomCode: CODE,
@@ -2117,10 +2146,72 @@ function renderSharedFiles() {
             roomKey: KEY,
             authToken: AUTH,
           })
-          const url = URL.createObjectURL(blob)
-          window.open(url, '_blank')
+          const buf = await blob.arrayBuffer()
+          const html = await renderDocxToHtml(buf, f.name)
+          previewMode = 'doc'
+          if ($('pdfPreview')) $('pdfPreview').hidden = true
+          if ($('htmlPreview')) $('htmlPreview').hidden = true
+          if ($('mdPreview')) $('mdPreview').hidden = true
+          if ($('docPreview')) {
+            $('docPreview').hidden = false
+            $('docPreview').innerHTML = html
+          }
+          toggleLivePreview(true)
+          toast(`📖 Loaded "${f.name}" in Split View`)
         } catch (err) {
-          toast('Could not open PDF: ' + err.message)
+          console.error('Word rendering error:', err)
+          toast('Could not render Word doc: ' + err.message)
+        }
+      }
+    }
+
+    // View PDF handler
+    if (isPdf) {
+      if (card.querySelector(`#view_pdf_split_${f.id}`)) {
+        card.querySelector(`#view_pdf_split_${f.id}`).onclick = async () => {
+          try {
+            toast('Decrypting ' + f.name + ' for Split View...')
+            const blob = await downloadAndDecryptFile({
+              fileMeta: f,
+              roomCode: CODE,
+              relayHost: relayHost(),
+              roomKey: KEY,
+              authToken: AUTH,
+            })
+            const url = URL.createObjectURL(blob)
+            previewMode = 'doc'
+            if ($('docPreview')) $('docPreview').hidden = true
+            if ($('htmlPreview')) $('htmlPreview').hidden = true
+            if ($('mdPreview')) $('mdPreview').hidden = true
+            if ($('pdfPreview')) {
+              $('pdfPreview').hidden = false
+              $('pdfPreview').src = url
+            }
+            toggleLivePreview(true)
+            toast(`📖 Loaded "${f.name}" in Split View`)
+          } catch (err) {
+            console.error('PDF view error:', err)
+            toast('Could not open PDF: ' + err.message)
+          }
+        }
+      }
+
+      if (card.querySelector(`#view_pdf_${f.id}`)) {
+        card.querySelector(`#view_pdf_${f.id}`).onclick = async () => {
+          try {
+            toast('Decrypting PDF...')
+            const blob = await downloadAndDecryptFile({
+              fileMeta: f,
+              roomCode: CODE,
+              relayHost: relayHost(),
+              roomKey: KEY,
+              authToken: AUTH,
+            })
+            const url = URL.createObjectURL(blob)
+            window.open(url, '_blank')
+          } catch (err) {
+            toast('Could not open PDF: ' + err.message)
+          }
         }
       }
     }
@@ -2868,11 +2959,27 @@ if ($('prevModeMd')) $('prevModeMd').onclick = () => {
   previewMode = 'markdown'
   updateLivePreview()
 }
+if ($('prevModeDoc')) $('prevModeDoc').onclick = () => {
+  previewMode = 'doc'
+  updateLivePreview()
+}
 if ($('prevReload')) $('prevReload').onclick = () => {
   updateLivePreview()
   toast('🔄 Preview reloaded')
 }
 if ($('prevPopout')) $('prevPopout').onclick = () => {
+  if (previewMode === 'doc') {
+    if ($('pdfPreview') && !$('pdfPreview').hidden && $('pdfPreview').src) {
+      window.open($('pdfPreview').src, '_blank')
+      return
+    }
+    if ($('docPreview') && !$('docPreview').hidden && $('docPreview').innerHTML) {
+      const docHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Assignment Document</title><style>body{font-family:system-ui,-apple-system,sans-serif;padding:32px;max-width:800px;margin:0 auto;line-height:1.6;color:#1e293b;background:#fff}table{border-collapse:collapse;width:100%;margin:16px 0}td,th{border:1px solid #cbd5e1;padding:8px 12px}</style></head><body>${$('docPreview').innerHTML}</body></html>`
+      const blob = new Blob([docHtml], { type: 'text/html;charset=utf-8' })
+      window.open(URL.createObjectURL(blob), '_blank')
+      return
+    }
+  }
   if (!activeId || !ytexts.get(activeId)) return
   const content = ytexts.get(activeId).toString()
   let extraCss = '', extraJs = ''

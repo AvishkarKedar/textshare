@@ -590,7 +590,41 @@ async function executeCodeInternal({ language, code, stdin = '' }) {
       return runRes
     }
 
-    // 8. Fallback to public sandboxed Piston API
+    // 8. Native Java (javac + java)
+    if (normLang === 'java') {
+      const classMatch = code.match(/public\s+class\s+([A-Za-z0-9_]+)/)
+      const className = classMatch ? classMatch[1] : 'Main'
+      const srcPath = path.join(workspaceDir, `${className}.java`)
+      await fs.promises.writeFile(srcPath, code, 'utf8')
+      const compile = await runSandboxedProcess({
+        cmd: 'javac',
+        args: ['-encoding', 'UTF-8', HAS_BWRAP ? `/workspace/${className}.java` : srcPath],
+        workspaceDir,
+        isCompile: true,
+        timeoutMs: 12000
+      })
+      if (compile.exitCode !== 0) {
+        return {
+          ok: false,
+          stdout: compile.stdout,
+          stderr: 'Compilation error:\n' + compile.stderr,
+          exitCode: compile.exitCode,
+          executionTime: compile.executionTime
+        }
+      }
+      const runRes = await runSandboxedProcess({
+        cmd: 'java',
+        args: ['-cp', HAS_BWRAP ? '/workspace' : workspaceDir, className],
+        input: stdin,
+        workspaceDir,
+        timeoutMs: 10000
+      })
+      RUNNER_CACHE.set(cacheKey, runRes)
+      setTimeout(() => RUNNER_CACHE.delete(cacheKey), 15000)
+      return runRes
+    }
+
+    // 9. Fallback to public sandboxed Piston API
     try {
       const response = await fetch('https://emkc.org/api/v2/piston/execute', {
         method: 'POST',

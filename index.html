@@ -463,6 +463,7 @@
           <div class="segrow sm" id="prevModeGroup" role="radiogroup" aria-label="Preview Mode">
             <button type="button" class="seg active" id="prevModeWeb" role="radio" aria-checked="true">Interactive</button>
             <button type="button" class="seg" id="prevModeMd" role="radio" aria-checked="false">Markdown</button>
+            <button type="button" class="seg" id="prevModeDoc" role="radio" aria-checked="false">Assignment Doc</button>
           </div>
           <span class="grow"></span>
           <div class="phead-actions">
@@ -474,6 +475,8 @@
           </div>
         </div>
         <div id="mdPreview" class="preview-pane" hidden></div>
+        <div id="docPreview" class="preview-pane doc-preview-pane" hidden></div>
+        <iframe id="pdfPreview" class="preview-pane pdf-preview-pane" hidden title="Assignment PDF Viewer"></iframe>
         <iframe id="htmlPreview" class="preview-pane" sandbox="allow-scripts allow-modals" title="Preview"></iframe>
       </div>
     </div>
