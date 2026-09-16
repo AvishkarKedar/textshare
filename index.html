@@ -78,8 +78,23 @@
     },
     {
       "@type": "Question",
-      "name": "Can I use anonshare on my phone?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes. It works in any modern mobile browser, with a layout built for small screens, including a bottom bar for files, chat, and settings." }
+      "name": "Can I use anonshare on Android and mobile phones?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. anonshare is fully optimized for Android and mobile browsers, featuring a thumb-friendly bottom action bar, an accessory keyboard bar for quick coding symbols, responsive drawer sheets, native file sharing up to 25MB, and WebRTC voice chat." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I run code in anonshare?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. anonshare features a sandboxed code runner supporting Python, JavaScript, C, C++, Rust, Go, Java, Bash, and more. Code executes inside an isolated Bubblewrap Linux sandbox with no outbound network access and strict memory caps." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I share files in anonshare?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Rooms support encrypted file sharing up to 25MB per file. Files are encrypted client-side with AES-GCM before upload, forwarded ephemerally, and destroyed permanently when the room expires." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is voice chat recorded or stored?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. Voice chat uses direct WebRTC peer-to-peer audio with DTLS-SRTP encryption. No audio is ever recorded, logged, transcribed, or stored on any server." }
     },
     {
       "@type": "Question",
@@ -89,7 +104,7 @@
     {
       "@type": "Question",
       "name": "Can I run my own relay instead of the default one?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes. anonshare is open source. You can deploy the relay yourself on Cloudflare Workers and point the app at it, using the instructions in the GitHub repository." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. anonshare is open source. You can deploy the relay yourself on Cloudflare Workers or your own VPS and point the app at it, using the instructions in the GitHub repository." }
     },
     {
       "@type": "Question",
@@ -99,7 +114,7 @@
     {
       "@type": "Question",
       "name": "Is there a limit on room size?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Each room supports up to 30 connections and about 5 MB of history before it is compacted, which is plenty for text and code but not a place to store large files." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Each room supports up to 30 concurrent connections, real-time collaboration, and encrypted file sharing up to 25MB per file." }
     }
   ]
 }
@@ -219,8 +234,20 @@
         <p>No cookies and no personal data are collected. The marketing site uses cookieless, privacy-friendly analytics that cannot identify or follow you. See the <a href="privacy.html">privacy policy</a> for details.</p>
       </details>
       <details class="faq">
-        <summary>Can I use anonshare on my phone?</summary>
-        <p>Yes. It works in any modern mobile browser, with a layout built for small screens, including a bottom bar for files, chat, and settings.</p>
+        <summary>Can I use anonshare on Android and mobile phones?</summary>
+        <p>Yes. anonshare is fully responsive and tailored for Android and mobile browsers. It includes a thumb-friendly bottom navigation bar, quick syntax keys bar for braces, semicolons, quotes and indentation, full drawer sheets, and native file uploads up to 25MB directly from your phone's storage.</p>
+      </details>
+      <details class="faq">
+        <summary>Can I run and compile code inside anonshare?</summary>
+        <p>Yes. With the built-in Runner (Ctrl+Enter or mobile Run button), you can execute Python, JavaScript, C, C++, Rust, Go, Java, Bash, and more. Code is compiled and run inside an isolated Linux Bubblewrap sandbox with zero outbound network access and strict 256MB RAM caps.</p>
+      </details>
+      <details class="faq">
+        <summary>Can I share files with others in the room?</summary>
+        <p>Yes. You can upload and share files up to 25MB. Files are encrypted client-side in your browser with AES-GCM before upload, stored ephemerally in room memory or streamed via WebRTC DataChannels, and erased permanently when the room expires.</p>
+      </details>
+      <details class="faq">
+        <summary>Is voice chat recorded or stored?</summary>
+        <p>No. Voice chat connects room members directly peer-to-peer using WebRTC with DTLS-SRTP encryption. No voice audio is ever recorded, transcribed, or stored on any server.</p>
       </details>
       <details class="faq">
         <summary>What happens if I lose my internet connection while I'm typing?</summary>
@@ -228,7 +255,7 @@
       </details>
       <details class="faq">
         <summary>Can I run my own relay instead of the default one?</summary>
-        <p>Yes. anonshare is <a href="https://github.com/AvishkarKedar/textshare" target="_blank" rel="noopener">open source</a>. You can deploy the relay yourself on Cloudflare Workers and point the app at it - see the GitHub repository for instructions.</p>
+        <p>Yes. anonshare is <a href="https://github.com/AvishkarKedar/textshare" target="_blank" rel="noopener">open source</a>. You can deploy the relay yourself on Cloudflare Workers or your own VPS and point the app at it - see the GitHub repository for instructions.</p>
       </details>
       <details class="faq">
         <summary>Is anonshare open source?</summary>
@@ -236,7 +263,7 @@
       </details>
       <details class="faq">
         <summary>Is there a limit on room size?</summary>
-        <p>Each room supports up to 30 connections and about 5 MB of history before it's compacted, which is plenty for text and code but not a place to store large files.</p>
+        <p>Each room supports up to 30 connections, live document history, and encrypted file sharing up to 25MB per file.</p>
       </details>
     </div>
   </section>
@@ -358,13 +385,13 @@
     <button class="btn primary ico-text" id="runBtn" title="Run Code (Ctrl+Enter)" aria-label="Run code"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span class="hideS">Run</span></button>
     <button class="btn ico" id="previewBtn" title="Toggle Live Preview" aria-label="Toggle Live Preview"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
     <button class="btn ico" id="filesBtn" title="Encrypted File Sharing (up to 25MB)" aria-label="Share Files"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span class="nd" id="filesDot" hidden></span></button>
-    <button class="btn ico" id="bookmarksBtn" title="Recent Rooms / History" aria-label="Recent Rooms"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
-    <button class="btn ico" id="zenBtn" title="Zen Mode / Fullscreen (F11)" aria-label="Zen Mode"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
+    <button class="btn ico hideS" id="bookmarksBtn" title="Recent Rooms / History" aria-label="Recent Rooms"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
+    <button class="btn ico hideS" id="zenBtn" title="Zen Mode / Fullscreen (F11)" aria-label="Zen Mode"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
     <button class="btn ico" id="voiceBtn" title="Voice Chat / Walkie-Talkie" aria-label="Voice Chat"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
     <select id="lang" class="btn sel" title="Language" aria-label="Language"></select>
-    <button class="btn ico" id="undoBtn" title="Undo" aria-label="Undo"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 7 4 12l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    <button class="btn ico" id="redoBtn" title="Redo" aria-label="Redo"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M15 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 12H10a6 6 0 0 0 0 12h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    <button class="btn ico" id="chatBtn" title="Chat" aria-label="Chat"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M4 5h16v10H9l-4 4V5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="nd" id="chatDot" hidden></span></button>
+    <button class="btn ico hideS" id="undoBtn" title="Undo" aria-label="Undo"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 7 4 12l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button class="btn ico hideS" id="redoBtn" title="Redo" aria-label="Redo"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M15 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 12H10a6 6 0 0 0 0 12h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button class="btn ico hideS" id="chatBtn" title="Chat" aria-label="Chat"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M4 5h16v10H9l-4 4V5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="nd" id="chatDot" hidden></span></button>
     <button class="btn ico" id="moreBtn" title="More" aria-label="More" aria-haspopup="true" aria-expanded="false">&#8943;</button>
 
     <div id="menu" role="menu" hidden>

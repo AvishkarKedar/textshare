@@ -525,7 +525,13 @@ body.doc-page{overflow:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:to
   aside.closing{transform:translateY(100%);opacity:.5;pointer-events:none}
   #mbar{display:flex}
   .hideS{display:none!important}
-  #topbar{gap:4px}
+  #topbar{gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #topbar::-webkit-scrollbar{display:none}
+  #editorContainer{flex-direction:column}
+  #previewWrap{height:50%;border-left:0;border-top:1px solid var(--line)}
+  #terminal{height:50%;max-height:50vh}
+  #historyDrawer{height:50%;max-height:50vh}
+  .term-head,.phead{min-height:36px}
   .cm-gutters{display:none}
   #statusbar{overflow:hidden}
   .hero{padding:32px 18px 24px}
