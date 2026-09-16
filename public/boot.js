@@ -1,6 +1,8 @@
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('/sw.js').catch(function () {})
+    navigator.serviceWorker.register('/sw.js').then(function (reg) {
+      reg.update().catch(function () {})
+    }).catch(function () {})
   })
 }
 setTimeout(function () {
