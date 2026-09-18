@@ -25,6 +25,8 @@ import { VoiceMesh } from './lib/voice.js'
 import { P2PMesh } from './lib/p2p.js'
 import { detectLanguage } from './lib/detector.js'
 import { getBookmarks, saveBookmark, removeBookmark, clearBookmarks } from './lib/bookmarks.js'
+import { UI_TEMPLATES, generateUiFromPrompt } from './lib/generative-ui.js'
+import { SLASH_COMMANDS, parseSlashCommand, filterSlashCommands } from './lib/slash-commands.js'
 
 window.__ts_booted = true
 
@@ -849,6 +851,10 @@ function boot(host) {
   ydoc.getArray('chat').observe(renderChat)
   ysharedFiles = ydoc.getArray('shared_files')
   ysharedFiles.observe(renderSharedFiles)
+  const ymeta = ydoc.getMap('meta')
+  ymeta.observe(() => {
+    renderRoomGoal()
+  })
   ydoc.on('update', () => {
     recordHistorySnapshot()
     if (previewOpen) updateLivePreview()
@@ -878,16 +884,18 @@ function boot(host) {
 
   awareness.on('change', () => {
     onPresence()
-    // Trigger P2P connection to discovered peers
-    if (p2pMesh) {
-      for (const [clientId] of awareness.getStates()) {
-        if (clientId !== ydoc.clientID) p2pMesh.connectToPeer(String(clientId))
+    // Trigger P2P and voice connection to discovered peers
+    for (const [clientId] of awareness.getStates()) {
+      if (clientId !== ydoc.clientID) {
+        if (p2pMesh) p2pMesh.connectToPeer(String(clientId))
+        if (voiceMesh && voiceActive) voiceMesh.callPeer(String(clientId))
       }
     }
   })
 
   renderChat()
   renderSharedFiles()
+  renderRoomGoal()
   onPresence()
   buildSwatches()
   setInterval(() => { paintPeople(); paintStatus() }, 15000)
@@ -1626,12 +1634,84 @@ function trimChat(len) {
   ydoc.transact(() => ydoc.getArray('chat').delete(0, len - CHAT_KEEP), 'local')
 }
 
+// --- Chat Slash Commands Autocomplete & Submission ---
+const chatSlashPopup = $('chatSlashPopup')
+let selectedSlashIndex = 0
+
+function updateChatSlashPopup(text) {
+  if (!chatSlashPopup) return
+  if (!text.startsWith('/')) {
+    hideChatSlashPopup()
+    return
+  }
+  const filtered = filterSlashCommands(text)
+  if (!filtered.length) {
+    hideChatSlashPopup()
+    return
+  }
+  chatSlashPopup.hidden = false
+  chatSlashPopup.innerHTML = ''
+  selectedSlashIndex = Math.min(selectedSlashIndex, filtered.length - 1)
+
+  filtered.forEach((c, idx) => {
+    const item = document.createElement('div')
+    item.className = 'slash-item' + (idx === selectedSlashIndex ? ' selected' : '')
+    item.innerHTML = `<span>${c.icon} <span class="slash-cmd">${c.command}</span></span> <span class="slash-desc">${c.description}</span>`
+    item.onclick = () => {
+      const inEl = $('chatInput')
+      inEl.value = c.command + ' '
+      inEl.focus()
+      hideChatSlashPopup()
+    }
+    chatSlashPopup.appendChild(item)
+  })
+}
+
+function hideChatSlashPopup() {
+  if (chatSlashPopup) chatSlashPopup.hidden = true
+}
+
+const cIn = $('chatInput')
+if (cIn) {
+  cIn.addEventListener('input', () => updateChatSlashPopup(cIn.value))
+  cIn.addEventListener('keydown', e => {
+    if (chatSlashPopup && !chatSlashPopup.hidden) {
+      const items = chatSlashPopup.querySelectorAll('.slash-item')
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        selectedSlashIndex = (selectedSlashIndex + 1) % items.length
+        items.forEach((it, i) => it.classList.toggle('selected', i === selectedSlashIndex))
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        selectedSlashIndex = (selectedSlashIndex - 1 + items.length) % items.length
+        items.forEach((it, i) => it.classList.toggle('selected', i === selectedSlashIndex))
+      } else if (e.key === 'Tab' || (e.key === 'Enter' && !cIn.value.includes(' '))) {
+        e.preventDefault()
+        const activeItem = items[selectedSlashIndex]
+        if (activeItem) activeItem.click()
+      } else if (e.key === 'Escape') {
+        hideChatSlashPopup()
+      }
+    }
+  })
+}
+
 $('chatForm').onsubmit = e => {
   e.preventDefault()
   const text = $('chatInput').value.trim()
   if (!text) return
+
+  const parsed = parseSlashCommand(text)
+  if (parsed.isCommand) {
+    $('chatInput').value = ''
+    hideChatSlashPopup()
+    handleSlashCommand(parsed)
+    return
+  }
+
   ydoc.getArray('chat').push([{ name: myName, color: myColor, text: text.slice(0, 500), ts: Date.now() }])
   $('chatInput').value = ''
+  hideChatSlashPopup()
 }
 
 function mobileSheet() {
@@ -1639,24 +1719,24 @@ function mobileSheet() {
 }
 
 function hidePanelAnimated(el) {
-  if (el.hidden) return
-  if (!mobileSheet()) { el.hidden = true; return }
+  if (!el || el.hidden) return
+  if (!mobileSheet()) { el.hidden = true; updateButtonActiveStates(); return }
   el.classList.add('closing')
   clearTimeout(el._closeTimer)
   el._closeTimer = setTimeout(() => {
     el.hidden = true
     el.classList.remove('closing')
+    updateButtonActiveStates()
   }, 280)
 }
 
 function showPanelAnimated(el) {
+  if (!el) return
   clearTimeout(el._closeTimer)
   el.classList.remove('closing')
   el.hidden = false
+  updateButtonActiveStates()
   if (mobileSheet()) {
-    // Force the browser to register the "closed" starting position before
-    // removing it - otherwise the sheet just snaps straight to open instead
-    // of sliding in.
     el.classList.add('closing')
     void el.offsetHeight
     requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('closing')))
@@ -1673,6 +1753,7 @@ function showPanel(el) {
     chatSeen = ydoc.getArray('chat').length
     $('chatInput').focus()
   }
+  updateButtonActiveStates()
   setTimeout(() => { if (view) view.requestMeasure() }, 60)
 }
 $('chatBtn').onclick = () => showPanel($('chat'))
@@ -1775,6 +1856,11 @@ function updateButtonActiveStates() {
     $('runBtn').classList.toggle('active', termOpen)
     $('runBtn').setAttribute('aria-pressed', termOpen ? 'true' : 'false')
   }
+  const mbarRun = document.querySelector('#mbar button[data-a="run"]')
+  if (mbarRun) {
+    mbarRun.classList.toggle('active', termOpen)
+    mbarRun.setAttribute('aria-pressed', termOpen ? 'true' : 'false')
+  }
 
   if ($('previewBtn')) {
     $('previewBtn').classList.toggle('active', previewOpen)
@@ -1788,6 +1874,12 @@ function updateButtonActiveStates() {
   }
   if ($('hubFilesBtn')) {
     $('hubFilesBtn').classList.toggle('active', fileOpen)
+    $('hubFilesBtn').setAttribute('aria-pressed', fileOpen ? 'true' : 'false')
+  }
+  const mbarFiles = document.querySelector('#mbar button[data-a="files"]')
+  if (mbarFiles) {
+    mbarFiles.classList.toggle('active', fileOpen)
+    mbarFiles.setAttribute('aria-pressed', fileOpen ? 'true' : 'false')
   }
 
   if ($('voiceBtn')) {
@@ -1795,10 +1887,10 @@ function updateButtonActiveStates() {
     $('voiceBtn').setAttribute('aria-pressed', voiceActive ? 'true' : 'false')
     if (voiceActive && voiceMesh && voiceMesh.isMuted) {
       $('voiceBtn').style.opacity = '0.7'
-      $('voiceBtn').title = 'Microphone Muted (Click to speak)'
+      $('voiceBtn').title = 'Microphone Muted (Click to speak, Shift+Click to disconnect)'
     } else if (voiceActive) {
       $('voiceBtn').style.opacity = '1'
-      $('voiceBtn').title = 'Voice Active (Click to mute)'
+      $('voiceBtn').title = 'Voice Active (Click to mute, Shift+Click to disconnect)'
     } else {
       $('voiceBtn').style.opacity = ''
       $('voiceBtn').title = 'Voice Chat / Walkie-Talkie'
@@ -1809,6 +1901,18 @@ function updateButtonActiveStates() {
   if ($('bookmarksBtn')) {
     $('bookmarksBtn').classList.toggle('active', bookmarksOpen)
     $('bookmarksBtn').setAttribute('aria-pressed', bookmarksOpen ? 'true' : 'false')
+  }
+
+  const browserOpen = $('browserDrawer') && !$('browserDrawer').hidden
+  if ($('browserBtn')) {
+    $('browserBtn').classList.toggle('active', browserOpen)
+    $('browserBtn').setAttribute('aria-pressed', browserOpen ? 'true' : 'false')
+  }
+
+  const goalBannerOpen = $('roomGoalBanner') && !$('roomGoalBanner').hidden
+  if ($('hubGoalBtn')) {
+    $('hubGoalBtn').classList.toggle('active', goalBannerOpen)
+    $('hubGoalBtn').setAttribute('aria-pressed', goalBannerOpen ? 'true' : 'false')
   }
 
   const zenActive = document.body.classList.contains('zen-mode')
@@ -1822,12 +1926,328 @@ function updateButtonActiveStates() {
     $('chatBtn').classList.toggle('active', chatOpen)
     $('chatBtn').setAttribute('aria-pressed', chatOpen ? 'true' : 'false')
   }
+  const mbarChat = document.querySelector('#mbar button[data-a="chat"]')
+  if (mbarChat) {
+    mbarChat.classList.toggle('active', chatOpen)
+    mbarChat.setAttribute('aria-pressed', chatOpen ? 'true' : 'false')
+  }
 
   const histOpen = $('historyDrawer') && !$('historyDrawer').hidden
   if ($('hubHistBtn')) {
     $('hubHistBtn').classList.toggle('active', histOpen)
     $('hubHistBtn').setAttribute('aria-pressed', histOpen ? 'true' : 'false')
   }
+}
+
+// --- Slash Commands Execution ---
+function handleSlashCommand(parsed) {
+  const cmd = parsed.command
+  const args = parsed.args
+
+  if (cmd === '/goal') {
+    if (!args) promptSetRoomGoal()
+    else if (args === 'clear') clearRoomGoal()
+    else if (args === 'done') toggleRoomGoalDone()
+    else setRoomGoal(args)
+  } else if (cmd === '/browser') {
+    toggleBrowserDrawer(true, args || 'https://devdocs.io')
+  } else if (cmd === '/teamwork-preview' || cmd === '/preview') {
+    openTeamworkPreview()
+  } else if (cmd === '/boost') {
+    toggleTurboBoost()
+  } else if (cmd === '/generative_ui' || cmd === '/genui') {
+    if (args) {
+      const code = generateUiFromPrompt(args)
+      const cleanName = args.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'gen-ui'
+      const fid = addFile(`${cleanName}.html`, code)
+      openFile(fid)
+      toggleLivePreview(true)
+      toast(`✨ Generated "${cleanName}.html" and opened preview!`)
+      ydoc.getArray('chat').push([{
+        name: 'Generative UI',
+        color: '#818cf8',
+        text: `✨ Generated UI component for "${args}" into ${cleanName}.html`,
+        ts: Date.now()
+      }])
+    } else {
+      openGenerativeUi()
+    }
+  } else if (cmd === '/clear') {
+    if ($('chatList')) $('chatList').innerHTML = ''
+    toast('Chat messages cleared locally')
+  } else if (cmd === '/shrug') {
+    ydoc.getArray('chat').push([{ name: myName, color: myColor, text: '¯\\_(ツ)_/¯', ts: Date.now() }])
+  } else if (cmd === '/help') {
+    const list = SLASH_COMMANDS.map(c => `<b>${c.command}</b>: ${c.description}`).join('<br>')
+    const helpBubble = document.createElement('div')
+    helpBubble.className = 'msg'
+    helpBubble.style.background = 'rgba(76,141,255,0.1)'
+    helpBubble.style.border = '1px solid var(--accent)'
+    helpBubble.innerHTML = `<div style="font-weight:bold;margin-bottom:4px">Available Commands:</div><div>${list}</div>`
+    $('chatList').appendChild(helpBubble)
+    $('chatList').scrollTop = $('chatList').scrollHeight
+  } else {
+    toast(`Unknown command: ${cmd}. Type /help for list of commands.`)
+  }
+}
+
+// --- Feature: Collaborative Room Goal (/goal) ---
+function renderRoomGoal() {
+  if (!ydoc) return
+  const ymeta = ydoc.getMap('meta')
+  const goal = ymeta.get('roomGoal')
+  const banner = $('roomGoalBanner')
+  const textEl = $('roomGoalText')
+  const statusEl = $('roomGoalStatus')
+  const hubPill = $('hubGoalPill')
+  const hubBtn = $('hubGoalBtn')
+
+  if (!banner) return
+
+  if (goal && goal.text) {
+    banner.hidden = false
+    banner.classList.toggle('goal-done', !!goal.done)
+    if (textEl) textEl.textContent = goal.text
+    if (statusEl) {
+      statusEl.textContent = goal.done ? 'Completed ✓' : 'In Progress'
+    }
+    if (hubPill) {
+      hubPill.hidden = false
+      hubPill.textContent = goal.done ? 'Done' : 'Active'
+    }
+    if (hubBtn) {
+      hubBtn.classList.add('active')
+      hubBtn.setAttribute('aria-pressed', 'true')
+    }
+    if ($('goalDoneBtn')) {
+      $('goalDoneBtn').textContent = goal.done ? '↺ Reopen' : '✓ Done'
+    }
+  } else {
+    banner.hidden = true
+    if (hubPill) hubPill.hidden = true
+    if (hubBtn) {
+      hubBtn.classList.remove('active')
+      hubBtn.setAttribute('aria-pressed', 'false')
+    }
+  }
+  updateButtonActiveStates()
+}
+
+async function promptSetRoomGoal(initialText = '') {
+  if (readOnlyNow()) return toast('This room is read-only')
+  const ymeta = ydoc.getMap('meta')
+  const curGoal = ymeta.get('roomGoal')
+  const prevText = initialText || (curGoal ? curGoal.text : '')
+
+  const text = await ask({
+    title: '🎯 Collaborative Room Goal',
+    body: 'Set a shared objective or task milestone for everyone in this room.',
+    input: true,
+    placeholder: 'e.g. Implement Dijkstra in C++ / Build Login Form',
+    confirmLabel: 'Set Goal',
+  })
+
+  if (!text || !text.trim()) return
+  setRoomGoal(text.trim())
+}
+
+function setRoomGoal(text) {
+  if (readOnlyNow()) return toast('This room is read-only')
+  const ymeta = ydoc.getMap('meta')
+  ymeta.set('roomGoal', {
+    text: text.slice(0, 300),
+    done: false,
+    author: myName,
+    ts: Date.now()
+  })
+  toast('🎯 Room Goal set: ' + text)
+  ydoc.getArray('chat').push([{
+    name: 'Room Goal',
+    color: '#38bdf8',
+    text: `🎯 Goal updated by ${myName || 'collaborator'}: "${text}"`,
+    ts: Date.now()
+  }])
+}
+
+function toggleRoomGoalDone() {
+  if (readOnlyNow()) return toast('This room is read-only')
+  const ymeta = ydoc.getMap('meta')
+  const cur = ymeta.get('roomGoal')
+  if (!cur) return
+  const nextDone = !cur.done
+  ymeta.set('roomGoal', { ...cur, done: nextDone })
+  toast(nextDone ? '🎉 Goal marked as completed!' : 'Goal reopened')
+}
+
+async function clearRoomGoal() {
+  if (readOnlyNow()) return toast('This room is read-only')
+  const ok = await ask({
+    title: 'Clear Room Goal?',
+    body: 'Remove the pinned goal banner for everyone in this room.',
+    confirmLabel: 'Clear Goal',
+    danger: true,
+  })
+  if (!ok) return
+  const ymeta = ydoc.getMap('meta')
+  ymeta.delete('roomGoal')
+  toast('Room goal cleared')
+}
+
+// --- Feature: In-Browser Web & Documentation Browser (/browser) ---
+function openBrowser(url) {
+  const targetUrl = url || $('browserUrlInput')?.value || 'https://devdocs.io'
+  if ($('browserUrlInput')) $('browserUrlInput').value = targetUrl
+  if ($('browserIframe')) $('browserIframe').src = targetUrl
+  if ($('browserExtLink')) $('browserExtLink').href = targetUrl
+  toggleBrowserDrawer(true)
+}
+
+function toggleBrowserDrawer(force, url) {
+  const next = typeof force === 'boolean' ? !force : !$('browserDrawer').hidden
+  $('browserDrawer').hidden = next
+  updateButtonActiveStates()
+  if (!next && url) {
+    openBrowser(url)
+  }
+}
+
+// --- Feature: Teamwork Collaborative Multi-Device Live Preview (/teamwork-preview) ---
+let currentPreviewDevice = 'desk'
+let isLandscape = false
+
+function setPreviewDevice(dev) {
+  currentPreviewDevice = dev
+  const holder = $('previewFrameHolder')
+  if (!holder) return
+  holder.classList.remove('device-tablet', 'device-mobile')
+  if (dev === 'tab') holder.classList.add('device-tablet')
+  if (dev === 'mob') holder.classList.add('device-mobile')
+
+  if ($('prevDevDesk')) $('prevDevDesk').classList.toggle('active', dev === 'desk')
+  if ($('prevDevTab')) $('prevDevTab').classList.toggle('active', dev === 'tab')
+  if ($('prevDevMob')) $('prevDevMob').classList.toggle('active', dev === 'mob')
+}
+
+function toggleDeviceOrientation() {
+  isLandscape = !isLandscape
+  const holder = $('previewFrameHolder')
+  if (holder) holder.classList.toggle('device-landscape', isLandscape)
+  toast(isLandscape ? 'Landscape orientation (667px)' : 'Portrait orientation')
+}
+
+function openTeamworkPreview() {
+  previewMode = 'web'
+  toggleLivePreview(true)
+  setPreviewDevice('desk')
+  toast('👥 Teamwork Multi-Device Live Preview Active')
+}
+
+// --- Feature: Turbo Developer Boost Mode (/boost) ---
+let turboActive = false
+let turboPingTimer = null
+
+function toggleTurboBoost() {
+  turboActive = !turboActive
+  document.body.classList.toggle('turbo-boost', turboActive)
+  if ($('turboBadge')) $('turboBadge').hidden = !turboActive
+
+  if (turboActive) {
+    measureRelayPing()
+    clearInterval(turboPingTimer)
+    turboPingTimer = setInterval(measureRelayPing, 4000)
+    toast('⚡ TURBO BOOST ACTIVATED (Fast Runner Cache & Live Latency)')
+    ydoc.getArray('chat').push([{
+      name: 'System',
+      color: '#f59e0b',
+      text: `⚡ ${myName || 'Collaborator'} activated Turbo Boost mode!`,
+      ts: Date.now()
+    }])
+  } else {
+    clearInterval(turboPingTimer)
+    turboPingTimer = null
+    toast('Turbo Boost deactivated')
+  }
+}
+
+async function measureRelayPing() {
+  if (!turboActive) return
+  const start = performance.now()
+  try {
+    const host = relayHost().replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/+$/, '')
+    const proto = location.protocol === 'https:' || !host.includes('localhost') ? 'https:' : 'http:'
+    const res = await fetch(`${proto}//${host}/health`, { method: 'GET', cache: 'no-store' })
+    if (res.ok) {
+      const rtt = Math.round(performance.now() - start)
+      if ($('turboPing')) $('turboPing').textContent = `${rtt}ms`
+    }
+  } catch (e) {
+    if ($('turboPing')) $('turboPing').textContent = 'p2p'
+  }
+}
+
+// --- Feature: Generative UI Component Builder (/generative_ui) ---
+let currentGenCode = ''
+
+function openGenerativeUi(initialPrompt = '') {
+  if ($('genUiModal')) $('genUiModal').hidden = false
+  renderGenPresets()
+  if ($('genUiPrompt') && initialPrompt) {
+    $('genUiPrompt').value = initialPrompt
+    generateAndPreviewUi(initialPrompt)
+  } else if (!currentGenCode) {
+    generateAndPreviewUi('calculator')
+  }
+}
+
+function renderGenPresets() {
+  const container = $('genUiPresets')
+  if (!container || container.children.length > 0) return
+  container.innerHTML = ''
+  for (const t of UI_TEMPLATES) {
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = 'gen-preset-chip'
+    chip.innerHTML = `<span>${t.icon}</span> <span>${t.name}</span>`
+    chip.onclick = () => {
+      if ($('genUiPrompt')) $('genUiPrompt').value = t.name
+      currentGenCode = t.html
+      updateGenPreview(currentGenCode)
+    }
+    container.appendChild(chip)
+  }
+}
+
+function generateAndPreviewUi(prompt) {
+  const code = generateUiFromPrompt(prompt)
+  currentGenCode = code
+  updateGenPreview(code)
+}
+
+function updateGenPreview(code) {
+  const iframe = $('genUiPreviewIframe')
+  if (iframe) iframe.srcdoc = code
+}
+
+function insertGenUiAtCursor() {
+  if (readOnlyNow()) return toast('This room is read-only')
+  if (!view || !currentGenCode) return
+  view.dispatch(view.state.replaceSelection(currentGenCode))
+  view.focus()
+  if ($('genUiModal')) $('genUiModal').hidden = true
+  toast('✨ UI component inserted at cursor')
+}
+
+function openGenUiAsNewTab() {
+  if (readOnlyNow()) return toast('This room is read-only')
+  if (!currentGenCode) return
+  const promptVal = $('genUiPrompt')?.value.trim() || 'component'
+  const cleanName = promptVal.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'generated-ui'
+  const filename = `${cleanName}.html`
+  const fid = addFile(filename, currentGenCode)
+  openFile(fid)
+  if ($('genUiModal')) $('genUiModal').hidden = true
+  toggleLivePreview(true)
+  toast(`✨ Created "${filename}" and opened in live preview!`)
 }
 
 // --- Feature 1: Code Runner with Stdin Input ---
@@ -2019,7 +2439,7 @@ function updateLivePreview() {
 
 // --- Feature 2: Dedicated Media & File Sharing Hub (up to 25MB) ---
 function toggleFileDrawer(force) {
-  const next = typeof force === 'boolean' ? !force : $('fileDrawer').hidden
+  const next = typeof force === 'boolean' ? !force : !$('fileDrawer').hidden
   $('fileDrawer').hidden = next
   updateButtonActiveStates()
   if (!next) renderSharedFiles()
@@ -2309,11 +2729,23 @@ async function handleFileUpload(file) {
 }
 
 // --- Feature 8: Ephemeral WebRTC Voice Chat ---
-async function toggleVoiceChat() {
+async function toggleVoiceChat(e) {
   if (!voiceMesh) {
     toast('Voice mesh initializing...')
     return
   }
+
+  // Shift-click or explicit disconnect
+  if (e && (e.shiftKey || e === false)) {
+    if (voiceActive) {
+      voiceMesh.stop()
+      voiceActive = false
+      updateButtonActiveStates()
+      toast('⏹️ Voice chat disconnected')
+    }
+    return
+  }
+
   if (!voiceActive) {
     try {
       toast('Connecting voice... please allow microphone access')
@@ -2321,6 +2753,13 @@ async function toggleVoiceChat() {
       if (ok) {
         voiceActive = true
         voiceMesh.setMuted(false)
+        if (typeof awareness !== 'undefined' && awareness) {
+          for (const [clientId] of awareness.getStates()) {
+            if (clientId !== ydoc.clientID) {
+              voiceMesh.callPeer(String(clientId))
+            }
+          }
+        }
         updateButtonActiveStates()
         toast('🎤 Microphone connected (Live in room)')
       }
@@ -2336,10 +2775,17 @@ async function toggleVoiceChat() {
       updateButtonActiveStates()
     }
   } else {
-    const nextMuted = !voiceMesh.isMuted
-    voiceMesh.setMuted(nextMuted)
-    updateButtonActiveStates()
-    toast(nextMuted ? '🔇 Microphone muted' : '🎤 Microphone unmuted')
+    // 3-step cycle: Active (unmuted) -> Mute -> Disconnect
+    if (!voiceMesh.isMuted) {
+      voiceMesh.setMuted(true)
+      updateButtonActiveStates()
+      toast('🔇 Microphone muted (Click to disconnect)')
+    } else {
+      voiceMesh.stop()
+      voiceActive = false
+      updateButtonActiveStates()
+      toast('⏹️ Voice chat disconnected')
+    }
   }
 }
 
@@ -2383,7 +2829,7 @@ function recordHistorySnapshot(fileId = activeId, force = false) {
 }
 
 function toggleHistoryDrawer(force) {
-  const next = typeof force === 'boolean' ? !force : $('historyDrawer').hidden
+  const next = typeof force === 'boolean' ? !force : !$('historyDrawer').hidden
   $('historyDrawer').hidden = next
   updateButtonActiveStates()
   if (!next) {
@@ -2574,6 +3020,11 @@ const ACTIONS = {
   say: () => cursorChat(),
   files: () => toggleFileDrawer(),
   chat: () => showPanel($('chat')),
+  goal: () => promptSetRoomGoal(),
+  browser: () => toggleBrowserDrawer(),
+  teamworkpreview: () => openTeamworkPreview(),
+  boost: () => toggleTurboBoost(),
+  genui: () => openGenerativeUi(),
   undo: () => $('undoBtn').click(),
   redo: () => $('redoBtn').click(),
   more: () => $('moreBtn').click(),
@@ -2749,7 +3200,14 @@ const COMMANDS = [
   ['Run code', 'runcode', 'Ctrl Enter'],
   ['Format document', 'format', 'Shift Alt F'],
   ['Toggle live preview', 'preview', ''],
+  ['Teamwork live preview', 'teamworkpreview', '/teamwork-preview'],
+  ['Generative UI builder', 'genui', '/generative_ui'],
+  ['In-browser web & docs', 'browser', '/browser'],
+  ['Room goal / objective', 'goal', '/goal'],
+  ['Turbo boost mode', 'boost', '/boost'],
   ['Shared files (25MB)', 'fileshare', ''],
+  ['Recent rooms / history', 'recentrooms', ''],
+  ['Zen mode', 'zenmode', 'F11'],
   ['Time machine / history', 'history', ''],
   ['Import from GitHub / Gist', 'importgit', ''],
   ['New file', 'newfile', ''],
@@ -2783,7 +3241,11 @@ function closePalette() {
 
 function renderPalette(q) {
   const needle = q.toLowerCase().trim()
-  palShown = COMMANDS.filter(c => !needle || c[0].toLowerCase().includes(needle))
+  palShown = COMMANDS.filter(c => !needle ||
+    c[0].toLowerCase().includes(needle) ||
+    c[1].toLowerCase().includes(needle) ||
+    (c[2] && c[2].toLowerCase().includes(needle))
+  )
   palIndex = 0
   const list = $('palList')
   list.innerHTML = ''
@@ -2851,6 +3313,8 @@ addEventListener('keydown', e => {
     if (!$('ask').hidden) return closeAsk(null)
     if (!$('pal').hidden) return closePalette()
     if (!$('modal').hidden) return $('mBack').click()
+    if ($('genUiModal') && !$('genUiModal').hidden) { $('genUiModal').hidden = true; return }
+    if ($('browserDrawer') && !$('browserDrawer').hidden) { toggleBrowserDrawer(false); return }
     if (!$('inactivity').hidden) { noteActivity(); return }
     if (!$('bookmarksDrawer').hidden) { toggleBookmarksDrawer(false); return }
     if (!$('fileDrawer').hidden) { toggleFileDrawer(false); return }
@@ -2904,8 +3368,9 @@ function toggleZenMode(force) {
 
 // --- Feature: Recent Rooms & Bookmarks ---
 function toggleBookmarksDrawer(force) {
-  const next = typeof force === 'boolean' ? !force : $('bookmarksDrawer').hidden
+  const next = typeof force === 'boolean' ? !force : !$('bookmarksDrawer').hidden
   $('bookmarksDrawer').hidden = next
+  updateButtonActiveStates()
   if (!next) renderBookmarksList()
 }
 
@@ -3059,6 +3524,92 @@ if ($('zenBtn')) $('zenBtn').onclick = () => toggleZenMode()
 if ($('zenExit')) $('zenExit').onclick = () => toggleZenMode(false)
 if ($('termClose')) $('termClose').onclick = () => { $('terminal').hidden = true; updateButtonActiveStates() }
 if ($('termClear')) $('termClear').onclick = () => { $('termOut').textContent = '' }
+if ($('termRerun')) $('termRerun').onclick = triggerRunCode
+
+// In-Browser Web & Docs controls
+if ($('browserBtn')) $('browserBtn').onclick = () => toggleBrowserDrawer()
+if ($('browserClose')) $('browserClose').onclick = () => toggleBrowserDrawer(false)
+if ($('browserPopout')) $('browserPopout').onclick = () => window.open($('browserUrlInput')?.value || 'https://devdocs.io', '_blank')
+if ($('browserGo')) $('browserGo').onclick = () => openBrowser($('browserUrlInput')?.value)
+if ($('browserUrlInput')) $('browserUrlInput').addEventListener('keydown', e => { if (e.key === 'Enter') openBrowser(e.target.value) })
+if ($('browserReload')) $('browserReload').onclick = () => {
+  if ($('browserIframe')) {
+    const s = $('browserIframe').src
+    $('browserIframe').src = s
+  }
+}
+if ($('browserBack')) $('browserBack').onclick = () => {
+  try { $('browserIframe').contentWindow.history.back() } catch (e) {}
+}
+if ($('browserFwd')) $('browserFwd').onclick = () => {
+  try { $('browserIframe').contentWindow.history.forward() } catch (e) {}
+}
+document.querySelectorAll('.b-chip').forEach(btn => {
+  btn.onclick = () => openBrowser(btn.dataset.url)
+})
+
+// Room Goal controls
+if ($('hubGoalBtn')) $('hubGoalBtn').onclick = () => promptSetRoomGoal()
+if ($('goalDoneBtn')) $('goalDoneBtn').onclick = () => toggleRoomGoalDone()
+if ($('goalEditBtn')) $('goalEditBtn').onclick = () => promptSetRoomGoal()
+if ($('goalClearBtn')) $('goalClearBtn').onclick = () => clearRoomGoal()
+
+// Teamwork Multi-Device Preview controls
+if ($('prevDevDesk')) $('prevDevDesk').onclick = () => setPreviewDevice('desk')
+if ($('prevDevTab')) $('prevDevTab').onclick = () => setPreviewDevice('tab')
+if ($('prevDevMob')) $('prevDevMob').onclick = () => setPreviewDevice('mob')
+if ($('prevDevRotate')) $('prevDevRotate').onclick = () => toggleDeviceOrientation()
+if ($('prevGenUiBtn')) $('prevGenUiBtn').onclick = () => openGenerativeUi()
+if ($('twConsoleToggle')) $('twConsoleToggle').onclick = () => {
+  const p = $('twConsolePane')
+  if (p) p.hidden = !p.hidden
+}
+let twLogNum = 0
+if ($('twConsoleClear')) $('twConsoleClear').onclick = () => {
+  if ($('twConsoleLogs')) $('twConsoleLogs').innerHTML = ''
+  twLogNum = 0
+  if ($('twLogCount')) $('twLogCount').hidden = true
+}
+
+// Turbo Boost status badge
+if ($('turboBadge')) $('turboBadge').onclick = () => toggleTurboBoost()
+
+// Generative UI modal controls
+if ($('genUiClose')) $('genUiClose').onclick = () => { if ($('genUiModal')) $('genUiModal').hidden = true }
+if ($('genUiGenerateBtn')) $('genUiGenerateBtn').onclick = () => generateAndPreviewUi($('genUiPrompt')?.value || '')
+if ($('genUiPrompt')) $('genUiPrompt').addEventListener('keydown', e => {
+  if (e.key === 'Enter') generateAndPreviewUi(e.target.value)
+})
+if ($('genUiCopyBtn')) $('genUiCopyBtn').onclick = () => {
+  if (currentGenCode) copy(currentGenCode, 'Component code')
+}
+if ($('genUiInsertCursorBtn')) $('genUiInsertCursorBtn').onclick = () => insertGenUiAtCursor()
+if ($('genUiNewTabBtn')) $('genUiNewTabBtn').onclick = () => openGenUiAsNewTab()
+
+// Inactivity warning close button
+if ($('inactivityClose')) $('inactivityClose').onclick = () => {
+  if ($('inactivity')) $('inactivity').hidden = true
+  noteActivity()
+}
+
+// Live preview console message handler
+window.addEventListener('message', e => {
+  if (e.data && e.data.type === 'preview-console') {
+    const logsEl = $('twConsoleLogs')
+    if (logsEl) {
+      twLogNum++
+      if ($('twLogCount')) {
+        $('twLogCount').textContent = twLogNum
+        $('twLogCount').hidden = false
+      }
+      const line = document.createElement('div')
+      line.className = `tw-c-${e.data.level || 'log'}`
+      line.textContent = `[${e.data.level || 'log'}] ${e.data.text}`
+      logsEl.appendChild(line)
+      logsEl.scrollTop = logsEl.scrollHeight
+    }
+  }
+})
 const fDrop = $('fileDropzone')
 if (fDrop) {
   fDrop.onclick = e => { if (e.target.tagName !== 'INPUT') $('fileInput').click() }

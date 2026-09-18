@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { formatCode } from '../lib/formatter.js'
-import { renderMarkdown } from '../lib/preview.js'
+import { renderMarkdown, buildStandaloneHtml } from '../lib/preview.js'
 
 describe('formatCode', () => {
   it('prettifies valid JSON', () => {
@@ -42,5 +42,25 @@ describe('renderMarkdown', () => {
     const html = renderMarkdown(md)
     expect(html).not.toContain('<script>')
     expect(html).toContain('&lt;script&gt;')
+  })
+})
+
+describe('buildStandaloneHtml', () => {
+  it('injects error and console interceptors into html fragments', () => {
+    const frag = '<h1>Hello World</h1>'
+    const html = buildStandaloneHtml(frag)
+    expect(html).toContain('<!DOCTYPE html>')
+    expect(html).toContain('anon-preview-error')
+    expect(html).toContain('preview-console')
+    expect(html).toContain('<h1>Hello World</h1>')
+  })
+
+  it('injects interceptors and extra css/js into full html documents', () => {
+    const doc = '<!DOCTYPE html><html><head><title>Test</title></head><body>Content</body></html>'
+    const html = buildStandaloneHtml(doc, { extraCss: 'body { background: #000; }', extraJs: 'window.test = 1;' })
+    expect(html).toContain('anon-preview-error')
+    expect(html).toContain('preview-console')
+    expect(html).toContain('body { background: #000; }')
+    expect(html).toContain('window.test = 1;')
   })
 })
