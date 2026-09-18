@@ -1549,13 +1549,14 @@ function paintPeople() {
 
   for (const p of all.slice(0, 5)) {
     const idle = isIdle(p, now)
+    const isSpeaking = Boolean(p.speaking || (voiceMesh && voiceMesh.isPeerSpeaking && voiceMesh.isPeerSpeaking(String(p.id))))
     const el = document.createElement('div')
-    el.className = 'av' + (p.me ? ' me' : '') + (idle ? ' idle' : '') + (following === p.id ? ' following' : '')
+    el.className = 'av' + (p.me ? ' me' : '') + (idle ? ' idle' : '') + (following === p.id ? ' following' : '') + (isSpeaking ? ' speaking' : '')
     el.style.background = safeColor(p.user.color)
     el.textContent = initials(p.user.name)
     el.title = p.me
-      ? safeName(p.user.name) + ' (you)'
-      : safeName(p.user.name) + (idle ? ' - idle' : '') + '\nclick to jump to their cursor, double-click to follow'
+      ? safeName(p.user.name) + ' (you)' + (isSpeaking ? ' - speaking' : '')
+      : safeName(p.user.name) + (isSpeaking ? ' - speaking' : idle ? ' - idle' : '') + '\nclick to jump to their cursor, double-click to follow'
     if (isTyping(p)) {
       const d = document.createElement('span')
       d.className = 'live'
@@ -2031,16 +2032,17 @@ function updateButtonActiveStates() {
 
   if ($('voiceBtn')) {
     $('voiceBtn').classList.toggle('active', voiceActive)
+    $('voiceBtn').classList.toggle('muted', Boolean(voiceActive && voiceMesh && voiceMesh.isMuted))
     $('voiceBtn').setAttribute('aria-pressed', voiceActive ? 'true' : 'false')
     if (voiceActive && voiceMesh && voiceMesh.isMuted) {
-      $('voiceBtn').style.opacity = '0.7'
-      $('voiceBtn').title = 'Microphone Muted (Click to speak, Shift+Click to disconnect)'
+      $('voiceBtn').style.opacity = '0.85'
+      $('voiceBtn').title = 'Microphone Muted (Click to unmute, Shift+Click to disconnect)'
     } else if (voiceActive) {
       $('voiceBtn').style.opacity = '1'
-      $('voiceBtn').title = 'Voice Active (Click to mute, Shift+Click to disconnect)'
+      $('voiceBtn').title = 'Microphone Live (Click to mute, Shift+Click to disconnect)'
     } else {
       $('voiceBtn').style.opacity = ''
-      $('voiceBtn').title = 'Voice Chat / Walkie-Talkie'
+      $('voiceBtn').title = 'Voice Chat / Walkie-Talkie (Click to speak)'
     }
   }
 
@@ -2899,20 +2901,19 @@ async function handleFileUpload(file) {
   }
 }
 
-// --- Feature 8: Ephemeral WebRTC Voice Chat ---
 async function toggleVoiceChat(e) {
   if (!voiceMesh) {
     toast('Voice mesh initializing...')
     return
   }
 
-  // Shift-click or explicit disconnect
+  // Shift-click or explicit false: disconnect
   if (e && (e.shiftKey || e === false)) {
     if (voiceActive) {
       voiceMesh.stop()
       voiceActive = false
       updateButtonActiveStates()
-      toast('⏹️ Voice chat disconnected')
+      toast('⏹️ Microphone disconnected')
     }
     return
   }
@@ -2932,12 +2933,12 @@ async function toggleVoiceChat(e) {
           }
         }
         updateButtonActiveStates()
-        toast('🎤 Microphone connected (Live in room)')
+        toast('🎤 Microphone live (Speaking in room)')
       }
     } catch (err) {
       console.warn('Microphone permission error:', err)
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        toast('⚠️ Microphone access was denied. Click the lock icon in your browser address bar to allow microphone access.')
+        toast('⚠️ Microphone access was denied. Click the lock/permission icon in your browser address bar to allow mic access.')
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
         toast('⚠️ No microphone found on this device.')
       } else {
@@ -2946,16 +2947,16 @@ async function toggleVoiceChat(e) {
       updateButtonActiveStates()
     }
   } else {
-    // 3-step cycle: Active (unmuted) -> Mute -> Disconnect
+    // If active and unmuted: mute mic
     if (!voiceMesh.isMuted) {
       voiceMesh.setMuted(true)
       updateButtonActiveStates()
-      toast('🔇 Microphone muted (Click to disconnect)')
+      toast('🔇 Microphone muted (Click to unmute, Shift+Click to disconnect)')
     } else {
-      voiceMesh.stop()
-      voiceActive = false
+      // If active and muted: unmute mic
+      voiceMesh.setMuted(false)
       updateButtonActiveStates()
-      toast('⏹️ Voice chat disconnected')
+      toast('🎤 Microphone unmuted (Live in room)')
     }
   }
 }
