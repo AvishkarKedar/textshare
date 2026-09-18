@@ -1,0 +1,929 @@
+===== index.html =====
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+
+<title>anonshare — Live Text Share &amp; Code Collaboration, End-to-End Encrypted</title>
+<meta name="description" content="Live text share for anyone in the world. Open a 6-character room, write and code together in real time, end-to-end encrypted in your browser. No account, nothing stored, erased when everyone leaves.">
+<meta name="keywords" content="live text share, live text sharing, real-time text editor, collaborative text editor, share text online, encrypted text share, live code share">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#000000">
+<link rel="canonical" href="https://code.avishkark.in/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="anonshare">
+<meta property="og:title" content="anonshare — Live Text Share &amp; Code Collaboration, End-to-End Encrypted">
+<meta property="og:description" content="Open a room, share six characters, write together live. Encrypted in your browser. No account. Erased when everyone leaves.">
+<meta property="og:url" content="https://code.avishkark.in/">
+<meta property="og:image" content="https://code.avishkark.in/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="anonshare — Live Text Share &amp; Code Collaboration, End-to-End Encrypted">
+<meta name="twitter:description" content="Open a room, share six characters, write together live. Encrypted in your browser.">
+<meta name="twitter:image" content="https://code.avishkark.in/og.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "anonshare",
+  "alternateName": "Live Text Share",
+  "url": "https://code.avishkark.in/",
+  "description": "Live text share and code collaboration, end-to-end encrypted in your browser. Open a room, share a 6-character code, write together in real time. No account, nothing stored.",
+  "applicationCategory": "Utility",
+  "operatingSystem": "Any",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Is anonshare really end-to-end encrypted?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Everything you type is encrypted with AES-GCM in your browser before it is sent anywhere. The relay only ever stores and forwards sealed bytes it cannot read." }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need to sign up or create an account?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. There is no sign-up, no email, and no account of any kind. Pick a display name and start typing." }
+    },
+    {
+      "@type": "Question",
+      "name": "How long does a room last?",
+      "acceptedAnswer": { "@type": "Answer", "text": "You choose: 10 minutes, 1 hour, or 24 hours after everyone leaves. The owner can also delete the room immediately." }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens if I lose the room code or password?",
+      "acceptedAnswer": { "@type": "Answer", "text": "The room becomes unreachable. There is no password reset and no server-side backdoor, since the key is derived only from the code and password in your browser." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I use anonshare for code, not just plain text?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Rooms support multiple files with syntax highlighting for many languages, plus live chat alongside the editor." }
+    },
+    {
+      "@type": "Question",
+      "name": "Does anonshare track me?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No cookies and no personal data are collected. The marketing site uses cookieless, privacy-friendly analytics that cannot identify or follow you." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I use anonshare on Android and mobile phones?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. anonshare is fully optimized for Android and mobile browsers, featuring a thumb-friendly bottom action bar, an accessory keyboard bar for quick coding symbols, responsive drawer sheets, native file sharing up to 25MB, and WebRTC voice chat." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I run code in anonshare?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. anonshare features a sandboxed code runner supporting Python, JavaScript, C, C++, Rust, Go, Java, Bash, and more. Code executes inside an isolated Bubblewrap Linux sandbox with no outbound network access and strict memory caps." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I share files in anonshare?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Rooms support encrypted file sharing up to 25MB per file. Files are encrypted client-side with AES-GCM before upload, forwarded ephemerally, and destroyed permanently when the room expires." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is voice chat recorded or stored?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. Voice chat uses direct WebRTC peer-to-peer audio with DTLS-SRTP encryption. No audio is ever recorded, logged, transcribed, or stored on any server." }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens if I lose my internet connection while I'm typing?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Your edits keep working locally. An offline copy is kept in your browser, and everything syncs automatically the moment your connection comes back." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I run my own relay instead of the default one?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. anonshare is open source. You can deploy the relay yourself on Cloudflare Workers or your own VPS and point the app at it, using the instructions in the GitHub repository." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is anonshare open source?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes, the entire project - the editor, the relay, and the admin tools - is open source under the MIT licence on GitHub." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is there a limit on room size?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Each room supports up to 30 concurrent connections, real-time collaboration, and encrypted file sharing up to 25MB per file." }
+    }
+  ]
+}
+</script>
+
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="app.css">
+<!-- KaTeX for LaTeX Math rendering -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<!-- Cloudflare Web Analytics -->
+<script defer type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "d0a6caaebaa64349bea67f3423b283af"}'></script>
+<!-- End Cloudflare Web Analytics -->
+</head>
+<body>
+<a class="skip-link" href="#gCreate">Skip to content</a>
+
+<!-- ============================================================ step one -->
+<section id="gate">
+
+  <div class="hero">
+    <div class="gwrap">
+      <div class="logo"><span class="caret">&gt;</span> anonshare</div>
+      <h1 class="htitle">Write together, in the open, with nothing stored.</h1>
+      <p class="tag">A live text share and code editor: your room is six characters. Everything in it is encrypted in your browser before it leaves. When the last person goes, it is erased.</p>
+
+      <button id="gCreate" class="btn primary block">Create a room</button>
+
+      <div class="rule"><span>or join with a code</span></div>
+
+      <form id="gJoin" class="codebox">
+        <input id="gCode" class="code-in" placeholder="ABC123" maxlength="6" spellcheck="false"
+               autocapitalize="characters" autocomplete="off" inputmode="text" aria-label="Room code">
+        <button id="gGo" class="btn go" type="submit" aria-label="Join room">&#8594;</button>
+      </form>
+
+      <p class="errline" id="gErr" hidden role="alert"></p>
+    </div>
+
+    <!-- the product demonstrating itself, driven by demo.js -->
+    <div class="demoWrap" inert aria-hidden="true">
+      <div class="demoBar">
+        <span class="dcode">DEMO01</span>
+        <span class="grow"></span>
+        <span class="dav" style="background:#4c8dff">ME</span>
+        <span class="dav" style="background:#3ddc84">AV</span>
+        <span class="dav" style="background:#c792ea">LZ</span>
+      </div>
+      <div id="demo"></div>
+      <div class="demoFoot"><span class="ddot"></span> live &middot; 3 online &middot; e2e</div>
+    </div>
+  </div>
+
+  <div class="strips">
+    <div class="strip">
+      <span class="si">&#128274;</span>
+      <b>End-to-end encrypted</b>
+      <p>AES-GCM under a key derived from your room code and password. The relay only ever sees sealed bytes.</p>
+    </div>
+    <div class="strip">
+      <span class="si">&#9201;</span>
+      <b>Erased on the way out</b>
+      <p>Rooms are destroyed once everyone has left. Choose 10 minutes, an hour, or a day.</p>
+    </div>
+    <div class="strip">
+      <span class="si">&#8709;</span>
+      <b>No account, ever</b>
+      <p>No sign-up, no cookies, no personal data collected. Pick a display name and start typing.</p>
+    </div>
+  </div>
+
+  <section class="howBlock" aria-labelledby="howTitle">
+    <h2 class="sectitle" id="howTitle">How it works</h2>
+    <div class="steps">
+      <div class="step">
+        <span class="stepno">1</span>
+        <b>Create a room</b>
+        <p>Click "Create a room." Optionally add a password and choose how long it lives: 10 minutes, an hour, or a day.</p>
+      </div>
+      <div class="step">
+        <span class="stepno">2</span>
+        <b>Share the code</b>
+        <p>Send the six-character room code, and the password if you set one, to whoever should join. That's the only key that matters.</p>
+      </div>
+      <div class="step">
+        <span class="stepno">3</span>
+        <b>Write together, live</b>
+        <p>Type, code, and chat in real time with everyone in the room. It's encrypted in your browser the whole way, and erased when you're done.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="faqBlock" aria-labelledby="faqTitle">
+    <h2 class="sectitle" id="faqTitle">Frequently asked questions</h2>
+    <div class="faqlist">
+      <details class="faq">
+        <summary>Is anonshare really end-to-end encrypted?</summary>
+        <p>Yes. Everything you type is encrypted with AES-GCM in your browser before it is sent anywhere. The relay only ever stores and forwards sealed bytes it cannot read. See <a href="security.html">how the encryption works</a> for the full threat model.</p>
+      </details>
+      <details class="faq">
+        <summary>Do I need to sign up or create an account?</summary>
+        <p>No. There is no sign-up, no email, and no account of any kind. Pick a display name and start typing.</p>
+      </details>
+      <details class="faq">
+        <summary>How long does a room last?</summary>
+        <p>You choose when you create it: 10 minutes, 1 hour, or 24 hours after everyone has left. The owner can also delete the room immediately, which erases it for everybody.</p>
+      </details>
+      <details class="faq">
+        <summary>What happens if I lose the room code or password?</summary>
+        <p>The room becomes unreachable. There is no password reset and no server-side backdoor, since the key is derived only from the code and password inside your browser.</p>
+      </details>
+      <details class="faq">
+        <summary>Can I use anonshare for code, not just plain text?</summary>
+        <p>Yes. Rooms support multiple files with syntax highlighting for many languages, plus live chat alongside the editor.</p>
+      </details>
+      <details class="faq">
+        <summary>Does anonshare track me?</summary>
+        <p>No cookies and no personal data are collected. The marketing site uses cookieless, privacy-friendly analytics that cannot identify or follow you. See the <a href="privacy.html">privacy policy</a> for details.</p>
+      </details>
+      <details class="faq">
+        <summary>Can I use anonshare on Android and mobile phones?</summary>
+        <p>Yes. anonshare is fully responsive and tailored for Android and mobile browsers. It includes a thumb-friendly bottom navigation bar, quick syntax keys bar for braces, semicolons, quotes and indentation, full drawer sheets, and native file uploads up to 25MB directly from your phone's storage.</p>
+      </details>
+      <details class="faq">
+        <summary>Can I run and compile code inside anonshare?</summary>
+        <p>Yes. With the built-in Runner (Ctrl+Enter or mobile Run button), you can execute Python, JavaScript, C, C++, Rust, Go, Java, Bash, and more. Code is compiled and run inside an isolated Linux Bubblewrap sandbox with zero outbound network access and strict 256MB RAM caps.</p>
+      </details>
+      <details class="faq">
+        <summary>Can I share files with others in the room?</summary>
+        <p>Yes. You can upload and share files up to 25MB. Files are encrypted client-side in your browser with AES-GCM before upload, stored ephemerally in room memory or streamed via WebRTC DataChannels, and erased permanently when the room expires.</p>
+      </details>
+      <details class="faq">
+        <summary>Is voice chat recorded or stored?</summary>
+        <p>No. Voice chat connects room members directly peer-to-peer using WebRTC with DTLS-SRTP encryption. No voice audio is ever recorded, transcribed, or stored on any server.</p>
+      </details>
+      <details class="faq">
+        <summary>What happens if I lose my internet connection while I'm typing?</summary>
+        <p>Your edits keep working locally. An offline copy is kept in your browser, and everything syncs automatically the moment your connection comes back.</p>
+      </details>
+      <details class="faq">
+        <summary>Can I run my own relay instead of the default one?</summary>
+        <p>Yes. anonshare is <a href="https://github.com/AvishkarKedar/textshare" target="_blank" rel="noopener">open source</a>. You can deploy the relay yourself on Cloudflare Workers or your own VPS and point the app at it - see the GitHub repository for instructions.</p>
+      </details>
+      <details class="faq">
+        <summary>Is anonshare open source?</summary>
+        <p>Yes, the entire project - the editor, the relay, and the admin tools - is <a href="https://github.com/AvishkarKedar/textshare" target="_blank" rel="noopener">open source under the MIT licence on GitHub</a>.</p>
+      </details>
+      <details class="faq">
+        <summary>Is there a limit on room size?</summary>
+        <p>Each room supports up to 30 connections, live document history, and encrypted file sharing up to 25MB per file.</p>
+      </details>
+    </div>
+  </section>
+
+  <footer id="siteFoot">
+    <div class="fcol">
+      <b>anonshare</b>
+      <p>A live, end-to-end encrypted scratchpad for text and code. No account, no cookies, nothing kept.</p>
+      <p class="by">Built by <a href="https://github.com/AvishkarKedar" target="_blank" rel="noopener">Avishkar Kedar</a></p>
+    </div>
+
+    <div class="fcol">
+      <b>Help</b>
+      <a href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20bug%20report">Report a bug</a>
+      <a href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20feedback">Send feedback</a>
+      <a href="https://github.com/AvishkarKedar/textshare" target="_blank" rel="noopener">View source on GitHub</a>
+      <a href="security.html">How the encryption works</a>
+    </div>
+
+    <div class="fcol">
+      <b>Legal</b>
+      <a href="privacy.html">Privacy policy</a>
+      <a href="terms.html">Terms &amp; conditions</a>
+    </div>
+  </footer>
+
+  <div id="footbar">
+    <span>&copy; 2026 Avishkar Kedar. All rights reserved.</span>
+    <span class="grow"></span>
+    <span class="hideS">Built in Pune, India</span>
+  </div>
+</section>
+
+<!-- ============================================================ step two -->
+<div id="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="lockmark" id="mLock" hidden aria-hidden="true">&#128274;</div>
+    <h2 id="mTitle">Join room</h2>
+    <p class="msub" id="mSub"></p>
+
+    <label class="lbl" for="mName">Display name</label>
+    <input id="mName" class="in" maxlength="24" placeholder="So others know who joined" autocomplete="nickname">
+
+    <div id="mPassWrap" hidden>
+      <label class="lbl" for="mPass"><span id="mPassLbl">Password</span></label>
+      <div class="passrow">
+        <input id="mPass" class="in" type="password" autocomplete="off" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
+        <button type="button" id="mPassEye" class="eye" aria-label="Show password" aria-pressed="false">show</button>
+      </div>
+      <p class="fineprint" id="mPassHint" hidden></p>
+    </div>
+
+    <button type="button" id="mAddPass" class="lnk addpass" hidden>+ protect this room with a password</button>
+
+    <div id="mTtlRow" hidden>
+      <label class="lbl" for="mTtl">Erase the room after everyone leaves</label>
+      <select id="mTtl" class="in sel">
+        <option value="10m">10 minutes</option>
+        <option value="1h">1 hour</option>
+        <option value="24h">24 hours</option>
+      </select>
+    </div>
+
+    <p class="errline" id="mErr" hidden role="alert"></p>
+
+    <div class="mrow">
+      <button id="mBack" class="btn">Back</button>
+      <button id="mGo" class="btn primary grow">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====================================== in-app confirm / prompt dialog -->
+<div id="ask" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="askTitle">
+    <h2 id="askTitle"></h2>
+    <p class="msub" id="askBody"></p>
+    <input id="askIn" class="in" maxlength="60" autocomplete="off" hidden>
+    <p class="errline" id="askErr" hidden role="alert"></p>
+    <div class="mrow">
+      <button id="askNo" class="btn">Cancel</button>
+      <button id="askYes" class="btn primary grow">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================== boot -->
+<div id="boot" hidden>
+  <div class="bootIn">
+    <div class="spin"></div>
+    <p id="bootMsg" role="status">Deriving your key</p>
+    <p class="fineprint">This happens in your browser and never leaves it.</p>
+  </div>
+</div>
+
+<!-- ======================================================== room ended -->
+<div id="killed" hidden>
+  <div class="sheet killedSheet" role="alertdialog" aria-modal="true" aria-labelledby="killedTitle">
+    <div class="lockmark" aria-hidden="true">&#128683;</div>
+    <h2 id="killedTitle">Room deleted</h2>
+    <p class="msub" id="killedBody"></p>
+    <p class="fineprint" id="killedTimer" role="status"></p>
+    <div class="mrow"><button id="killedHome" class="btn primary grow">Go to the home page now</button></div>
+  </div>
+</div>
+
+<!-- ============================================== inactivity warning modal -->
+<div id="inactivity" hidden>
+  <div class="sheet inactivitySheet" role="alertdialog" aria-modal="true" aria-labelledby="inactivityTitle">
+    <div class="inactivity-head">
+      <div class="lockmark" aria-hidden="true">&#9200;</div>
+      <button class="pclose-btn" id="inactivityClose" aria-label="Dismiss warning and keep working" title="Dismiss (Esc)">
+        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <h2 id="inactivityTitle">Room Inactivity Warning</h2>
+    <p class="msub" id="inactivityBody">No movement or typing detected for 15 minutes. To conserve server resources, this room will be automatically deleted in:</p>
+    <div id="inactivityCountdown" class="inactivity-countdown" role="timer" aria-live="assertive">05:00</div>
+    <p class="fineprint">Click below or resume working to keep this room open.</p>
+    <div class="mrow">
+      <button id="inactivityResume" class="btn primary grow" style="height:38px;font-size:13px">Keep Working / Resume Room</button>
+    </div>
+  </div>
+</div>
+
+<!-- =============================================================== app -->
+<main id="app" hidden>
+  <header id="topbar">
+    <span class="logo sm hideS" aria-hidden="true"><span class="caret">&gt;</span></span>
+    <button id="roomChip" class="chip" title="Copy room code">
+      <span id="roomCode">------</span><span id="lockIcon" hidden aria-label="Password protected">&#128274;</span>
+    </button>
+    <button class="btn hideS" id="copyLink">Invite</button>
+    <span class="grow"></span>
+
+    <div class="stack" id="people" aria-label="People in this room"></div>
+
+    <button class="btn primary ico-text" id="runBtn" title="Run Code (Ctrl+Enter)" aria-label="Run code"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span class="hideS">Run</span></button>
+    <button class="btn ico" id="previewBtn" title="Toggle Live Preview" aria-label="Toggle Live Preview"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button class="btn ico" id="filesBtn" title="Encrypted File Sharing (up to 25MB)" aria-label="Share Files"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span class="nd" id="filesDot" hidden></span></button>
+    <button class="btn ico hideS" id="browserBtn" title="In-Browser Web & Docs Viewer (/browser)" aria-label="Web Browser"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></button>
+    <button class="btn ico hideS" id="bookmarksBtn" title="Recent Rooms / History" aria-label="Recent Rooms"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
+    <button class="btn ico hideS" id="zenBtn" title="Zen Mode / Fullscreen (F11)" aria-label="Zen Mode"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
+    <button class="btn ico" id="voiceBtn" title="Voice Chat / Walkie-Talkie" aria-label="Voice Chat"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
+    <button class="btn ico" id="voiceDeafenBtn" title="Deafen / Mute Peer Audio" aria-label="Deafen Audio" hidden><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/><line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="2"/></svg></button>
+    <select id="lang" class="btn sel" title="Language" aria-label="Language"></select>
+    <button class="btn ico hideS" id="undoBtn" title="Undo" aria-label="Undo"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 7 4 12l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button class="btn ico hideS" id="redoBtn" title="Redo" aria-label="Redo"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M15 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 12H10a6 6 0 0 0 0 12h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button class="btn ico hideS" id="chatBtn" title="Chat" aria-label="Chat"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M4 5h16v10H9l-4 4V5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="nd" id="chatDot" hidden></span></button>
+    <button class="btn ico" id="moreBtn" title="More" aria-label="More" aria-haspopup="true" aria-expanded="false">&#8943;</button>
+
+    <div id="menu" role="menu" hidden>
+      <button data-a="runcode" role="menuitem">Run code <kbd>Ctrl Enter</kbd></button>
+      <button data-a="format" role="menuitem">Format document <kbd>Shift Alt F</kbd></button>
+      <button data-a="preview" role="menuitem">Toggle live preview</button>
+      <button data-a="whiteboard" role="menuitem">Collaborative whiteboard</button>
+      <button data-a="teamworkpreview" role="menuitem">Teamwork live preview <kbd>/teamwork-preview</kbd></button>
+      <button data-a="genui" role="menuitem">Generative UI builder <kbd>/generative_ui</kbd></button>
+      <button data-a="browser" role="menuitem">In-browser web &amp; docs <kbd>/browser</kbd></button>
+      <button data-a="goal" role="menuitem">Room goal / objective <kbd>/goal</kbd></button>
+      <button data-a="boost" role="menuitem">Turbo boost mode <kbd>/boost</kbd></button>
+      <button data-a="fileshare" role="menuitem">Shared files (25MB)</button>
+      <button data-a="recentrooms" role="menuitem">Recent rooms / history</button>
+      <button data-a="zenmode" role="menuitem">Zen mode <kbd>F11</kbd></button>
+      <button data-a="history" role="menuitem">Time machine / history</button>
+      <button data-a="importgit" role="menuitem">Import from GitHub / Gist</button>
+      <div class="msep"></div>
+      <button data-a="palette" role="menuitem">Command palette <kbd>Ctrl K</kbd></button>
+      <button data-a="find" role="menuitem">Find and replace <kbd>Ctrl F</kbd></button>
+      <div class="msep"></div>
+      <button data-a="newfile" role="menuitem">New file</button>
+      <button data-a="rename" role="menuitem">Rename file</button>
+      <button data-a="download" role="menuitem">Download file</button>
+      <button data-a="exportzip" role="menuitem">Export all files as ZIP</button>
+      <div class="msep"></div>
+      <button data-a="invite" role="menuitem">Share room (one-tap)</button>
+      <button data-a="viewlink" role="menuitem">Copy view-only link</button>
+      <div class="msep"></div>
+      <button data-a="theme" role="menuitem">Theme: <span id="themeVal">dark</span></button>
+      <button data-a="settings" role="menuitem">Settings</button>
+      <button data-a="leave" role="menuitem">Leave room</button>
+    </div>
+  </header>
+
+  <div id="banner" role="status" hidden></div>
+
+  <nav id="tabbar" aria-label="Files">
+    <div id="tabs"></div>
+    <button class="btn ico flat" id="newFile" title="New file" aria-label="New file">+</button>
+    <span class="grow"></span>
+    <button class="btn sm flat hub-tab-btn" id="hubWbBtn" title="Collaborative Whiteboard Canvas (Draw, Sketch &amp; Diagram)">
+      🎨 Whiteboard
+    </button>
+    <button class="btn sm flat hub-tab-btn" id="hubGoalBtn" title="Collaborative Room Goal / Objective (/goal)">
+      🎯 Goal <span class="pill sm" id="hubGoalPill" hidden>Set</span>
+    </button>
+    <button class="btn sm flat hub-tab-btn" id="hubHistBtn" title="Time Machine (Document Revisions & Timeline Slider)">
+      ⏱️ History
+    </button>
+    <button class="btn sm flat hub-tab-btn" id="hubFilesBtn" title="Shared Files (Videos, PDFs, Images, Documents)">
+      📁 Shared Files <span class="pill" id="hubFilesCount">0</span>
+    </button>
+  </nav>
+
+  <!-- Collaborative Room Goal Banner -->
+  <div id="roomGoalBanner" class="room-goal-banner" hidden>
+    <div class="goal-left">
+      <span class="goal-pill">🎯 GOAL</span>
+      <span id="roomGoalText" class="goal-text">No active goal</span>
+      <span id="roomGoalStatus" class="pill sm goal-status-pill">In Progress</span>
+    </div>
+    <div class="goal-right">
+      <button class="btn sm flat goal-act-btn" id="goalDoneBtn" title="Toggle Goal Status">✓ Mark Done</button>
+      <button class="btn sm flat goal-act-btn" id="goalEditBtn" title="Edit Goal">✏️ Edit</button>
+      <button class="pclose-btn goal-close-btn" id="goalClearBtn" aria-label="Clear Goal" title="Clear Goal">
+        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="stage">
+    <div id="editorContainer">
+      <div id="editorWrap">
+        <div id="editor"></div>
+        <div id="overlay" aria-hidden="true"></div>
+        <button id="jump" hidden></button>
+      </div>
+
+      <div id="previewWrap" hidden>
+        <div class="phead preview-head">
+          <span class="preview-title">✨ Artifact Preview</span>
+          <div class="segrow sm" id="prevModeGroup" role="radiogroup" aria-label="Preview Mode">
+            <button type="button" class="seg active" id="prevModeWeb" role="radio" aria-checked="true">Interactive</button>
+            <button type="button" class="seg" id="prevModeMd" role="radio" aria-checked="false">Markdown</button>
+            <button type="button" class="seg" id="prevModeDoc" role="radio" aria-checked="false">Assignment Doc</button>
+          </div>
+          <div class="segrow sm device-seg hideS" id="prevDeviceGroup" role="radiogroup" aria-label="Device Viewport">
+            <button type="button" class="seg active" id="prevDevDesk" role="radio" aria-checked="true" title="Desktop view (100%)">🖥️ Desk</button>
+            <button type="button" class="seg" id="prevDevTab" role="radio" aria-checked="false" title="Tablet view (768px)">📱 Tab</button>
+            <button type="button" class="seg" id="prevDevMob" role="radio" aria-checked="false" title="Mobile iPhone/Android (375px)">📱 Mob</button>
+            <button type="button" class="seg" id="prevDevRotate" title="Rotate orientation">🔄</button>
+          </div>
+          <span class="grow"></span>
+          <div class="phead-actions">
+            <button class="btn sm flat hideS" id="prevGenUiBtn" title="Generate UI Component into Preview">✨ Generate UI</button>
+            <button class="btn sm flat" id="prevReload" title="Reload preview">🔄 Reload</button>
+            <button class="btn sm flat hideS" id="prevPopout" title="Open in new window">⛶ Pop out</button>
+            <button class="pclose-btn" id="previewClose" aria-label="Close preview" title="Close preview (Esc)">
+              <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div id="teamworkBar" class="teamwork-bar hideS">
+          <span class="tw-badge">👥 Teamwork Sync: <span id="twLiveStatus">Live</span></span>
+          <span class="grow"></span>
+          <button class="btn sm flat" id="twConsoleToggle" title="Toggle Preview Console">Console Logs <span id="twLogCount" class="pill sm" hidden>0</span></button>
+        </div>
+        <div id="twConsolePane" class="tw-console-pane" hidden>
+          <div class="tw-console-head">
+            <span>Preview Console</span>
+            <button class="btn sm flat" id="twConsoleClear">Clear</button>
+          </div>
+          <pre id="twConsoleLogs" class="tw-console-logs"></pre>
+        </div>
+        <div id="mdPreview" class="preview-pane" hidden></div>
+        <div id="docPreview" class="preview-pane doc-preview-pane" hidden></div>
+        <iframe id="pdfPreview" class="preview-pane pdf-preview-pane" hidden title="Assignment PDF Viewer"></iframe>
+        <div id="previewFrameHolder" class="preview-frame-holder">
+          <iframe id="htmlPreview" class="preview-pane" sandbox="allow-scripts allow-modals" title="Preview"></iframe>
+        </div>
+      </div>
+
+      <!-- Collaborative Whiteboard Canvas Tab -->
+      <div id="whiteboardWrap" class="whiteboard-wrap" hidden>
+        <div class="wb-toolbar">
+          <div class="wb-tool-group">
+            <button type="button" class="btn sm wb-tool-btn active" id="wbToolPen" title="Pen Brush">✏️ Pen</button>
+            <button type="button" class="btn sm wb-tool-btn" id="wbToolHighlighter" title="Highlighter">🖍️ Highlight</button>
+            <button type="button" class="btn sm wb-tool-btn" id="wbToolEraser" title="Eraser">🧹 Eraser</button>
+          </div>
+          <div class="wb-color-group" id="wbColors">
+            <button type="button" class="wb-color-dot active" data-color="#4c8dff" style="background:#4c8dff" title="Blue"></button>
+            <button type="button" class="wb-color-dot" data-color="#ffffff" style="background:#ffffff" title="White"></button>
+            <button type="button" class="wb-color-dot" data-color="#3ddc84" style="background:#3ddc84" title="Green"></button>
+            <button type="button" class="wb-color-dot" data-color="#ffb347" style="background:#ffb347" title="Orange"></button>
+            <button type="button" class="wb-color-dot" data-color="#ff6b5b" style="background:#ff6b5b" title="Red"></button>
+            <button type="button" class="wb-color-dot" data-color="#c792ea" style="background:#c792ea" title="Purple"></button>
+            <button type="button" class="wb-color-dot" data-color="#e8d44d" style="background:#e8d44d" title="Yellow"></button>
+          </div>
+          <div class="wb-size-group">
+            <select id="wbBrushSize" class="btn sm sel" title="Brush size">
+              <option value="2">2px (Fine)</option>
+              <option value="4" selected>4px (Medium)</option>
+              <option value="8">8px (Thick)</option>
+              <option value="16">16px (Jumbo)</option>
+            </select>
+          </div>
+          <span class="grow"></span>
+          <div class="wb-action-group">
+            <button type="button" class="btn sm flat" id="wbDownloadBtn" title="Download Whiteboard as PNG Image">💾 Download PNG</button>
+            <button type="button" class="btn sm flat danger" id="wbClearBtn" title="Clear Canvas">🗑️ Clear</button>
+            <button class="pclose-btn" id="wbCloseBtn" aria-label="Close Whiteboard" title="Close Whiteboard (Esc)">
+              <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="wb-canvas-holder">
+          <canvas id="whiteboardCanvas"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Drawer: Terminal / Code Runner Output & Stdin Input -->
+    <div id="terminal" hidden aria-label="Terminal output">
+      <div class="resizer" id="termResizer" aria-hidden="true"></div>
+      <div class="term-head">
+        <span class="term-title">Console / Runner</span>
+        <div class="segrow sm" id="termTabGroup" role="radiogroup">
+          <button type="button" class="seg active" id="termTabOut" role="radio" aria-checked="true">Output</button>
+          <button type="button" class="seg" id="termTabIn" role="radio" aria-checked="false">Input (stdin) <span id="termInBadge" class="pill" hidden>Set</span></button>
+        </div>
+        <span class="pill" id="termStatus">Ready</span>
+        <span class="pill" id="termTime" hidden></span>
+        <span class="pill" id="termLang"></span>
+        <span class="grow"></span>
+        <div class="phead-actions">
+          <button class="btn sm flat" id="termClear" title="Clear console output">Clear</button>
+          <button class="pclose-btn" id="termClose" aria-label="Close console" title="Close console (Esc)">
+            <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="termOutWrap" class="term-content-pane">
+        <div id="termPromptBanner" class="term-prompt-banner" hidden>
+          <span>💡 Program requested input (<code>input()</code>). Enter values in the Input tab and click Run!</span>
+          <button class="btn sm primary" id="termGoInput">Go to Input</button>
+        </div>
+        <pre id="termOut" class="term-body" tabindex="0"></pre>
+      </div>
+      <div id="termInWrap" class="term-content-pane" hidden>
+        <div class="term-stdin-header">
+          <span>Program Input (Passed to <code>input()</code>, <code>scanf</code>, <code>cin</code>, <code>readline</code>):</span>
+          <button class="btn sm flat" id="termClearStdin">Clear input</button>
+        </div>
+        <textarea id="termStdinArea" class="term-stdin-area" placeholder="Enter input values here (one entry per prompt)...&#10;Alice&#10;25&#10;yes" spellcheck="false"></textarea>
+      </div>
+      <div class="term-foot">
+        <button id="termRerun" class="btn sm primary">▶ Run Code (Ctrl+Enter)</button>
+        <button id="termSwitchIn" class="btn sm">⌨️ Stdin: <span id="stdinStatus">0 lines</span></button>
+        <span class="term-stdin-hint hideS">Enter program input in the Input tab</span>
+      </div>
+    </div>
+
+    <!-- Media & File Sharing Hub -->
+    <aside id="fileDrawer" hidden aria-label="Encrypted File Sharing & Media Hub">
+      <div class="resizer" id="fileResizer" aria-hidden="true"></div>
+      <div class="phead file-hub-head">
+        <div class="file-hub-title-wrap">
+          <span class="file-hub-title">📁 Shared Files &amp; Media</span>
+          <span class="file-hub-subtitle">End-to-End Encrypted (AES-GCM 256) &middot; Up to 25MB</span>
+        </div>
+        <button class="pclose-btn" id="fileDrawerClose" aria-label="Close files hub" title="Close files (Esc)">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="file-body">
+        <div class="dropzone" id="fileDropzone">
+          <svg class="ic lg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p class="drop-lead">Drag &amp; drop any <strong>Video, PDF, Image, Audio, or Document</strong> (up to 25MB)</p>
+          <p class="drop-sub">or <label for="fileInput" class="btn sm primary file-browse-btn">Browse files</label></p>
+          <input type="file" id="fileInput" hidden>
+          <div class="progress-bar-wrap" id="uploadProgWrap" hidden>
+            <div class="progress-bar" id="uploadProgBar" style="width: 0%"></div>
+            <span id="uploadProgText">0%</span>
+          </div>
+        </div>
+        <div class="file-filter-bar">
+          <span class="file-filter-lbl">Files in this room:</span>
+          <span id="fileCountBadge" class="pill">0 files</span>
+          <span class="grow"></span>
+          <button class="btn sm flat" id="fileDownloadZipBtn" title="Download all shared files as a ZIP archive">📦 Download All (ZIP)</button>
+        </div>
+        <div id="sharedFileList" class="shared-list"></div>
+      </div>
+    </aside>
+
+    <!-- Bottom Drawer: Time Machine / History Replay -->
+    <div id="historyDrawer" hidden aria-label="Revision History">
+      <div class="resizer" id="histResizer" aria-hidden="true"></div>
+      <div class="phead hist-phead">
+        <div class="hist-title-wrap">
+          <span class="hist-title">⏱️ Time Machine</span>
+          <span id="histActiveFileBadge" class="pill sm">active file</span>
+        </div>
+        <div class="hist-view-switch">
+          <button type="button" class="seg on" id="histModeDiff">Diff</button>
+          <button type="button" class="seg" id="histModeSnap">Full Code</button>
+        </div>
+        <div class="phead-actions">
+          <button class="btn sm primary" id="histRevertBtn" title="Revert active file directly to this revision">Revert File</button>
+          <button class="btn sm" id="histRestoreTabBtn" title="Open this revision as a new file tab">Save as Tab</button>
+          <button class="pclose-btn" id="histClose" aria-label="Close Time Machine" title="Close Time Machine (Esc)">
+            <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="hist-body">
+        <div class="hist-controls">
+          <button class="btn sm ico" id="histStepOldest" title="Jump to oldest revision">⏮</button>
+          <button class="btn sm ico" id="histStepBack" title="Step backward">◀</button>
+          <div class="hist-slider-wrap">
+            <input type="range" id="histSlider" min="0" max="0" value="0" class="slider">
+            <div class="hist-slider-meta">
+              <span id="histTimestamp">Live document</span>
+              <span id="histDelta">0 changes</span>
+              <span id="histCount">Live</span>
+            </div>
+          </div>
+          <button class="btn sm ico" id="histStepFwd" title="Step forward">▶</button>
+          <button class="btn sm ico" id="histStepLatest" title="Jump to latest revision">⏭</button>
+        </div>
+        <div id="histDiff" class="hist-view"></div>
+        <pre id="histSnapshot" class="hist-view hist-snap-view" hidden></pre>
+      </div>
+    </div>
+
+    <!-- Recent Rooms Drawer -->
+    <aside id="bookmarksDrawer" hidden aria-label="Recent Rooms & History">
+      <div class="resizer" id="bookmarksResizer" aria-hidden="true"></div>
+      <div class="phead">
+        <span>Recent Rooms &middot; Bookmarks</span>
+        <div class="phead-actions">
+          <button class="btn sm flat" id="bookmarksClear">Clear All</button>
+          <button class="pclose-btn" id="bookmarksClose" aria-label="Close bookmarks" title="Close (Esc)">
+            <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="bookmarksList" class="bookmarks-body"></div>
+    </aside>
+
+    <!-- In-Browser Web & Documentation Browser -->
+    <aside id="browserDrawer" hidden aria-label="In-Browser Web & Docs Viewer">
+      <div class="resizer" id="browserResizer" aria-hidden="true"></div>
+      <div class="phead browser-phead">
+        <div class="browser-head-title">
+          <span>🌐 Web Browser</span>
+          <span class="pill sm hideS">Sandbox</span>
+        </div>
+        <div class="phead-actions">
+          <button class="btn sm flat hideS" id="browserPopout" title="Open in new window">⛶ Pop out</button>
+          <button class="pclose-btn" id="browserClose" aria-label="Close browser" title="Close (Esc)">
+            <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="browser-toolbar">
+        <button class="btn sm ico" id="browserBack" title="Back">◀</button>
+        <button class="btn sm ico" id="browserFwd" title="Forward">▶</button>
+        <button class="btn sm ico" id="browserReload" title="Reload">🔄</button>
+        <input id="browserUrlInput" class="in sm browser-url-in" placeholder="https://..." value="https://devdocs.io">
+        <button class="btn sm primary" id="browserGo">Go</button>
+      </div>
+      <div class="browser-chips">
+        <button type="button" class="b-chip" data-url="https://devdocs.io">DevDocs</button>
+        <button type="button" class="b-chip" data-url="https://developer.mozilla.org">MDN</button>
+        <button type="button" class="b-chip" data-url="https://docs.python.org/3/">Python</button>
+        <button type="button" class="b-chip" data-url="https://en.cppreference.com/w/">C++</button>
+        <button type="button" class="b-chip" data-url="https://www.w3schools.com">W3Schools</button>
+        <button type="button" class="b-chip" data-url="https://stackoverflow.com">StackOverflow</button>
+      </div>
+      <div class="browser-body">
+        <iframe id="browserIframe" class="browser-iframe" sandbox="allow-scripts allow-forms allow-same-origin allow-popups" src="https://devdocs.io"></iframe>
+        <div id="browserNotice" class="browser-frame-notice" hidden>
+          <p>⚠️ If this site restricts embedded viewing, open it in a browser tab:</p>
+          <a id="browserExtLink" href="https://devdocs.io" target="_blank" rel="noopener" class="btn sm primary">Open External ↗</a>
+        </div>
+      </div>
+    </aside>
+
+    <button id="zenExit" class="btn sm primary floating-zen-btn" hidden>Exit Zen Mode (Esc)</button>
+
+    <aside id="chat" hidden aria-label="Room chat">
+      <div class="resizer" id="chatResizer" aria-hidden="true"></div>
+      <div class="phead">
+        <span>Chat</span>
+        <button class="pclose-btn" id="chatClose" aria-label="Close chat" title="Close (Esc)">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="chatList" role="log" aria-live="polite"></div>
+      <div id="chatSlashPopup" class="chat-slash-popup" hidden></div>
+      <form id="chatForm"><input id="chatInput" class="in" placeholder="Message the room (type / for commands)" maxlength="500" autocomplete="off" aria-label="Message the room"></form>
+    </aside>
+
+    <aside id="panel" hidden aria-label="Settings">
+      <div class="resizer" id="panelResizer" aria-hidden="true"></div>
+      <div class="phead">
+        <span>Settings &middot; People</span>
+        <button class="pclose-btn" id="panelClose" aria-label="Close settings" title="Close (Esc)">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="sec">In this room</div>
+      <div id="roster"></div>
+
+      <div class="sec">You</div>
+      <label class="lbl" for="nameInput">Display name</label>
+      <input id="nameInput" class="in" maxlength="24">
+      <label class="lbl" for="swatches">Your colour</label>
+      <div id="swatches" role="radiogroup" aria-label="Your colour"></div>
+
+      <div class="sec">Appearance</div>
+      <label class="lbl" id="themeLbl">Theme</label>
+      <div id="themeSeg" class="segrow flex-wrap" role="radiogroup" aria-labelledby="themeLbl">
+        <button type="button" class="seg" data-theme-choice="dark" role="radio" aria-checked="false">&#127769; Dark</button>
+        <button type="button" class="seg" data-theme-choice="light" role="radio" aria-checked="false">&#9728; Light</button>
+        <button type="button" class="seg" data-theme-choice="dracula" role="radio" aria-checked="false">&#129499; Dracula</button>
+        <button type="button" class="seg" data-theme-choice="nord" role="radio" aria-checked="false">&#10052; Nord</button>
+        <button type="button" class="seg" data-theme-choice="monokai" role="radio" aria-checked="false">&#128160; Monokai</button>
+      </div>
+
+      <label class="lbl" for="chatColorToggle">Chat text</label>
+      <button type="button" id="chatColorToggle" class="btn" aria-pressed="true">Color messages by sender: on</button>
+
+      <label class="lbl" for="edFont">Editor font size</label>
+      <select id="edFont" class="in sel">
+        <option value="12">12px</option>
+        <option value="13">13px</option>
+        <option value="14">14px</option>
+        <option value="15">15px</option>
+        <option value="16">16px</option>
+        <option value="18">18px</option>
+      </select>
+
+      <label class="lbl" for="keymapSelect">Keybindings &amp; Navigation</label>
+      <select id="keymapSelect" class="in sel">
+        <option value="standard">Standard (Default / VS Code)</option>
+        <option value="emacs">Emacs Mode (Ctrl-A, Ctrl-E, Ctrl-K, Ctrl-Y, Alt-F/B)</option>
+        <option value="vim">Vim Navigation Mode (Esc normal mode, hjkl, dd, yy, p)</option>
+      </select>
+
+      <div class="mrow"><button class="btn primary" id="saveSettings">Save</button></div>
+
+      <div class="sec">This device</div>
+      <p class="fineprint">An offline copy of this room lives in this browser so you can keep working without a connection.</p>
+      <button class="btn danger" id="forgetRoom">Delete offline copy</button>
+
+      <div id="ownerOnly" hidden>
+        <div class="sec danger">Danger zone</div>
+        <p class="fineprint">You created this room, so only you can do this. Proof lives in this browser alone and cannot be recovered.</p>
+        <button class="btn" id="btnLock">Make read-only for everyone else</button>
+        <button class="btn" id="btnSuspend">Suspend room</button>
+        <button class="btn danger" id="btnDelete">Delete room permanently</button>
+      </div>
+
+      <div class="sec">Privacy</div>
+      <p class="fineprint" id="privacyNote"></p>
+      <div class="plinks">
+        <a class="lnk" href="security.html" target="_blank" rel="noopener">How the encryption works</a>
+        <a class="lnk" href="privacy.html" target="_blank" rel="noopener">Privacy policy</a>
+        <a class="lnk" href="terms.html" target="_blank" rel="noopener">Terms</a>
+        <a class="lnk" href="mailto:avishkarkedar+text@gmail.com?subject=anonshare%20bug%20report">Report a bug</a>
+      </div>
+    </aside>
+  </div>
+
+  <footer id="statusbar">
+    <span id="dot" aria-hidden="true"></span><span id="connText">connecting</span>
+    <span class="sep" aria-hidden="true"></span>
+    <span id="userCount">1 online</span>
+    <span class="sep" aria-hidden="true"></span>
+    <span id="encBadge" title="End-to-end encrypted in your browser">e2e</span>
+    <button type="button" class="pill turbo-pill" id="turboBadge" hidden title="Turbo Boost Mode: Active (Click for latency & metrics)">⚡ TURBO <span id="turboPing">--ms</span></button>
+    <span class="pill" id="offlineBadge" hidden>offline</span>
+    <span class="pill" id="roBadge" hidden>view only</span>
+    <span class="pill" id="lockBadge" hidden>locked</span>
+    <button class="pill act" id="followBadge" hidden></button>
+    <span class="grow"></span>
+    <span id="counts"></span>
+  </footer>
+
+  <div id="mobileKeys" class="mobile-keys-bar" aria-label="Quick syntax keys">
+    <button type="button" data-key="{">{</button>
+    <button type="button" data-key="}">}</button>
+    <button type="button" data-key="(">(</button>
+    <button type="button" data-key=")">)</button>
+    <button type="button" data-key="[">[</button>
+    <button type="button" data-key="]">]</button>
+    <button type="button" data-key=";">;</button>
+    <button type="button" data-key="=">=</button>
+    <button type="button" data-key="&quot;">"</button>
+    <button type="button" data-key="'">'</button>
+    <button type="button" data-key="/">/</button>
+    <button type="button" data-key="Tab">Tab</button>
+    <button type="button" data-key="=&gt;">=&gt;</button>
+  </div>
+
+  <nav id="mbar" aria-label="Actions">
+    <button data-a="run">run</button>
+    <button data-a="files">files</button>
+    <button data-a="chat">chat</button>
+    <button data-a="undo">undo</button>
+    <button data-a="redo">redo</button>
+    <button data-a="more">more</button>
+  </nav>
+</main>
+
+<!-- ==================================================== command palette -->
+<div id="pal" hidden>
+  <div class="palBox" role="dialog" aria-modal="true" aria-label="Command palette">
+    <input id="palInput" class="palIn" placeholder="Type a command" autocomplete="off" spellcheck="false">
+    <div id="palList" role="listbox"></div>
+  </div>
+</div>
+
+<!-- ============================================== generative UI modal -->
+<div id="genUiModal" hidden>
+  <div class="sheet gen-ui-sheet" role="dialog" aria-modal="true" aria-labelledby="genUiTitle">
+    <div class="phead gen-phead">
+      <div class="gen-ui-head-title">
+        <span class="gen-icon">✨</span>
+        <h2 id="genUiTitle">Generative UI Component Builder</h2>
+      </div>
+      <button class="pclose-btn" id="genUiClose" aria-label="Close Generative UI" title="Close (Esc)">
+        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <p class="msub">Generate responsive, interactive HTML/CSS/JS components into your editor and live preview.</p>
+    
+    <div class="gen-input-wrap">
+      <input id="genUiPrompt" class="in" placeholder="Describe a component (e.g. calculator, login form, todo app, hero banner)..." autocomplete="off">
+      <button id="genUiGenerateBtn" class="btn primary">✨ Generate UI</button>
+    </div>
+
+    <div class="sec">Or pick a template:</div>
+    <div class="gen-preset-grid" id="genUiPresets"></div>
+
+    <div class="sec">Live Component Preview:</div>
+    <div class="gen-preview-box">
+      <iframe id="genUiPreviewIframe" class="gen-preview-frame" sandbox="allow-scripts" title="Generative UI Preview"></iframe>
+    </div>
+
+    <div class="gen-actions-row">
+      <button class="btn" id="genUiCopyBtn">📋 Copy Code</button>
+      <button class="btn" id="genUiInsertCursorBtn">⬇️ Insert at Cursor</button>
+      <button class="btn primary" id="genUiNewTabBtn">📂 Open as New Tab</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<noscript><p style="color:#e7e7e7;font-family:monospace;padding:24px">anonshare encrypts in the browser, so it needs JavaScript enabled.</p></noscript>
+
+<script type="module" src="app.js"></script>
+<script src="/boot.js" defer></script>
+</body>
+</html>
