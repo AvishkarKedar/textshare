@@ -1,6 +1,6 @@
 "use client";
 
-import { Github, Shield, FileText, Heart } from "lucide-react";
+import { Github, Shield, FileText } from "lucide-react";
 import { useAnon } from "@/lib/store";
 import { toast } from "sonner";
 
@@ -81,10 +81,10 @@ export function LandingFooter() {
 
         <div className="hairline-t mt-8 flex flex-col items-start justify-between gap-2 pt-6 sm:flex-row sm:items-center">
           <p className="anon-mono text-[11px] anon-dim">
-            © {new Date().getFullYear()} anonshare. Sharp corners everywhere. The only round thing is a person.
+            © {new Date().getFullYear()} anonshare · MIT · built by <a href="https://avishkark.in" target="_blank" rel="noopener" className="anon-accent hover:underline">Avishkar Kedar</a>
           </p>
-          <p className="anon-mono text-[11px] anon-dim inline-flex items-center gap-1">
-            made with <Heart className="h-3 w-3" style={{ color: "var(--anon-danger)" }} /> in pune
+          <p className="anon-mono text-[11px] anon-dim">
+            <a href="mailto:avishkarkedar+text@gmail.com" className="hover:anon-fg">avishkarkedar+text@gmail.com</a>
           </p>
         </div>
       </div>
