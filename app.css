@@ -1206,5 +1206,131 @@ body.turbo-boost #stage {
   }
 }
 
+/* --------------------------------------------------- Deafen / Speaker Mute */
+#voiceDeafenBtn.deafened, #voiceDeafenBtn[aria-pressed="true"] {
+  background: rgba(239, 68, 68, 0.25) !important;
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.45) !important;
+}
+#voiceDeafenBtn.deafened svg { stroke: #ef4444 !important; }
+
+/* --------------------------------------------------- KaTeX Math in Preview */
+.math-block, .katex-display {
+  display: block;
+  margin: 14px 0;
+  padding: 10px 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.math-inline, .katex {
+  display: inline-block;
+  vertical-align: middle;
+  padding: 0 2px;
+}
+
+/* --------------------------------------------------- Collaborative Whiteboard */
+.whiteboard-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.wb-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  z-index: 10;
+  flex-shrink: 0;
+}
+.wb-tool-group, .wb-color-group, .wb-size-group, .wb-action-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wb-tool-btn.active {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #fff !important;
+}
+.wb-color-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform .15s var(--ease), border-color .15s var(--ease);
+}
+.wb-color-dot:hover { transform: scale(1.15); }
+.wb-color-dot.active {
+  border-color: #fff;
+  transform: scale(1.25);
+  box-shadow: 0 0 6px rgba(255,255,255,0.7);
+}
+.wb-canvas-holder {
+  flex: 1;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  touch-action: none;
+  overflow: hidden;
+  background: #080808;
+}
+[data-theme=light] .wb-canvas-holder { background: #fdfdfd; }
+#whiteboardCanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* --------------------------------------------------- CodeMirror Gutter Error Markers */
+.cm-error-gutter-marker {
+  color: var(--danger);
+  font-weight: 800;
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+  line-height: 1;
+  display: inline-block;
+  padding: 0 2px;
+}
+.cm-error-line-highlight {
+  background: rgba(255, 92, 77, 0.12) !important;
+}
+
+/* --------------------------------------------------- Status Bar Live Counts & Follow Badge */
+#counts {
+  font: 11px/1.2 var(--mono);
+  color: var(--mut);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+#followBadge.act {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  cursor: pointer;
+}
+#followBadge:hover {
+  filter: brightness(1.15);
+}
+
 
 

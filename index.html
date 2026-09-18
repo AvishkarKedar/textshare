@@ -124,6 +124,9 @@
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="app.css">
+<!-- KaTeX for LaTeX Math rendering -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <!-- Cloudflare Web Analytics -->
 <script defer type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "d0a6caaebaa64349bea67f3423b283af"}'></script>
 <!-- End Cloudflare Web Analytics -->
@@ -408,6 +411,7 @@
     <button class="btn ico hideS" id="bookmarksBtn" title="Recent Rooms / History" aria-label="Recent Rooms"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
     <button class="btn ico hideS" id="zenBtn" title="Zen Mode / Fullscreen (F11)" aria-label="Zen Mode"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
     <button class="btn ico" id="voiceBtn" title="Voice Chat / Walkie-Talkie" aria-label="Voice Chat"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
+    <button class="btn ico" id="voiceDeafenBtn" title="Deafen / Mute Peer Audio" aria-label="Deafen Audio" hidden><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/><line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="2"/></svg></button>
     <select id="lang" class="btn sel" title="Language" aria-label="Language"></select>
     <button class="btn ico hideS" id="undoBtn" title="Undo" aria-label="Undo"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M9 7 4 12l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <button class="btn ico hideS" id="redoBtn" title="Redo" aria-label="Redo"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M15 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 12H10a6 6 0 0 0 0 12h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -418,6 +422,7 @@
       <button data-a="runcode" role="menuitem">Run code <kbd>Ctrl Enter</kbd></button>
       <button data-a="format" role="menuitem">Format document <kbd>Shift Alt F</kbd></button>
       <button data-a="preview" role="menuitem">Toggle live preview</button>
+      <button data-a="whiteboard" role="menuitem">Collaborative whiteboard</button>
       <button data-a="teamworkpreview" role="menuitem">Teamwork live preview <kbd>/teamwork-preview</kbd></button>
       <button data-a="genui" role="menuitem">Generative UI builder <kbd>/generative_ui</kbd></button>
       <button data-a="browser" role="menuitem">In-browser web &amp; docs <kbd>/browser</kbd></button>
@@ -435,7 +440,7 @@
       <button data-a="newfile" role="menuitem">New file</button>
       <button data-a="rename" role="menuitem">Rename file</button>
       <button data-a="download" role="menuitem">Download file</button>
-      <button data-a="exportzip" role="menuitem">Export all files</button>
+      <button data-a="exportzip" role="menuitem">Export all files as ZIP</button>
       <div class="msep"></div>
       <button data-a="invite" role="menuitem">Share room (one-tap)</button>
       <button data-a="viewlink" role="menuitem">Copy view-only link</button>
@@ -452,6 +457,9 @@
     <div id="tabs"></div>
     <button class="btn ico flat" id="newFile" title="New file" aria-label="New file">+</button>
     <span class="grow"></span>
+    <button class="btn sm flat hub-tab-btn" id="hubWbBtn" title="Collaborative Whiteboard Canvas (Draw, Sketch &amp; Diagram)">
+      🎨 Whiteboard
+    </button>
     <button class="btn sm flat hub-tab-btn" id="hubGoalBtn" title="Collaborative Room Goal / Objective (/goal)">
       🎯 Goal <span class="pill sm" id="hubGoalPill" hidden>Set</span>
     </button>
@@ -530,6 +538,45 @@
           <iframe id="htmlPreview" class="preview-pane" sandbox="allow-scripts allow-modals" title="Preview"></iframe>
         </div>
       </div>
+
+      <!-- Collaborative Whiteboard Canvas Tab -->
+      <div id="whiteboardWrap" class="whiteboard-wrap" hidden>
+        <div class="wb-toolbar">
+          <div class="wb-tool-group">
+            <button type="button" class="btn sm wb-tool-btn active" id="wbToolPen" title="Pen Brush">✏️ Pen</button>
+            <button type="button" class="btn sm wb-tool-btn" id="wbToolHighlighter" title="Highlighter">🖍️ Highlight</button>
+            <button type="button" class="btn sm wb-tool-btn" id="wbToolEraser" title="Eraser">🧹 Eraser</button>
+          </div>
+          <div class="wb-color-group" id="wbColors">
+            <button type="button" class="wb-color-dot active" data-color="#4c8dff" style="background:#4c8dff" title="Blue"></button>
+            <button type="button" class="wb-color-dot" data-color="#ffffff" style="background:#ffffff" title="White"></button>
+            <button type="button" class="wb-color-dot" data-color="#3ddc84" style="background:#3ddc84" title="Green"></button>
+            <button type="button" class="wb-color-dot" data-color="#ffb347" style="background:#ffb347" title="Orange"></button>
+            <button type="button" class="wb-color-dot" data-color="#ff6b5b" style="background:#ff6b5b" title="Red"></button>
+            <button type="button" class="wb-color-dot" data-color="#c792ea" style="background:#c792ea" title="Purple"></button>
+            <button type="button" class="wb-color-dot" data-color="#e8d44d" style="background:#e8d44d" title="Yellow"></button>
+          </div>
+          <div class="wb-size-group">
+            <select id="wbBrushSize" class="btn sm sel" title="Brush size">
+              <option value="2">2px (Fine)</option>
+              <option value="4" selected>4px (Medium)</option>
+              <option value="8">8px (Thick)</option>
+              <option value="16">16px (Jumbo)</option>
+            </select>
+          </div>
+          <span class="grow"></span>
+          <div class="wb-action-group">
+            <button type="button" class="btn sm flat" id="wbDownloadBtn" title="Download Whiteboard as PNG Image">💾 Download PNG</button>
+            <button type="button" class="btn sm flat danger" id="wbClearBtn" title="Clear Canvas">🗑️ Clear</button>
+            <button class="pclose-btn" id="wbCloseBtn" aria-label="Close Whiteboard" title="Close Whiteboard (Esc)">
+              <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="wb-canvas-holder">
+          <canvas id="whiteboardCanvas"></canvas>
+        </div>
+      </div>
     </div>
 
     <!-- Bottom Drawer: Terminal / Code Runner Output & Stdin Input -->
@@ -598,8 +645,9 @@
         </div>
         <div class="file-filter-bar">
           <span class="file-filter-lbl">Files in this room:</span>
-          <span class="grow"></span>
           <span id="fileCountBadge" class="pill">0 files</span>
+          <span class="grow"></span>
+          <button class="btn sm flat" id="fileDownloadZipBtn" title="Download all shared files as a ZIP archive">📦 Download All (ZIP)</button>
         </div>
         <div id="sharedFileList" class="shared-list"></div>
       </div>
@@ -753,6 +801,13 @@
         <option value="15">15px</option>
         <option value="16">16px</option>
         <option value="18">18px</option>
+      </select>
+
+      <label class="lbl" for="keymapSelect">Keybindings &amp; Navigation</label>
+      <select id="keymapSelect" class="in sel">
+        <option value="standard">Standard (Default / VS Code)</option>
+        <option value="emacs">Emacs Mode (Ctrl-A, Ctrl-E, Ctrl-K, Ctrl-Y, Alt-F/B)</option>
+        <option value="vim">Vim Navigation Mode (Esc normal mode, hjkl, dd, yy, p)</option>
       </select>
 
       <div class="mrow"><button class="btn primary" id="saveSettings">Save</button></div>
