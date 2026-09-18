@@ -19,7 +19,7 @@ import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
 import { runCode, parseErrorPositions } from './lib/runner.js'
 import { uploadEncryptedFile, downloadAndDecryptFile, saveBlobAsFile, isCodeOrTextFile } from './lib/file-sharing.js'
 import { formatCode } from './lib/formatter.js'
-import { renderMarkdown, updateHtmlPreview, buildStandaloneHtml, renderVisualDiff } from './lib/preview.js'
+import { renderMarkdown, updateHtmlPreview, buildStandaloneHtml, renderVisualDiff, isValidPreviewMessage } from './lib/preview.js'
 import { renderDocxToHtml } from './lib/docx-viewer.js'
 import { VoiceMesh } from './lib/voice.js'
 import { P2PMesh } from './lib/p2p.js'
@@ -871,6 +871,9 @@ function boot(host) {
       paintPeople()
       if (cid === String(ydoc.clientID) && $('voiceBtn')) {
         $('voiceBtn').classList.toggle('speaking', isSpeaking)
+      }
+      if (typeof awareness !== 'undefined' && awareness) {
+        awareness.setLocalStateField('speaking', isSpeaking)
       }
     }
     relay.onp2p = signal => {
@@ -2274,6 +2277,7 @@ async function triggerRunCode() {
       code,
       stdin: stdinVal,
       relayHost: relayHost(),
+      allowThirdPartyExecution: true,
     })
 
     $('termOut').textContent = res.stdout || (res.stderr ? '' : '(Program exited with no output)')
@@ -2332,6 +2336,7 @@ function triggerFormatCode() {
 
 // --- Feature 6: Artifacts-Style Split Screen & Live Preview ---
 let previewMode = 'auto' // 'auto' | 'web' | 'markdown' | 'doc'
+let previewOpen = false
 
 function toggleLivePreview(force) {
   previewOpen = typeof force === 'boolean' ? force : !previewOpen
@@ -3594,7 +3599,7 @@ if ($('inactivityClose')) $('inactivityClose').onclick = () => {
 
 // Live preview console message handler
 window.addEventListener('message', e => {
-  if (e.data && e.data.type === 'preview-console') {
+  if (isValidPreviewMessage(e, $('htmlPreview'))) {
     const logsEl = $('twConsoleLogs')
     if (logsEl) {
       twLogNum++
