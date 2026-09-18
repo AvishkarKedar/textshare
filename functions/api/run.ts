@@ -1,4 +1,5 @@
 // Cloudflare Pages Function: /api/run
+// Proxies to sandboxed execution engine (Piston) for real multi-language execution
 
 interface RunBody {
   language: string;
@@ -15,207 +16,28 @@ interface RunResult {
   language: string;
 }
 
-const MAX_DURATION_MS = 5000;
-const MAX_OUTPUT_CHARS = 20_000;
-
-function formatArgs(args: unknown[]): string {
-  return args
-    .map((a) => {
-      if (a === null) return "null";
-      if (a === undefined) return "undefined";
-      if (typeof a === "string") return a;
-      try {
-        return JSON.stringify(a, null, a && typeof a === "object" ? 2 : 0);
-      } catch {
-        return String(a);
-      }
-    })
-    .join(" ");
-}
-
-async function runJavaScript(source: string, stdin: string): Promise<RunResult> {
-  const start = Date.now();
-  const stdoutChunks: string[] = [];
-  const stderrChunks: string[] = [];
-
-  const fakeConsole = {
-    log: (...args: unknown[]) => stdoutChunks.push(formatArgs(args)),
-    info: (...args: unknown[]) => stdoutChunks.push(formatArgs(args)),
-    debug: (...args: unknown[]) => stdoutChunks.push(formatArgs(args)),
-    warn: (...args: unknown[]) => stderrChunks.push(formatArgs(args)),
-    error: (...args: unknown[]) => stderrChunks.push(formatArgs(args)),
-  };
-
-  const stdinLines = stdin.split("\n");
-  let stdinIdx = 0;
-  const readline = () => stdinLines[stdinIdx++] ?? "";
-
-  let exitCode = 0;
-  let timedOut = false;
-
-  const sandboxedGlobals = {
-    console: fakeConsole,
-    readline,
-    Math,
-    JSON,
-    Date,
-    Array,
-    Object,
-    String,
-    Number,
-    Boolean,
-    RegExp,
-    Map,
-    Set,
-    Promise,
-    Symbol,
-    Error,
-    parseInt,
-    parseFloat,
-    isNaN,
-    isFinite,
-    encodeURIComponent,
-    decodeURIComponent,
-  };
-
-  const wrappedSource = `
-    "use strict";
-    const process = undefined;
-    const require = undefined;
-    const global = undefined;
-    const globalThis = undefined;
-    const fetch = undefined;
-    const XMLHttpRequest = undefined;
-    const WebSocket = undefined;
-    ${source}
-  `;
-
-  try {
-    await Promise.race([
-      (async () => {
-        try {
-          const fn = new Function(...Object.keys(sandboxedGlobals), wrappedSource);
-          const result = fn(...Object.values(sandboxedGlobals));
-          if (result && typeof result.then === "function") {
-            await result;
-          }
-        } catch (e: any) {
-          exitCode = 1;
-          stderrChunks.push(String(e instanceof Error ? e.stack || e.message : e));
-        }
-      })(),
-      new Promise((resolve) =>
-        setTimeout(() => {
-          timedOut = true;
-          resolve(undefined);
-        }, MAX_DURATION_MS),
-      ),
-    ]);
-
-    await new Promise((r) => setTimeout(r, 10));
-
-    if (timedOut) {
-      exitCode = 124;
-      stderrChunks.push(`[anonshare] execution timed out after ${MAX_DURATION_MS}ms`);
-    }
-  } catch (e: any) {
-    exitCode = 1;
-    stderrChunks.push(String(e instanceof Error ? e.message : e));
-  }
-
-  const stdout = stdoutChunks.join("\n").slice(0, MAX_OUTPUT_CHARS);
-  const stderr = stderrChunks.join("\n").slice(0, MAX_OUTPUT_CHARS);
-
-  return {
-    ok: exitCode === 0,
-    stdout,
-    stderr,
-    exitCode,
-    durationMs: Date.now() - start,
-    language: "javascript",
-  };
-}
-
-function evalPyExpr(expr: string, vars: Record<string, unknown>): unknown {
-  const e = expr.trim();
-  const fM = e.match(/^f["'](.*)["']$/);
-  if (fM) {
-    return fM[1].replace(/\{([^}]+)\}/g, (_, inner) => String(evalPyExpr(inner, vars)));
-  }
-  if (/^["'].*["']$/.test(e)) return e.slice(1, -1);
-  if (/^-?\d+(\.\d+)?$/.test(e)) return Number(e);
-  if (e === "True") return true;
-  if (e === "False") return false;
-  if (e === "None") return null;
-  if (/^\w+$/.test(e)) return vars[e];
-  const jsExpr = e.replace(/\bTrue\b/g, "true").replace(/\bFalse\b/g, "false").replace(/\bNone\b/g, "null").replace(/\bnot\b/g, "!");
-  const fn = new Function(...Object.keys(vars), `return (${jsExpr});`);
-  return fn(...Object.values(vars));
-}
-
-async function runPythonLite(source: string, stdin: string): Promise<RunResult> {
-  const start = Date.now();
-  const stdout: string[] = [];
-  const stderr: string[] = [];
-  let exitCode = 0;
-
-  const lines = source.split("\n");
-  const vars: Record<string, unknown> = {};
-  const stdinLines = stdin.split("\n");
-  let stdinIdx = 0;
-  const input = () => stdinLines[stdinIdx++] ?? "";
-
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i];
-    const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
-
-    try {
-      const printM = line.match(/^print\((.*)\)$/);
-      if (printM) {
-        const val = evalPyExpr(printM[1], vars);
-        stdout.push(String(val));
-        continue;
-      }
-      const inputM = line.match(/^(\w+)\s*=\s*input\((.*)\)$/);
-      if (inputM) {
-        const prompt = evalPyExpr(inputM[2], vars);
-        if (prompt) stdout.push(String(prompt));
-        vars[inputM[1]] = input();
-        continue;
-      }
-      const assignM = line.match(/^(\w+)\s*=\s*(.+)$/);
-      if (assignM) {
-        vars[assignM[1]] = evalPyExpr(assignM[2], vars);
-        continue;
-      }
-      if (line.startsWith("if ") && line.endsWith(":")) {
-        const cond = evalPyExpr(line.slice(3, -1), vars);
-        if (!cond) {
-          i++;
-          while (i < lines.length && (lines[i].startsWith("    ") || lines[i].startsWith("\t") || lines[i].trim() === "")) i++;
-          i--;
-        }
-        continue;
-      }
-      const val = evalPyExpr(line, vars);
-      if (val !== undefined) stdout.push(String(val));
-    } catch (e: any) {
-      stderr.push(`Line ${i + 1}: ${e instanceof Error ? e.message : String(e)}`);
-      exitCode = 1;
-      break;
-    }
-  }
-
-  return {
-    ok: exitCode === 0,
-    stdout: stdout.join("\n").slice(0, MAX_OUTPUT_CHARS),
-    stderr: stderr.join("\n").slice(0, MAX_OUTPUT_CHARS),
-    exitCode,
-    durationMs: Date.now() - start,
-    language: "python",
-  };
-}
+const PISTON_LANG_MAP: Record<string, { language: string; version: string }> = {
+  javascript: { language: "javascript", version: "18.15.0" },
+  js: { language: "javascript", version: "18.15.0" },
+  node: { language: "javascript", version: "18.15.0" },
+  typescript: { language: "typescript", version: "5.0.3" },
+  ts: { language: "typescript", version: "5.0.3" },
+  python: { language: "python", version: "3.10.0" },
+  py: { language: "python", version: "3.10.0" },
+  c: { language: "c", version: "10.2.0" },
+  cpp: { language: "c++", version: "10.2.0" },
+  "c++": { language: "c++", version: "10.2.0" },
+  java: { language: "java", version: "15.0.2" },
+  rust: { language: "rust", version: "1.68.2" },
+  rs: { language: "rust", version: "1.68.2" },
+  go: { language: "go", version: "1.16.2" },
+  golang: { language: "go", version: "1.16.2" },
+  php: { language: "php", version: "8.2.3" },
+  ruby: { language: "ruby", version: "3.0.1" },
+  rb: { language: "ruby", version: "3.0.1" },
+  bash: { language: "bash", version: "5.2.0" },
+  sh: { language: "bash", version: "5.2.0" },
+};
 
 export async function onRequestPost(context: { request: Request }): Promise<Response> {
   let body: RunBody;
@@ -234,42 +56,68 @@ export async function onRequestPost(context: { request: Request }): Promise<Resp
     return Response.json({ ok: false, stderr: "source too large (max 64KB)", stdout: "", exitCode: 1, durationMs: 0, language }, { status: 413 });
   }
 
-  let result: RunResult;
+  const normalizedLang = (language || "").toLowerCase().trim();
+  const langConfig = PISTON_LANG_MAP[normalizedLang] || { language: normalizedLang, version: "*" };
+
+  const start = Date.now();
   try {
-    if (language === "javascript" || language === "typescript" || language === "js") {
-      result = await runJavaScript(source, stdin);
-    } else if (language === "python" || language === "py") {
-      result = await runPythonLite(source, stdin);
-    } else {
+    const res = await fetch("https://emkc.org/api/v2/piston/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        language: langConfig.language,
+        version: langConfig.version,
+        files: [{ content: source }],
+        stdin: stdin || "",
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
       return Response.json({
         ok: false,
-        stderr: `language "${language}" not supported in demo runner. Try javascript or python. (production relays proxy to Piston for 15 languages.)`,
         stdout: "",
+        stderr: `Runner error (${res.status}): ${errText}`,
         exitCode: 1,
-        durationMs: 0,
-        language,
-      }, { status: 400 });
+        durationMs: Date.now() - start,
+        language: langConfig.language,
+      });
     }
+
+    const data: any = await res.json();
+    const runInfo = data.run || {};
+    const compileInfo = data.compile || {};
+
+    const stdout = (runInfo.stdout || "").slice(0, 20_000);
+    const stderr = (compileInfo.stderr || runInfo.stderr || compileInfo.output || "").slice(0, 20_000);
+    const exitCode = typeof runInfo.code === "number" ? runInfo.code : (compileInfo.code || 0);
+
+    return Response.json({
+      ok: exitCode === 0,
+      stdout,
+      stderr,
+      exitCode,
+      durationMs: Date.now() - start,
+      language: langConfig.language,
+    });
   } catch (e: any) {
-    result = {
+    return Response.json({
       ok: false,
       stdout: "",
-      stderr: `internal error: ${e instanceof Error ? e.message : String(e)}`,
+      stderr: `Execution failed: ${e instanceof Error ? e.message : String(e)}`,
       exitCode: 1,
-      durationMs: 0,
-      language,
-    };
+      durationMs: Date.now() - start,
+      language: normalizedLang,
+    });
   }
-
-  return Response.json(result);
 }
 
 export async function onRequestGet(): Promise<Response> {
   return Response.json({
     ok: true,
     service: "anonshare-run",
-    languages: ["javascript", "python (lite)"],
-    maxDurationMs: MAX_DURATION_MS,
-    note: "demo runner. production relays proxy to a sandboxed Piston instance.",
+    languages: Object.keys(PISTON_LANG_MAP),
+    engine: "piston-sandbox",
+    note: "Sandboxed execution for JavaScript, Python, C, C++, Java, Rust, Go, PHP, Ruby, Bash.",
   });
 }
