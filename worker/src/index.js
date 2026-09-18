@@ -564,6 +564,21 @@ export class Room {
         return
       }
 
+      if (type === T_P2P) {
+        try {
+          const targetLen = payload[0]
+          const targetCid = new TextDecoder().decode(payload.subarray(1, 1 + targetLen))
+          for (const peer of this.sockets()) {
+            const pa = this.att(peer)
+            if (pa && pa.cid === targetCid) {
+              peer.send(frame(T_P2P, payload.buffer))
+              break
+            }
+          }
+        } catch (e) {}
+        return
+      }
+
       if (type === T_GRANT) {
         if (!a.own) return ws.send(errorFrame('not_owner'))
         const target = new TextDecoder().decode(payload)

@@ -862,10 +862,10 @@ function boot(host) {
 
   try {
     p2pMesh = new P2PMesh(String(ydoc.clientID), (targetCid, sig) => {
-      if (relay) relay.sendP2P(targetCid, sig)
+      if (relay) relay.sendP2P(targetCid, { ...sig, senderCid: String(ydoc.clientID) })
     })
     voiceMesh = new VoiceMesh(String(ydoc.clientID), (targetCid, sig) => {
-      if (relay) relay.sendP2P(targetCid, sig)
+      if (relay) relay.sendP2P(targetCid, { ...sig, senderCid: String(ydoc.clientID) })
     })
     voiceMesh.onSpeaking = (cid, isSpeaking) => {
       paintPeople()
@@ -877,10 +877,11 @@ function boot(host) {
       }
     }
     relay.onp2p = signal => {
+      const sender = signal?.senderCid
       if (signal && signal.type && signal.type.startsWith('voice-')) {
-        voiceMesh?.handleSignal(signal.senderCid, signal)
+        voiceMesh?.handleSignal(sender, signal)
       } else if (p2pMesh) {
-        p2pMesh?.handleSignal(signal.senderCid, signal)
+        p2pMesh?.handleSignal(sender, signal)
       }
     }
   } catch (e) {}
@@ -2270,6 +2271,10 @@ async function triggerRunCode() {
   if ($('termPromptBanner')) $('termPromptBanner').hidden = true
 
   const stdinVal = $('termStdinArea') ? $('termStdinArea').value : ($('termStdin') ? $('termStdin').value : '')
+  const codeExpectsInput = /\b(input\(|cin\s*>>|scanf\(|Scanner\b|readLine\(|gets\(|getchar\(|fgets\()/i.test(code)
+  if (codeExpectsInput && !stdinVal) {
+    if ($('termPromptBanner')) $('termPromptBanner').hidden = false
+  }
 
   try {
     const res = await runCode({
@@ -2286,10 +2291,25 @@ async function triggerRunCode() {
       $('termOut').textContent += res.stderr
     }
 
+    if (res.ok && (res.exitCode === 0 || res.exitCode === null)) {
+      $('termStatus').textContent = 'Success'
+      $('termStatus').style.background = 'var(--ok)'
+    } else {
+      $('termStatus').textContent = res.exitCode != null ? `Exit ${res.exitCode}` : 'Error'
+      $('termStatus').style.background = 'var(--danger)'
+    }
+
+    if (res.executionTime != null) {
+      const ms = typeof res.executionTime === 'number' && res.executionTime < 10 ? Math.round(res.executionTime * 1000) : res.executionTime
+      $('termTime').textContent = `${ms}ms`
+      $('termTime').hidden = false
+    }
+
     const needsInput = res.stderr && (res.stderr.includes('EOFError') || res.stderr.includes('EOF when reading a line') || res.stderr.includes('NoSuchElementException'))
-    if ($('termPromptBanner')) $('termPromptBanner').hidden = !needsInput
-    if (needsInput && !stdinVal) {
-      toast('💡 Program requested input. Enter input in the Input tab and click Run.')
+    if (needsInput) {
+      if ($('termPromptBanner')) $('termPromptBanner').hidden = false
+      if ($('termTabIn')) $('termTabIn').click()
+      toast('💡 Program requested input. Enter input in the stdin box and click Run.')
     }
 
     if (res.errorPositions && res.errorPositions.length > 0) {
@@ -2864,15 +2884,23 @@ function updateHistoryView() {
 
   const snap = snaps[idx]
   if (snap) {
+    const d = new Date(snap.time)
+    const timeFormatted = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     const elapsedSec = Math.max(0, Math.round((Date.now() - snap.time) / 1000))
     const timeAgo = elapsedSec < 60 ? `${elapsedSec}s ago` : `${Math.round(elapsedSec / 60)}m ago`
-    $('histTimestamp').textContent = `${new Date(snap.time).toLocaleTimeString()} (${timeAgo})`
-    $('histCount').textContent = `Revision ${idx + 1}/${snaps.length}`
+    $('histTimestamp').textContent = `${timeFormatted} (${timeAgo})`
+    $('histCount').textContent = `Revision ${idx + 1} of ${snaps.length}`
 
+    const prevText = idx > 0 ? snaps[idx - 1].text : ''
     const snapLines = snap.text ? snap.text.split('\n').length : 0
-    const curLines = cur ? cur.split('\n').length : 0
-    const delta = snapLines - curLines
-    $('histDelta').textContent = delta === 0 ? 'same line count' : (delta > 0 ? `+${delta} lines` : `${delta} lines`)
+    const prevLines = prevText ? prevText.split('\n').length : 0
+    const delta = snapLines - prevLines
+
+    if (idx === 0) {
+      $('histDelta').textContent = `Initial (${snapLines} lines)`
+    } else {
+      $('histDelta').textContent = delta === 0 ? 'same line count' : (delta > 0 ? `+${delta} lines` : `${delta} lines`)
+    }
 
     if (histViewMode === 'snap') {
       $('histDiff').hidden = true
@@ -2883,7 +2911,8 @@ function updateHistoryView() {
     } else {
       $('histSnapshot').hidden = true
       $('histDiff').hidden = false
-      $('histDiff').innerHTML = renderVisualDiff(snap.text, cur)
+      const baseForDiff = idx === 0 ? '' : prevText
+      $('histDiff').innerHTML = renderVisualDiff(baseForDiff, snap.text)
       if ($('histModeSnap')) $('histModeSnap').classList.remove('on')
       if ($('histModeDiff')) $('histModeDiff').classList.add('on')
     }
