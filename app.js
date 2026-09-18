@@ -17,9 +17,9 @@ import { tags as t } from '@lezer/highlight'
 import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from '@codemirror/autocomplete'
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
 import { runCode, parseErrorPositions } from './lib/runner.js'
-import { uploadEncryptedFile, downloadAndDecryptFile, saveBlobAsFile, isCodeOrTextFile } from './lib/file-sharing.js'
+import { uploadEncryptedFile, downloadAndDecryptFile, saveBlobAsFile, isCodeOrTextFile, exportFilesAsZip, createZipArchive } from './lib/file-sharing.js'
 import { formatCode } from './lib/formatter.js'
-import { renderMarkdown, updateHtmlPreview, buildStandaloneHtml, renderVisualDiff, isValidPreviewMessage } from './lib/preview.js'
+import { renderMarkdown, renderLatex, updateHtmlPreview, buildStandaloneHtml, renderVisualDiff, isValidPreviewMessage } from './lib/preview.js'
 import { renderDocxToHtml } from './lib/docx-viewer.js'
 import { VoiceMesh } from './lib/voice.js'
 import { P2PMesh } from './lib/p2p.js'
@@ -506,7 +506,8 @@ let shownKilled = false, killedInterval = null, adminSuspendNoted = false
 let scrollHandler = null, stopDemo = null
 const known = new Map()
 
-const langComp = new Compartment(), themeComp = new Compartment(), roComp = new Compartment()
+const langComp = new Compartment(), themeComp = new Compartment(), roComp = new Compartment(), keymapComp = new Compartment()
+let currentKeymapMode = LS.get('ts.keymap', 'standard')
 const storedColor = LS.get('ts.color', '')
 let myColor = /^#[0-9a-f]{6}$/i.test(storedColor)
   ? storedColor
@@ -1110,6 +1111,143 @@ const marksField = StateField.define({
   },
 })
 
+// --- Feature 10: Compiler Error Gutter Markers ---
+class ErrorGutterMarker extends GutterMarker {
+  constructor(message) {
+    super()
+    this.message = message || 'Error'
+  }
+  toDOM() {
+    const s = document.createElement('span')
+    s.className = 'cm-error-gutter-marker'
+    s.textContent = '●'
+    s.title = this.message
+    s.setAttribute('aria-label', this.message)
+    return s
+  }
+}
+
+const setErrorMarkersEffect = StateEffect.define()
+const clearErrorMarkersEffect = StateEffect.define()
+
+const errorGutterField = StateField.define({
+  create: () => RangeSet.empty,
+  update(markers, tr) {
+    markers = markers.map(tr.changes)
+    for (const effect of tr.effects) {
+      if (effect.is(setErrorMarkersEffect)) markers = effect.value
+      else if (effect.is(clearErrorMarkersEffect)) markers = RangeSet.empty
+    }
+    return markers
+  },
+})
+
+export function displayCompilerErrors(errorPositions = []) {
+  if (!view || !Array.isArray(errorPositions)) return
+  if (errorPositions.length === 0) {
+    view.dispatch({ effects: clearErrorMarkersEffect.of(null) })
+    return
+  }
+  const builder = new RangeSetBuilder()
+  const doc = view.state.doc
+  const sorted = [...errorPositions]
+    .filter(p => p && Number.isInteger(p.line) && p.line >= 1 && p.line <= doc.lines)
+    .sort((a, b) => a.line - b.line)
+
+  for (const pos of sorted) {
+    try {
+      const lineObj = doc.line(pos.line)
+      builder.add(lineObj.from, lineObj.from, new ErrorGutterMarker(pos.message || 'Compiler error'))
+    } catch (_) {}
+  }
+  view.dispatch({ effects: setErrorMarkersEffect.of(builder.finish()) })
+}
+
+// --- Feature 13: Vim & Emacs Keybinding Extensions ---
+function getKeymapExtension(mode) {
+  if (mode === 'emacs') {
+    return keymap.of([
+      { key: 'Ctrl-a', run: v => { v.dispatch({ selection: { anchor: v.state.doc.lineAt(v.state.selection.main.head).from } }); return true } },
+      { key: 'Ctrl-e', run: v => { v.dispatch({ selection: { anchor: v.state.doc.lineAt(v.state.selection.main.head).to } }); return true } },
+      { key: 'Ctrl-k', run: v => {
+        const sel = v.state.selection.main
+        const line = v.state.doc.lineAt(sel.head)
+        const to = sel.head === line.to ? Math.min(sel.head + 1, v.state.doc.length) : line.to
+        v.dispatch({ changes: { from: sel.head, to }, selection: { anchor: sel.head } })
+        return true
+      } },
+      { key: 'Alt-f', run: v => {
+        const head = v.state.selection.main.head
+        const text = v.state.doc.toString()
+        const next = text.slice(head).search(/\b\w/)
+        if (next !== -1) {
+          const match = text.slice(head + next).search(/\W/)
+          const target = match === -1 ? text.length : head + next + match
+          v.dispatch({ selection: { anchor: target } })
+        }
+        return true
+      } },
+      { key: 'Alt-b', run: v => {
+        const head = v.state.selection.main.head
+        const text = v.state.doc.toString().slice(0, head)
+        const match = text.search(/\w+\W*$/)
+        const target = match === -1 ? 0 : match
+        v.dispatch({ selection: { anchor: target } })
+        return true
+      } },
+    ])
+  } else if (mode === 'vim') {
+    return keymap.of([
+      { key: 'Alt-h', run: v => { v.dispatch({ selection: { anchor: Math.max(0, v.state.selection.main.head - 1) } }); return true } },
+      { key: 'Alt-l', run: v => { v.dispatch({ selection: { anchor: Math.min(v.state.doc.length, v.state.selection.main.head + 1) } }); return true } },
+      { key: 'Alt-j', run: v => {
+        const sel = v.state.selection.main
+        const doc = v.state.doc
+        const line = doc.lineAt(sel.head)
+        if (line.number < doc.lines) {
+          const nextLine = doc.line(line.number + 1)
+          const col = sel.head - line.from
+          v.dispatch({ selection: { anchor: Math.min(nextLine.to, nextLine.from + col) } })
+        }
+        return true
+      } },
+      { key: 'Alt-k', run: v => {
+        const sel = v.state.selection.main
+        const doc = v.state.doc
+        const line = doc.lineAt(sel.head)
+        if (line.number > 1) {
+          const prevLine = doc.line(line.number - 1)
+          const col = sel.head - line.from
+          v.dispatch({ selection: { anchor: Math.min(prevLine.to, prevLine.from + col) } })
+        }
+        return true
+      } },
+    ])
+  }
+  return []
+}
+
+// --- Feature 14: Status Bar Live Counts ---
+function paintCounts() {
+  const el = $('counts')
+  if (!el || !view) return
+  const doc = view.state.doc
+  const lines = doc.lines
+  const text = doc.toString()
+  const chars = doc.length
+  const words = (text.trim().match(/\S+/g) || []).length
+
+  const sel = view.state.selection.main
+  const selLen = Math.abs(sel.to - sel.from)
+  const lineObj = doc.lineAt(sel.head)
+  const curLine = lineObj.number
+  const curCol = sel.head - lineObj.from + 1
+
+  let str = `Ln ${curLine}, Col ${curCol} | ${lines} lines | ${words} words | ${chars.toLocaleString()} chars`
+  if (selLen > 0) str += ` (${selLen} sel)`
+  el.textContent = str
+}
+
 function absOf(json) {
   try {
     const abs = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(json), ydoc)
@@ -1245,6 +1383,8 @@ function mount() {
         highlightActiveLineGutter(),
         marksField,
         gutter({ class: 'cm-presence', markers: v => v.state.field(marksField) }),
+        errorGutterField,
+        gutter({ class: 'cm-error-gutter', markers: v => v.state.field(errorGutterField) }),
         highlightSpecialChars(),
         foldGutter(),
         drawSelection(),
@@ -1265,6 +1405,7 @@ function mount() {
           ...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap,
           ...foldKeymap, ...completionKeymap, ...yUndoManagerKeymap, indentWithTab,
         ]),
+        keymapComp.of(getKeymapExtension(currentKeymapMode)),
         langComp.of([]),
         themeComp.of(highlightFor(resolved())),
         roComp.of(readOnlyExt()),
@@ -1275,7 +1416,9 @@ function mount() {
             paintCounts()
             autoLang()
             if (!remote) markTyping()
+            view.dispatch({ effects: clearErrorMarkersEffect.of(null) })
           }
+          if (u.selectionSet) paintCounts()
           if ((u.docChanged || u.selectionSet) && !remote) touchActive()
           if (u.geometryChanged || u.viewportChanged || u.docChanged) paintBubbles()
         }),
@@ -2313,6 +2456,7 @@ async function triggerRunCode() {
     }
 
     if (res.errorPositions && res.errorPositions.length > 0) {
+      displayCompilerErrors(res.errorPositions)
       const errBar = document.createElement('div')
       errBar.style.cssText = 'padding:6px 10px;background:rgba(255,77,79,0.12);border-bottom:1px solid rgba(255,77,79,0.3);display:flex;align-items:center;gap:8px;font-size:11px'
       errBar.innerHTML = '<span style="color:#ff7b72;font-weight:600">&#9888;&#65039; Detected errors:</span> ' +
@@ -2321,6 +2465,8 @@ async function triggerRunCode() {
       errBar.querySelectorAll('button[data-jump-line]').forEach(b => {
         b.onclick = () => jumpToLine(parseInt(b.dataset.jumpLine, 10))
       })
+    } else {
+      displayCompilerErrors([])
     }
 
     $('termStatus').textContent = res.ok ? 'Exit: 0' : `Exit: ${res.exitCode ?? 1}`
@@ -3004,12 +3150,223 @@ async function importFromGitHub() {
   }
 }
 
+// --- Feature 8: Collaborative Whiteboard Canvas Tab ---
+let whiteboardOpen = false
+let wbCanvas = null, wbCtx = null
+let wbTool = 'pen' // 'pen' | 'highlighter' | 'eraser'
+let wbColor = '#4c8dff'
+let wbSize = 4
+let wbIsDrawing = false
+let wbCurrentStroke = null
+let ywhiteboard = null
+
+function initWhiteboard() {
+  if (!ydoc) return
+  ywhiteboard = ydoc.getArray('whiteboard_strokes')
+  ywhiteboard.observe(() => {
+    if (whiteboardOpen) renderWhiteboardStrokes()
+  })
+}
+
+function setupWhiteboardCanvas() {
+  wbCanvas = $('whiteboardCanvas')
+  if (!wbCanvas) return
+  wbCtx = wbCanvas.getContext('2d')
+  const holder = wbCanvas.parentElement
+  if (!holder) return
+  const rect = holder.getBoundingClientRect()
+  const dpr = window.devicePixelRatio || 1
+  wbCanvas.width = Math.max(300, Math.floor(rect.width * dpr))
+  wbCanvas.height = Math.max(300, Math.floor(rect.height * dpr))
+  wbCtx.setTransform(1, 0, 0, 1, 0, 0)
+  wbCtx.scale(dpr, dpr)
+  renderWhiteboardStrokes()
+}
+
+function renderWhiteboardStrokes() {
+  if (!wbCanvas || !wbCtx || !ywhiteboard) return
+  const holder = wbCanvas.parentElement
+  const rect = holder ? holder.getBoundingClientRect() : wbCanvas.getBoundingClientRect()
+  wbCtx.clearRect(0, 0, rect.width, rect.height)
+
+  const strokes = ywhiteboard.toArray()
+  for (const s of strokes) {
+    if (!s || !Array.isArray(s.points) || s.points.length < 2) continue
+    wbCtx.save()
+    wbCtx.beginPath()
+    wbCtx.lineCap = 'round'
+    wbCtx.lineJoin = 'round'
+
+    if (s.tool === 'highlighter') {
+      wbCtx.globalAlpha = 0.35
+      wbCtx.strokeStyle = s.color || '#e8d44d'
+      wbCtx.lineWidth = (s.size || 4) * 3.5
+      wbCtx.globalCompositeOperation = 'source-over'
+    } else if (s.tool === 'eraser') {
+      wbCtx.globalAlpha = 1.0
+      wbCtx.globalCompositeOperation = 'destination-out'
+      wbCtx.lineWidth = (s.size || 4) * 5
+    } else {
+      wbCtx.globalAlpha = 1.0
+      wbCtx.strokeStyle = s.color || '#4c8dff'
+      wbCtx.lineWidth = s.size || 4
+      wbCtx.globalCompositeOperation = 'source-over'
+    }
+
+    const pts = s.points
+    wbCtx.moveTo(pts[0].x, pts[0].y)
+    for (let i = 1; i < pts.length; i++) {
+      wbCtx.lineTo(pts[i].x, pts[i].y)
+    }
+    wbCtx.stroke()
+    wbCtx.restore()
+  }
+}
+
+function toggleWhiteboard(force) {
+  whiteboardOpen = typeof force === 'boolean' ? force : !whiteboardOpen
+  $('whiteboardWrap').hidden = !whiteboardOpen
+  $('editorWrap').hidden = whiteboardOpen
+  if ($('hubWbBtn')) {
+    $('hubWbBtn').classList.toggle('active', whiteboardOpen)
+    $('hubWbBtn').setAttribute('aria-pressed', whiteboardOpen ? 'true' : 'false')
+  }
+  if (whiteboardOpen) {
+    if (!ywhiteboard && ydoc) initWhiteboard()
+    setTimeout(setupWhiteboardCanvas, 30)
+    toast('🎨 Collaborative Whiteboard Active')
+  }
+}
+
+function clearWhiteboard() {
+  if (readOnlyNow()) return toast('This room is read-only')
+  if (!ywhiteboard) return
+  ywhiteboard.delete(0, ywhiteboard.length)
+  renderWhiteboardStrokes()
+  toast('Whiteboard canvas cleared')
+}
+
+function downloadWhiteboardPng() {
+  if (!wbCanvas || !ywhiteboard) return
+  const holder = wbCanvas.parentElement
+  const rect = holder ? holder.getBoundingClientRect() : wbCanvas.getBoundingClientRect()
+  const dpr = window.devicePixelRatio || 1
+  const offscreen = document.createElement('canvas')
+  offscreen.width = Math.max(300, Math.floor(rect.width * dpr))
+  offscreen.height = Math.max(300, Math.floor(rect.height * dpr))
+  const offCtx = offscreen.getContext('2d')
+  offCtx.scale(dpr, dpr)
+
+  const isLight = document.documentElement.dataset.theme === 'light'
+  offCtx.fillStyle = isLight ? '#ffffff' : '#080808'
+  offCtx.fillRect(0, 0, rect.width, rect.height)
+
+  const strokes = ywhiteboard.toArray()
+  for (const s of strokes) {
+    if (!s || !Array.isArray(s.points) || s.points.length < 2) continue
+    offCtx.save()
+    offCtx.beginPath()
+    offCtx.lineCap = 'round'
+    offCtx.lineJoin = 'round'
+
+    if (s.tool === 'highlighter') {
+      offCtx.globalAlpha = 0.35
+      offCtx.strokeStyle = s.color || '#e8d44d'
+      offCtx.lineWidth = (s.size || 4) * 3.5
+    } else if (s.tool === 'eraser') {
+      offCtx.globalAlpha = 1.0
+      offCtx.strokeStyle = isLight ? '#ffffff' : '#080808'
+      offCtx.lineWidth = (s.size || 4) * 5
+    } else {
+      offCtx.globalAlpha = 1.0
+      offCtx.strokeStyle = s.color || '#4c8dff'
+      offCtx.lineWidth = s.size || 4
+    }
+
+    const pts = s.points
+    offCtx.moveTo(pts[0].x, pts[0].y)
+    for (let i = 1; i < pts.length; i++) {
+      offCtx.lineTo(pts[i].x, pts[i].y)
+    }
+    offCtx.stroke()
+    offCtx.restore()
+  }
+
+  offscreen.toBlob(blob => {
+    if (blob) saveBlobAsFile(blob, `whiteboard-${CODE}.png`)
+  })
+  toast('💾 Saved whiteboard as PNG image')
+}
+
+// --- Feature 9: ZIP Archive Exporters ---
+async function downloadAllSharedFilesZip() {
+  const arr = (ysharedFiles || ydoc.getArray('shared_files')).toArray()
+  if (!arr.length) return toast('No shared files in this room')
+  toast('Preparing ZIP archive...')
+  $('uploadProgWrap').hidden = false
+  $('uploadProgBar').style.width = '0%'
+  $('uploadProgText').textContent = 'Decrypting files (0/' + arr.length + ')...'
+
+  try {
+    const filesToZip = []
+    for (let i = 0; i < arr.length; i++) {
+      const fileMeta = arr[i]
+      $('uploadProgText').textContent = `Decrypting ${fileMeta.name} (${i + 1}/${arr.length})...`
+      $('uploadProgBar').style.width = `${Math.round(((i + 1) / arr.length) * 100)}%`
+      const blob = await downloadAndDecryptFile({
+        fileMeta,
+        roomCode: CODE,
+        relayHost: relayHost(),
+        roomKey: KEY,
+        authToken: AUTH,
+      })
+      filesToZip.push({ name: fileMeta.name, data: blob })
+    }
+    $('uploadProgBar').style.width = '100%'
+    $('uploadProgText').textContent = 'Building ZIP file...'
+    await exportFilesAsZip(filesToZip, `anonshare-files-${CODE}.zip`)
+    $('uploadProgWrap').hidden = true
+    toast('📦 Shared files ZIP downloaded successfully')
+  } catch (err) {
+    $('uploadProgWrap').hidden = true
+    toast('ZIP export failed: ' + err.message)
+  }
+}
+
+async function exportWorkspaceZip() {
+  try {
+    toast('Packaging workspace files into ZIP...')
+    const textFiles = files().map(f => ({
+      name: f.name,
+      data: (ytexts.get(f.id) || '').toString()
+    }))
+    const sharedArr = (ysharedFiles || ydoc.getArray('shared_files')).toArray()
+    for (const fileMeta of sharedArr) {
+      try {
+        const blob = await downloadAndDecryptFile({
+          fileMeta,
+          roomCode: CODE,
+          relayHost: relayHost(),
+          roomKey: KEY,
+          authToken: AUTH,
+        })
+        textFiles.push({ name: `shared/${fileMeta.name}`, data: blob })
+      } catch (_) {}
+    }
+    await exportFilesAsZip(textFiles, `anonshare-workspace-${CODE}.zip`)
+    toast('📦 Workspace ZIP downloaded successfully')
+  } catch (err) {
+    toast('Export failed: ' + err.message)
+  }
+}
+
 const ACTIONS = {
   palette: () => openPalette(),
   runcode: () => triggerRunCode(),
   run: () => triggerRunCode(),
   format: () => triggerFormatCode(),
   preview: () => toggleLivePreview(),
+  whiteboard: () => toggleWhiteboard(),
   fileshare: () => toggleFileDrawer(),
   recentrooms: () => toggleBookmarksDrawer(),
   zenmode: () => toggleZenMode(),
@@ -3023,13 +3380,7 @@ const ACTIONS = {
     downloadBlob(new Blob([view.state.doc.toString()], { type: 'text/plain;charset=utf-8' }),
       (f && f.name) || CODE + '.txt')
   },
-  exportzip: async () => {
-    try {
-      const { makeZip } = await import('./zip.js')
-      const entries = files().map(f => ({ name: f.name, text: (ytexts.get(f.id) || { toString: () => '' }).toString() }))
-      downloadBlob(makeZip(entries), 'anonshare-' + CODE + '.zip')
-    } catch (e) { toast('Could not build the archive') }
-  },
+  exportzip: () => exportWorkspaceZip(),
   invite: async () => {
     const shareUrl = inviteLink()
     const text = `Join my encrypted scratchpad on anonshare: ${CODE}${typeof PASS !== 'undefined' && PASS ? ' (Password: ' + PASS + ')' : ''}`
@@ -3094,7 +3445,13 @@ $('saveSettings').onclick = () => {
     LS.set('ts.name', n)
     awareness.setLocalStateField('user', { name: n, color: myColor, view: VIEW_ONLY })
   }
-  toast('Saved')
+  const km = $('keymapSelect') ? $('keymapSelect').value : 'standard'
+  if (km) {
+    currentKeymapMode = km
+    LS.set('ts.keymap', km)
+    if (view) view.dispatch({ effects: keymapComp.reconfigure(getKeymapExtension(km)) })
+  }
+  toast('Settings saved')
   paintPeople()
   $('panel').hidden = true
 }
@@ -3696,6 +4053,135 @@ if ($('histRestoreTabBtn')) $('histRestoreTabBtn').onclick = restoreAsNewTab
 if ($('chatClose')) $('chatClose').onclick = () => { $('chat').hidden = true; updateButtonActiveStates() }
 if ($('panelClose')) $('panelClose').onclick = () => { $('panel').hidden = true; updateButtonActiveStates() }
 
+// Whiteboard Tab & Toolbar Listeners
+if ($('hubWbBtn')) $('hubWbBtn').onclick = () => toggleWhiteboard()
+if ($('wbCloseBtn')) $('wbCloseBtn').onclick = () => toggleWhiteboard(false)
+if ($('wbClearBtn')) $('wbClearBtn').onclick = clearWhiteboard
+if ($('wbDownloadBtn')) $('wbDownloadBtn').onclick = downloadWhiteboardPng
+
+if ($('wbToolPen')) $('wbToolPen').onclick = () => {
+  wbTool = 'pen'
+  document.querySelectorAll('.wb-tool-btn').forEach(b => b.classList.remove('active'))
+  $('wbToolPen').classList.add('active')
+}
+if ($('wbToolHighlighter')) $('wbToolHighlighter').onclick = () => {
+  wbTool = 'highlighter'
+  document.querySelectorAll('.wb-tool-btn').forEach(b => b.classList.remove('active'))
+  $('wbToolHighlighter').classList.add('active')
+}
+if ($('wbToolEraser')) $('wbToolEraser').onclick = () => {
+  wbTool = 'eraser'
+  document.querySelectorAll('.wb-tool-btn').forEach(b => b.classList.remove('active'))
+  $('wbToolEraser').classList.add('active')
+}
+
+document.querySelectorAll('.wb-color-dot').forEach(dot => {
+  dot.onclick = () => {
+    wbColor = dot.dataset.color || '#4c8dff'
+    document.querySelectorAll('.wb-color-dot').forEach(d => d.classList.remove('active'))
+    dot.classList.add('active')
+    if (wbTool === 'eraser') {
+      wbTool = 'pen'
+      document.querySelectorAll('.wb-tool-btn').forEach(b => b.classList.remove('active'))
+      if ($('wbToolPen')) $('wbToolPen').classList.add('active')
+    }
+  }
+})
+
+if ($('wbBrushSize')) {
+  $('wbBrushSize').onchange = e => {
+    wbSize = parseInt(e.target.value, 10) || 4
+  }
+}
+
+// Whiteboard Canvas Pointer Drawing Handlers
+const wbCanvasEl = $('whiteboardCanvas')
+if (wbCanvasEl) {
+  wbCanvasEl.addEventListener('pointerdown', e => {
+    if (readOnlyNow()) return
+    try { wbCanvasEl.setPointerCapture(e.pointerId) } catch (_) {}
+    wbIsDrawing = true
+    const rect = wbCanvasEl.getBoundingClientRect()
+    const x = Math.round(e.clientX - rect.left)
+    const y = Math.round(e.clientY - rect.top)
+    wbCurrentStroke = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      color: wbColor,
+      size: wbSize,
+      tool: wbTool,
+      points: [{ x, y }]
+    }
+  })
+
+  wbCanvasEl.addEventListener('pointermove', e => {
+    if (!wbIsDrawing || !wbCurrentStroke) return
+    const rect = wbCanvasEl.getBoundingClientRect()
+    const x = Math.round(e.clientX - rect.left)
+    const y = Math.round(e.clientY - rect.top)
+    const pts = wbCurrentStroke.points
+    const last = pts[pts.length - 1]
+    if (Math.hypot(x - last.x, y - last.y) < 2) return
+    pts.push({ x, y })
+
+    if (wbCtx) {
+      wbCtx.save()
+      wbCtx.beginPath()
+      wbCtx.lineCap = 'round'
+      wbCtx.lineJoin = 'round'
+      if (wbTool === 'highlighter') {
+        wbCtx.globalAlpha = 0.35
+        wbCtx.strokeStyle = wbColor
+        wbCtx.lineWidth = wbSize * 3.5
+        wbCtx.globalCompositeOperation = 'source-over'
+      } else if (wbTool === 'eraser') {
+        wbCtx.globalAlpha = 1.0
+        wbCtx.globalCompositeOperation = 'destination-out'
+        wbCtx.lineWidth = wbSize * 5
+      } else {
+        wbCtx.globalAlpha = 1.0
+        wbCtx.strokeStyle = wbColor
+        wbCtx.lineWidth = wbSize
+        wbCtx.globalCompositeOperation = 'source-over'
+      }
+      wbCtx.moveTo(last.x, last.y)
+      wbCtx.lineTo(x, y)
+      wbCtx.stroke()
+      wbCtx.restore()
+    }
+  })
+
+  const endWbDrawing = e => {
+    if (wbIsDrawing && wbCurrentStroke && wbCurrentStroke.points.length > 1) {
+      if (ywhiteboard) ywhiteboard.push([wbCurrentStroke])
+    }
+    wbIsDrawing = false
+    wbCurrentStroke = null
+    try { if (e && e.pointerId) wbCanvasEl.releasePointerCapture(e.pointerId) } catch (_) {}
+  }
+  wbCanvasEl.addEventListener('pointerup', endWbDrawing)
+  wbCanvasEl.addEventListener('pointercancel', endWbDrawing)
+}
+
+// ZIP Download for Shared Files
+if ($('fileDownloadZipBtn')) $('fileDownloadZipBtn').onclick = downloadAllSharedFilesZip
+
+// Voice Deafen / Speaker Mute Toggle
+if ($('voiceDeafenBtn')) {
+  $('voiceDeafenBtn').onclick = () => {
+    if (!voiceMesh) return
+    const next = !voiceMesh.isDeafened
+    voiceMesh.setDeafened(next)
+    $('voiceDeafenBtn').classList.toggle('deafened', next)
+    $('voiceDeafenBtn').setAttribute('aria-pressed', String(next))
+    toast(next ? '🎧 Audio deafened (peer sound muted)' : '🎧 Audio undeafened')
+  }
+}
+
+// Settings Keymap Initializer
+if ($('keymapSelect')) {
+  $('keymapSelect').value = currentKeymapMode
+}
+
 // Mobile accessory toolbar quick keys
 document.querySelectorAll('#mobileKeys button[data-key]').forEach(b => {
   b.onclick = () => {
@@ -3775,12 +4261,9 @@ function banner(msg, kind) {
   if (kind !== 'bad') setTimeout(() => { b.hidden = true }, 12000)
 }
 
-function paintCounts() {
-  if (!view) return
-  const d = view.state.doc
-  const s = d.toString().trim()
-  $('counts').textContent = d.lines + 'L ' + (s ? s.split(/\s+/).length : 0) + 'W ' + d.length + 'C'
-}
+window.addEventListener('resize', () => {
+  if (whiteboardOpen) setupWhiteboardCanvas()
+})
 
 addEventListener('hashchange', () => {
   const next = norm(location.hash.slice(1))
