@@ -47,13 +47,16 @@ const COMPACT_EVERY = 150
 const SNAPSHOT_WINDOW = 45000
 const IP_PER_MIN = 600
 const CREATE_PER_MIN = 60
-const AUTH_PER_MIN = 12
-const RUN_PER_MIN = 20
-const CODE_RE = /^[A-Z0-9]{4,12}$/
-
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'anonshare-master-secret'
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '[REDACTED-LEAKED-SECRET]'
 const PORT = parseInt(process.env.PORT || '8787', 10)
 const HOST = process.env.HOST || '0.0.0.0'
+
+const currentConfig = {
+  IP_PER_MIN,
+  CREATE_PER_MIN,
+  AUTH_PER_MIN,
+  MAX_CONNS,
+}
 
 /* ------------------------------------------------------------- helpers */
 
@@ -882,6 +885,29 @@ const server = http.createServer(async (req, res) => {
 
       room.announceState()
       return sendJson(res, { ok: true, suspended: !!room.meta.s, locked: !!room.meta.r })
+    }
+
+    if (url.pathname === '/admin/config') {
+      if (req.method === 'GET') {
+        const defaults = { IP_PER_MIN, CREATE_PER_MIN, AUTH_PER_MIN, MAX_CONNS, RATE_PER_SEC }
+        return sendJson(res, { config: currentConfig, defaults })
+      }
+      if (req.method === 'POST') {
+        let body = ''
+        req.on('data', chunk => { body += chunk })
+        req.on('end', () => {
+          try {
+            const data = JSON.parse(body)
+            for (const k of ['IP_PER_MIN', 'CREATE_PER_MIN', 'AUTH_PER_MIN', 'MAX_CONNS']) {
+              if (typeof data[k] === 'number' && data[k] > 0) currentConfig[k] = Math.floor(data[k])
+            }
+            return sendJson(res, { ok: true, config: currentConfig })
+          } catch (e) {
+            return sendJson(res, { error: 'bad_body' }, 400)
+          }
+        })
+        return
+      }
     }
 
     return sendJson(res, { error: 'not_found' }, 404)
