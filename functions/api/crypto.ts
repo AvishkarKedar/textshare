@@ -1,22 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+// Cloudflare Pages Function: /api/crypto
 
 interface CryptoBody {
   code: string;
   password?: string;
 }
 
-/**
- * Demonstrates the actual anonshare key-derivation flow:
- *   key  = PBKDF2(code + ":" + password, salt = "anonshare|CODE",       600_000) → AES-GCM 256
- *   auth = PBKDF2(code + ":" + password, salt = "anonshare-auth|CODE", 600_000) → 32 bytes (relay stores SHA-256)
- *
- * The relay NEVER sees `key`. It only sees `auth`, and even then only stores
- * SHA-256(auth). This route runs entirely in the browser's WebCrypto — we
- * mirror it here on the server so the demo can SHOW the math.
- */
 async function deriveBits(password: string, salt: string, iterations: number, len: number): Promise<ArrayBuffer> {
   const { subtle } = globalThis.crypto;
   const enc = new TextEncoder();
@@ -43,38 +31,36 @@ function bufToHex(buf: ArrayBuffer): string {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function POST(req: NextRequest) {
+export async function onRequestPost(context: { request: Request }): Promise<Response> {
   let body: CryptoBody;
   try {
-    body = await req.json();
+    body = await context.request.json();
   } catch {
-    return NextResponse.json({ ok: false, error: "invalid JSON" }, { status: 400 });
+    return Response.json({ ok: false, error: "invalid JSON" }, { status: 400 });
   }
   const code = (body.code || "").toUpperCase();
   const password = body.password || "";
   if (!code) {
-    return NextResponse.json({ ok: false, error: "code is required" }, { status: 400 });
+    return Response.json({ ok: false, error: "code is required" }, { status: 400 });
   }
 
-  const ITERATIONS = 100_000; // 600k in prod; 100k here so the demo returns in ~1s
+  const ITERATIONS = 100_000;
   const input = `${code}:${password}`;
   const keySalt = `anonshare|${code}`;
   const authSalt = `anonshare-auth|${code}`;
 
   const start = Date.now();
   try {
-    // derive both in parallel
     const [keyBuf, authBuf, authHashBuf] = await Promise.all([
-      deriveBits(input, keySalt, ITERATIONS, 256), // 256 bits = AES-GCM 256
-      deriveBits(input, authSalt, ITERATIONS, 256), // 256 bits
-      // also compute SHA-256(auth) to show what the relay would store
+      deriveBits(input, keySalt, ITERATIONS, 256),
+      deriveBits(input, authSalt, ITERATIONS, 256),
       (async () => {
         const a = await deriveBits(input, authSalt, ITERATIONS, 256);
         return globalThis.crypto.subtle.digest("SHA-256", a);
       })(),
     ]);
 
-    return NextResponse.json({
+    return Response.json({
       ok: true,
       code,
       iterations: ITERATIONS,
@@ -101,16 +87,16 @@ export async function POST(req: NextRequest) {
       differentSalts: keySalt !== authSalt,
       derivedAt: Date.now(),
     });
-  } catch (e) {
-    return NextResponse.json(
+  } catch (e: any) {
+    return Response.json(
       { ok: false, error: e instanceof Error ? e.message : String(e) },
       { status: 500 },
     );
   }
 }
 
-export async function GET() {
-  return NextResponse.json({
+export async function onRequestGet(): Promise<Response> {
+  return Response.json({
     ok: true,
     service: "anonshare-crypto-demo",
     algorithm: "PBKDF2-SHA-256",

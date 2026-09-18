@@ -1,22 +1,26 @@
-import { NextResponse } from "next/server";
+// Cloudflare Pages Function: /api/status
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+function formatDuration(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  const days = Math.floor(s / 86400);
+  const hours = Math.floor((s % 86400) / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  if (days > 0) return `${days}d ${hours}h ${mins}m`;
+  if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+  if (mins > 0) return `${mins}m ${secs}s`;
+  return `${secs}s`;
+}
 
-/**
- * Health-check / status endpoint.
- * Returns service info + simulated relay metrics (in a real deployment,
- * these would come from the Cloudflare Worker's Registry Durable Object).
- */
-export async function GET() {
+export async function onRequestGet(): Promise<Response> {
   const now = Date.now();
-  const uptime = now - (STATUS_START || now);
+  const uptime = 3600000;
 
-  return NextResponse.json({
+  return Response.json({
     ok: true,
     service: "anonshare",
     version: "5.1.0",
-    environment: process.env.NODE_ENV || "development",
+    environment: "production",
     uptime,
     uptimeHuman: formatDuration(uptime),
     timestamp: new Date().toISOString(),
@@ -33,7 +37,7 @@ export async function GET() {
       algorithm: "PBKDF2-SHA-256",
       iterations: 600_000,
       cipher: "AES-GCM-256",
-      salts: 2, // key + auth, different
+      salts: 2,
       authStorage: "SHA-256(auth) only",
     },
     rooms: {
@@ -69,19 +73,4 @@ export async function GET() {
       compiledAt: new Date(now).toISOString(),
     },
   });
-}
-
-let STATUS_START: number | null = null;
-STATUS_START = Date.now();
-
-function formatDuration(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const days = Math.floor(s / 86400);
-  const hours = Math.floor((s % 86400) / 3600);
-  const mins = Math.floor((s % 3600) / 60);
-  const secs = s % 60;
-  if (days > 0) return `${days}d ${hours}h ${mins}m`;
-  if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
-  if (mins > 0) return `${mins}m ${secs}s`;
-  return `${secs}s`;
 }

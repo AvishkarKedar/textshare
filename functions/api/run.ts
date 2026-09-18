@@ -1,7 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+// Cloudflare Pages Function: /api/run
 
 interface RunBody {
   language: string;
@@ -21,17 +18,21 @@ interface RunResult {
 const MAX_DURATION_MS = 5000;
 const MAX_OUTPUT_CHARS = 20_000;
 
-/**
- * Sandboxed JavaScript execution.
- *
- * We run the user's code in a fresh `Function` constructor with no access to
- * the outer scope. `console.log/warn/error` are captured. A microtask drain +
- * timer cap prevents infinite loops from hanging the request.
- *
- * This is NOT a substitute for a real OS-level sandbox (Bubblewrap/nsjail) —
- * it's a demo runner for the anonshare UX prototype. Production deployments
- * should proxy to a proper sandboxed runner (Piston / Firecracker / gVisor).
- */
+function formatArgs(args: unknown[]): string {
+  return args
+    .map((a) => {
+      if (a === null) return "null";
+      if (a === undefined) return "undefined";
+      if (typeof a === "string") return a;
+      try {
+        return JSON.stringify(a, null, a && typeof a === "object" ? 2 : 0);
+      } catch {
+        return String(a);
+      }
+    })
+    .join(" ");
+}
+
 async function runJavaScript(source: string, stdin: string): Promise<RunResult> {
   const start = Date.now();
   const stdoutChunks: string[] = [];
@@ -45,7 +46,6 @@ async function runJavaScript(source: string, stdin: string): Promise<RunResult> 
     error: (...args: unknown[]) => stderrChunks.push(formatArgs(args)),
   };
 
-  // minimal stdin reader — returns the next line
   const stdinLines = stdin.split("\n");
   let stdinIdx = 0;
   const readline = () => stdinLines[stdinIdx++] ?? "";
@@ -53,8 +53,6 @@ async function runJavaScript(source: string, stdin: string): Promise<RunResult> 
   let exitCode = 0;
   let timedOut = false;
 
-  // We can't truly sandbox `eval`, but the Function constructor at least
-  // isolates scope. Block `process` and `require` access.
   const sandboxedGlobals = {
     console: fakeConsole,
     readline,
@@ -93,17 +91,15 @@ async function runJavaScript(source: string, stdin: string): Promise<RunResult> 
   `;
 
   try {
-    // race the user code against a timeout
     await Promise.race([
       (async () => {
         try {
-          
           const fn = new Function(...Object.keys(sandboxedGlobals), wrappedSource);
           const result = fn(...Object.values(sandboxedGlobals));
           if (result && typeof result.then === "function") {
             await result;
           }
-        } catch (e) {
+        } catch (e: any) {
           exitCode = 1;
           stderrChunks.push(String(e instanceof Error ? e.stack || e.message : e));
         }
@@ -116,14 +112,13 @@ async function runJavaScript(source: string, stdin: string): Promise<RunResult> 
       ),
     ]);
 
-    // drain microtasks
     await new Promise((r) => setTimeout(r, 10));
 
     if (timedOut) {
       exitCode = 124;
       stderrChunks.push(`[anonshare] execution timed out after ${MAX_DURATION_MS}ms`);
     }
-  } catch (e) {
+  } catch (e: any) {
     exitCode = 1;
     stderrChunks.push(String(e instanceof Error ? e.message : e));
   }
@@ -141,27 +136,23 @@ async function runJavaScript(source: string, stdin: string): Promise<RunResult> 
   };
 }
 
-function formatArgs(args: unknown[]): string {
-  return args
-    .map((a) => {
-      if (a === null) return "null";
-      if (a === undefined) return "undefined";
-      if (typeof a === "string") return a;
-      try {
-        return JSON.stringify(a, null, a && typeof a === "object" ? 2 : 0);
-      } catch {
-        return String(a);
-      }
-    })
-    .join(" ");
+function evalPyExpr(expr: string, vars: Record<string, unknown>): unknown {
+  const e = expr.trim();
+  const fM = e.match(/^f["'](.*)["']$/);
+  if (fM) {
+    return fM[1].replace(/\{([^}]+)\}/g, (_, inner) => String(evalPyExpr(inner, vars)));
+  }
+  if (/^["'].*["']$/.test(e)) return e.slice(1, -1);
+  if (/^-?\d+(\.\d+)?$/.test(e)) return Number(e);
+  if (e === "True") return true;
+  if (e === "False") return false;
+  if (e === "None") return null;
+  if (/^\w+$/.test(e)) return vars[e];
+  const jsExpr = e.replace(/\bTrue\b/g, "true").replace(/\bFalse\b/g, "false").replace(/\bNone\b/g, "null").replace(/\bnot\b/g, "!");
+  const fn = new Function(...Object.keys(vars), `return (${jsExpr});`);
+  return fn(...Object.values(vars));
 }
 
-/**
- * Very small "interpreter" for a handful of Python-ish statements, enough to
- * make the demo feel alive for print() / basic arithmetic / if-else. This is
- * explicitly NOT a real Python interpreter — it's a teaching aid for the UX.
- * A real deployment proxies to Piston.
- */
 async function runPythonLite(source: string, stdin: string): Promise<RunResult> {
   const start = Date.now();
   const stdout: string[] = [];
@@ -180,14 +171,12 @@ async function runPythonLite(source: string, stdin: string): Promise<RunResult> 
     if (!line || line.startsWith("#")) continue;
 
     try {
-      // print(...)
       const printM = line.match(/^print\((.*)\)$/);
       if (printM) {
         const val = evalPyExpr(printM[1], vars);
         stdout.push(String(val));
         continue;
       }
-      // input(...)
       const inputM = line.match(/^(\w+)\s*=\s*input\((.*)\)$/);
       if (inputM) {
         const prompt = evalPyExpr(inputM[2], vars);
@@ -195,27 +184,23 @@ async function runPythonLite(source: string, stdin: string): Promise<RunResult> 
         vars[inputM[1]] = input();
         continue;
       }
-      // assignment: x = expr
       const assignM = line.match(/^(\w+)\s*=\s*(.+)$/);
       if (assignM) {
         vars[assignM[1]] = evalPyExpr(assignM[2], vars);
         continue;
       }
-      // if / elif / else — very loose
       if (line.startsWith("if ") && line.endsWith(":")) {
         const cond = evalPyExpr(line.slice(3, -1), vars);
         if (!cond) {
-          // skip indented block
           i++;
           while (i < lines.length && (lines[i].startsWith("    ") || lines[i].startsWith("\t") || lines[i].trim() === "")) i++;
           i--;
         }
         continue;
       }
-      // bare expression
       const val = evalPyExpr(line, vars);
       if (val !== undefined) stdout.push(String(val));
-    } catch (e) {
+    } catch (e: any) {
       stderr.push(`Line ${i + 1}: ${e instanceof Error ? e.message : String(e)}`);
       exitCode = 1;
       break;
@@ -232,46 +217,21 @@ async function runPythonLite(source: string, stdin: string): Promise<RunResult> 
   };
 }
 
-function evalPyExpr(expr: string, vars: Record<string, unknown>): unknown {
-  const e = expr.trim();
-  // f-string
-  const fM = e.match(/^f["'](.*)["']$/);
-  if (fM) {
-    return fM[1].replace(/\{([^}]+)\}/g, (_, inner) => String(evalPyExpr(inner, vars)));
-  }
-  // string literal
-  if (/^["'].*["']$/.test(e)) return e.slice(1, -1);
-  // number
-  if (/^-?\d+(\.\d+)?$/.test(e)) return Number(e);
-  // boolean
-  if (e === "True") return true;
-  if (e === "False") return false;
-  if (e === "None") return null;
-  // variable
-  if (/^\w+$/.test(e)) return vars[e];
-  // arithmetic — delegate to JS eval (sandboxed: only vars + numbers)
-  const jsExpr = e.replace(/\bTrue\b/g, "true").replace(/\bFalse\b/g, "false").replace(/\bNone\b/g, "null").replace(/\bnot\b/g, "!");
-  
-  const fn = new Function(...Object.keys(vars), `return (${jsExpr});`);
-  return fn(...Object.values(vars));
-}
-
-export async function POST(req: NextRequest) {
+export async function onRequestPost(context: { request: Request }): Promise<Response> {
   let body: RunBody;
   try {
-    body = await req.json();
+    body = await context.request.json();
   } catch {
-    return NextResponse.json({ ok: false, stderr: "invalid JSON body", stdout: "", exitCode: 1, durationMs: 0, language: "?" }, { status: 400 });
+    return Response.json({ ok: false, stderr: "invalid JSON body", stdout: "", exitCode: 1, durationMs: 0, language: "?" }, { status: 400 });
   }
 
   const { language, source, stdin = "" } = body;
   if (!source || typeof source !== "string") {
-    return NextResponse.json({ ok: false, stderr: "missing source", stdout: "", exitCode: 1, durationMs: 0, language }, { status: 400 });
+    return Response.json({ ok: false, stderr: "missing source", stdout: "", exitCode: 1, durationMs: 0, language }, { status: 400 });
   }
 
-  // simple rate-limit by source size
   if (source.length > 64_000) {
-    return NextResponse.json({ ok: false, stderr: "source too large (max 64KB)", stdout: "", exitCode: 1, durationMs: 0, language }, { status: 413 });
+    return Response.json({ ok: false, stderr: "source too large (max 64KB)", stdout: "", exitCode: 1, durationMs: 0, language }, { status: 413 });
   }
 
   let result: RunResult;
@@ -281,7 +241,7 @@ export async function POST(req: NextRequest) {
     } else if (language === "python" || language === "py") {
       result = await runPythonLite(source, stdin);
     } else {
-      return NextResponse.json({
+      return Response.json({
         ok: false,
         stderr: `language "${language}" not supported in demo runner. Try javascript or python. (production relays proxy to Piston for 15 languages.)`,
         stdout: "",
@@ -290,7 +250,7 @@ export async function POST(req: NextRequest) {
         language,
       }, { status: 400 });
     }
-  } catch (e) {
+  } catch (e: any) {
     result = {
       ok: false,
       stdout: "",
@@ -301,11 +261,11 @@ export async function POST(req: NextRequest) {
     };
   }
 
-  return NextResponse.json(result);
+  return Response.json(result);
 }
 
-export async function GET() {
-  return NextResponse.json({
+export async function onRequestGet(): Promise<Response> {
+  return Response.json({
     ok: true,
     service: "anonshare-run",
     languages: ["javascript", "python (lite)"],
