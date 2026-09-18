@@ -1,0 +1,76 @@
+"use client";
+
+import { X, Plus, FileCode2, PenTool, Sparkles, History as HistoryIcon, FolderOpen, FlaskConical } from "lucide-react";
+import { useAnon } from "@/lib/store";
+
+export function TabBar() {
+  const s = useAnon();
+  if (s.zenMode) return null;
+
+  return (
+    <div className="flex h-9 items-stretch hairline-b anon-raise overflow-x-auto no-scrollbar">
+      <div className="flex items-stretch">
+        {s.files.map((f) => {
+          const active = f.id === s.activeFileId;
+          return (
+            <button
+              key={f.id}
+              onClick={() => s.setActiveFile(f.id)}
+              className={`group flex h-9 items-center gap-2 px-3 text-xs anon-mono transition-colors ${
+                active
+                  ? "bg-[var(--anon-bg)] anon-fg hairline-r"
+                  : "anon-mut hover:bg-[var(--anon-panel)] hairline-r"
+              }`}
+            >
+              <FileCode2 className="h-3 w-3" />
+              <span className="whitespace-nowrap">{f.name}</span>
+              {active && (
+                <span className="h-1.5 w-1.5 rounded-full anim-beat" style={{ background: "var(--anon-ok)" }} />
+              )}
+            </button>
+          );
+        })}
+        <button
+          onClick={() => s.addFile("untitled.txt", "text")}
+          className="flex h-9 w-9 items-center justify-center anon-mut hover:bg-[var(--anon-panel)] hairline-r"
+          title="New file"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div className="ml-auto flex items-stretch">
+        <HubTab icon={PenTool} label="Whiteboard" onClick={() => s.toggleWhiteboard()} active={s.whiteboardOpen} />
+        <HubTab icon={Sparkles} label="Generative" onClick={() => s.toggleGenerative()} active={s.generativeOpen} />
+        <HubTab icon={FlaskConical} label="Tests" onClick={() => s.toggleTestPanel()} active={s.testPanelOpen} />
+        <HubTab icon={HistoryIcon} label="History" onClick={() => s.toggleHistory()} active={s.historyOpen} />
+        <HubTab icon={FolderOpen} label="Files" onClick={() => s.toggleFiles()} active={s.filesOpen} />
+      </div>
+    </div>
+  );
+}
+
+function HubTab({
+  icon: Icon,
+  label,
+  onClick,
+  active,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  onClick?: () => void;
+  active?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex h-9 items-center gap-1.5 px-3 text-xs anon-mono hairline-l transition-colors ${
+        active ? "bg-[var(--anon-panel)] anon-fg" : "anon-mut hover:bg-[var(--anon-panel)]"
+      }`}
+      title={label}
+    >
+      <Icon className="h-3 w-3" />
+      <span className="hidden xl:inline">{label}</span>
+    </button>
+  );
+}

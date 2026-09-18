@@ -1,0 +1,75 @@
+"use client";
+
+import { Play, FolderOpen, MessageSquare, Undo2, Redo2, MoreHorizontal } from "lucide-react";
+import { useAnon } from "@/lib/store";
+
+export function MobileNav() {
+  const s = useAnon();
+  return (
+    <>
+      {/* floating action button — Run */}
+      <button
+        onClick={() => {}}
+        className="fixed bottom-16 right-4 z-30 inline-flex h-12 w-12 items-center justify-center bg-[var(--anon-accent)] text-[var(--anon-accent-fg)] shadow-lg shadow-black/40 transition-transform active:scale-95 md:hidden"
+        style={{ borderRadius: 0 }}
+        title="Run code"
+        aria-label="Run code"
+      >
+        <Play className="h-5 w-5" />
+      </button>
+
+      {/* bottom nav */}
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-12 items-stretch hairline-t anon-raise md:hidden">
+        <NavBtn icon={FolderOpen} label="files" onClick={() => s.toggleFiles()} active={s.filesOpen} />
+        <NavBtn icon={MessageSquare} label="chat" onClick={() => s.toggleChat()} active={s.chatOpen} />
+        <NavBtn icon={Undo2} label="undo" onClick={() => {}} />
+        <NavBtn icon={Redo2} label="redo" onClick={() => {}} />
+        <NavBtn icon={MoreHorizontal} label="more" onClick={() => s.togglePalette()} />
+      </nav>
+
+      {/* accessory keys bar (above bottom nav) */}
+      <div className="fixed inset-x-0 bottom-12 z-10 flex h-9 items-stretch hairline-t anon-panel anon-mono text-xs anon-mut md:hidden overflow-x-auto no-scrollbar">
+        {["{", "}", "(", ")", "[", "]", ";", "=", '"', "'", "/", "Tab", "=>"].map((k) => (
+          <button
+            key={k}
+            onClick={() => {
+              const ta = document.querySelector("textarea");
+              if (ta) {
+                const start = ta.selectionStart;
+                const end = ta.selectionEnd;
+                ta.setRangeText(k === "Tab" ? "\t" : k, start, end, "end");
+              }
+            }}
+            className="flex h-9 min-w-9 flex-none items-center justify-center px-2 hover:bg-[var(--anon-raise)]"
+          >
+            {k}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function NavBtn({
+  icon: Icon,
+  label,
+  onClick,
+  active,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] anon-mono ${
+        active ? "anon-accent bg-[var(--anon-panel)]" : "anon-mut"
+      }`}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
+  );
+}

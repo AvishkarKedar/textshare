@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>anonshare admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<section id="login">
+  <div class="card">
+    <h1>anonshare admin</h1>
+    <p class="mut">Owner-only dashboard. Select a relay server and sign in with the admin password.</p>
+    
+    <div style="margin-top:14px;text-align:left">
+      <label for="relaySelect" style="display:block;font-size:12px;font-weight:600;color:var(--mut);margin-bottom:6px">Target Relay:</label>
+      <select id="relaySelect" class="in" style="margin-bottom:10px;cursor:pointer;width:100%">
+        <option value="https://relay.avishkark.in">⚡ Primary VPS Relay (relay.avishkark.in)</option>
+        <option value="https://textshare-sync.avishkarkedar.workers.dev">☁️ Backup Cloudflare Worker (textshare-sync.avishkarkedar.workers.dev)</option>
+        <option value="custom">✏️ Custom URL...</option>
+      </select>
+      <input id="customRelayUrl" class="in" placeholder="https://..." style="margin-bottom:10px" hidden autocomplete="off" spellcheck="false">
+
+      <label for="loginPass" style="display:block;font-size:12px;font-weight:600;color:var(--mut);margin-bottom:6px">Admin Password:</label>
+      <input id="loginPass" class="in" type="password" placeholder="Enter admin password" autocomplete="current-password" style="width:100%">
+    </div>
+
+    <p class="errline" id="loginErr" hidden></p>
+    <button id="loginGo" class="btn primary block" style="margin-top:14px">Sign in</button>
+  </div>
+</section>
+
+<main id="dash" hidden>
+  <header id="top">
+    <div class="logo"><span class="caret">&gt;</span> anonshare admin</div>
+    <span class="grow"></span>
+    <span id="relayUrl" class="mut small"></span>
+    <button id="refreshBtn" class="btn">Refresh</button>
+    <button id="logoutBtn" class="btn">Sign out</button>
+  </header>
+
+  <div id="banner" hidden></div>
+
+  <section class="metrics">
+    <div class="mcard"><b id="mTotal">&mdash;</b><span>active rooms</span></div>
+    <div class="mcard"><b id="mHour">&mdash;</b><span>created (1h)</span></div>
+    <div class="mcard"><b id="mDay">&mdash;</b><span>created (24h)</span></div>
+    <div class="mcard"><b id="mPass">&mdash;</b><span>password-protected</span></div>
+  </section>
+
+  <section class="panel">
+    <div class="phead">
+      <h2>Rooms</h2>
+      <input id="roomFilter" class="in sm" placeholder="Filter by code">
+    </div>
+    <div class="tablewrap">
+      <table id="roomsTable">
+        <thead>
+          <tr><th>Code</th><th>Created</th><th>TTL</th><th>Peers</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="roomsBody"></tbody>
+      </table>
+      <p id="roomsEmpty" class="mut" hidden>No active rooms right now.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="phead"><h2>Rate limits</h2></div>
+    <p class="mut">Adjust the relay's abuse-prevention caps without a redeploy. Changes take effect within ~15 seconds. Leave a field blank to use the built-in default.</p>
+    <div id="configForm" class="configform"></div>
+    <div class="mrow">
+      <button id="configSave" class="btn primary">Save limits</button>
+      <span id="configSaved" class="mut small" hidden>Saved.</span>
+    </div>
+  </section>
+
+  <footer id="footNote" class="mut small">
+    This dashboard only ever sees room codes, timestamps, TTLs, and peer counts &mdash; never message content, passwords, or encryption keys. See the project's WHITEPAPER.md and COMPLIANCE.md for details.
+  </footer>
+</main>
+
+<script src="admin.js"></script>
+</body>
+</html>
