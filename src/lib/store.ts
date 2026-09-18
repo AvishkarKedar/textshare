@@ -186,6 +186,7 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: "⌘ ⇧ R", label: "Open recent rooms (bookmarks)", group: "navigation" },
   { keys: "⌘ ⇧ Y", label: "Open system status", group: "tools" },
   { keys: "⌘ ⇧ X", label: "Open threat model", group: "tools" },
+  { keys: "⌘ ⇧ F", label: "Open FAQs & help", group: "tools" },
   { keys: "⌘ ⇧ O", label: "Restart onboarding tour", group: "global" },
   { keys: "⌘ .", label: "Toggle zen mode", group: "global" },
   { keys: "⌘ ⇧ H", label: "Open history (time machine)", group: "navigation" },
@@ -193,6 +194,7 @@ export const SHORTCUTS: ShortcutDef[] = [
 ];
 
 export const SLASH_COMMANDS: SlashCommand[] = [
+  { id: "faq", trigger: "/faq", label: "FAQs & Help", hint: "honest answers to all questions", icon: "❓" },
   { id: "run", trigger: "/run", label: "Run code", hint: "execute the active file", icon: "▶" },
   { id: "test", trigger: "/test", label: "Run tests", hint: "parse test()/assert patterns", icon: "✓" },
   { id: "zen", trigger: "/zen", label: "Toggle zen mode", hint: "distraction-free editor", icon: "◗" },
@@ -384,9 +386,10 @@ interface AnonState {
   findMatchIndex: number;
   findMatchCount: number;
 
-  // privacy + terms modals
+  // privacy + terms + faq modals
   privacyOpen: boolean;
   termsOpen: boolean;
+  faqOpen: boolean;
 
   // shared files (upload/sharing)
   sharedFiles: SharedFile[];
@@ -457,9 +460,10 @@ interface AnonState {
   toggleFindCaseSensitive: () => void;
   toggleFindRegex: () => void;
   setFindMatch: (idx: number, count: number) => void;
-  // privacy + terms
+  // privacy + terms + faq
   togglePrivacy: () => void;
   toggleTerms: () => void;
+  toggleFaq: () => void;
 
   // actions
   setView: (v: View) => void;
@@ -809,6 +813,7 @@ export const useAnon = create<AnonState>()(
 
       privacyOpen: false,
       termsOpen: false,
+      faqOpen: false,
 
       sharedFiles: [],
 
@@ -899,6 +904,9 @@ export const useAnon = create<AnonState>()(
           },
           sharedFiles: [],
           bookmarksOpen: false,
+          privacyOpen: false,
+          termsOpen: false,
+          faqOpen: false,
           goalText: "",
           goalSetAt: null,
           findOpen: false,
@@ -1361,9 +1369,10 @@ export const useAnon = create<AnonState>()(
       toggleFindRegex: () => set((s) => ({ findRegex: !s.findRegex })),
       setFindMatch: (idx, count) => set({ findMatchIndex: idx, findMatchCount: count }),
 
-      // ---------- privacy + terms ----------
+      // ---------- privacy + terms + faq ----------
       togglePrivacy: () => set((s) => ({ privacyOpen: !s.privacyOpen })),
       toggleTerms: () => set((s) => ({ termsOpen: !s.termsOpen })),
+      toggleFaq: () => set((s) => ({ faqOpen: !s.faqOpen })),
       // ---------- end new actions ----------
 
       // ---------- notifications ----------

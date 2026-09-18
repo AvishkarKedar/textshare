@@ -43,9 +43,8 @@ const FAQS = [
 export function FAQ() {
   const [open, setOpen] = useState<number | null>(0);
   const toggleSecurity = useAnon((s) => s.toggleSecurity);
-  const setView = useAnon((s) => s.setView);
   return (
-    <section className="hairline-t">
+    <section id="faq" className="hairline-t scroll-mt-12">
       <div className="mx-auto max-w-7xl px-6 py-16">
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_2fr]">
           <div>
@@ -63,13 +62,12 @@ export function FAQ() {
             </p>
             <button
               onClick={() => {
-                setView("editor");
-                setTimeout(() => toggleSecurity(), 200);
+                toggleSecurity();
                 toast("Opening threat model", { description: "Full security write-up with honest limits." });
               }}
-              className="anon-mono mt-4 inline-flex items-center gap-1 text-xs anon-accent hover:underline"
+              className="anon-mono mt-4 inline-flex items-center gap-1 text-xs anon-accent hover:underline cursor-pointer"
             >
-              Read security.html →
+              Read security write-up →
             </button>
           </div>
           <div className="hairline">

@@ -82,9 +82,26 @@ export function Hero() {
             <span className="anon-accent transition-transform group-hover:translate-x-0.5">→</span>
           </button>
 
-          <div className="flex items-center gap-3">
-            <span className="anon-mono text-sm anon-accent hero-caret">{'>'}</span>
-            <span className="anon-mono text-sm anon-fg">anonshare</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="anon-mono text-sm anon-accent hero-caret">{'>'}</span>
+              <span className="anon-mono text-sm anon-fg">anonshare</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <a
+                href="#faq"
+                className="anon-mono text-xs text-[#8c8c8c] hover:text-[#e7e7e7] hover:underline transition-colors"
+              >
+                FAQ
+              </a>
+              <button
+                type="button"
+                onClick={() => toggleSecurity()}
+                className="anon-mono text-xs text-[#8c8c8c] hover:text-[#e7e7e7] hover:underline transition-colors cursor-pointer"
+              >
+                Security
+              </button>
+            </div>
           </div>
 
           <h1 className="anon-sans text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">

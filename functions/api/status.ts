@@ -29,8 +29,6 @@ export async function onRequestGet(): Promise<Response> {
       url: "relay.avishkark.in",
       fallback: "textshare-sync.avishkarkedar.workers.dev",
       status: "operational",
-      medianLatencyMs: 38,
-      p99LatencyMs: 142,
       websocketPath: "/?XTransformPort=3003",
     },
     crypto: {
@@ -41,19 +39,16 @@ export async function onRequestGet(): Promise<Response> {
       authStorage: "SHA-256(auth) only",
     },
     rooms: {
-      active: 12_847,
-      createdLast1h: 342,
-      createdLast24h: 8_104,
-      passwordProtected: 1_203,
       maxConnections: 60,
       ttlOptions: ["10m", "1h", "24h"],
+      note: "room counts not available in this prototype — would come from the Registry DO in production",
     },
     runner: {
       languages: 15,
-      sandbox: "bubblewrap (--unshare-all --unshare-net)",
+      sandbox: "bubblewrap (--unshare-all --unshare-net) on self-hosted relay",
       maxRamMb: 256,
       timeoutMs: 5_000,
-      note: "self-hosted relay runs sandboxed; public worker falls back to emkc.org Piston",
+      fallback: "public emkc.org Piston API on open-source Worker",
     },
     sync: {
       service: "anonshare-sync",

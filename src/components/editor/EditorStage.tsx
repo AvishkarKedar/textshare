@@ -111,6 +111,9 @@ export function EditorStage() {
       case "security":
         s.toggleSecurity();
         break;
+      case "faq":
+        s.toggleFaq();
+        break;
       case "find":
         s.toggleFind();
         break;

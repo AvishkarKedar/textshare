@@ -23,6 +23,7 @@ import {
   Bookmark,
   Activity,
   Shield,
+  HelpCircle,
   CornerDownLeft,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -61,6 +62,7 @@ export function CommandPalette() {
       { id: "bookmarks", label: "Open recent rooms", kbd: "⌘⇧R", icon: Bookmark, group: "navigation", run: () => { s.toggleBookmarks(); close(); } },
       { id: "status", label: "Open system status", kbd: "⌘⇧Y", icon: Activity, group: "tools", run: () => { s.toggleStatus(); close(); } },
       { id: "security", label: "Open threat model", kbd: "⌘⇧X", icon: Shield, group: "tools", run: () => { s.toggleSecurity(); close(); } },
+      { id: "faq", label: "Open FAQs & Help", kbd: "⌘⇧F", icon: HelpCircle, group: "help", run: () => { s.toggleFaq(); close(); } },
       { id: "zen", label: s.zenMode ? "Exit zen mode" : "Enter zen mode", kbd: "⌘.", icon: Maximize2, group: "view", run: () => { s.toggleZen(); close(); } },
       { id: "settings", label: "Open settings", kbd: "⌘,", icon: Settings, group: "config", run: () => { s.toggleSettings(); close(); } },
       { id: "shortcuts", label: "Show keyboard shortcuts", kbd: "?", icon: RotateCcw, group: "config", run: () => { s.toggleShortcuts(); close(); } },
