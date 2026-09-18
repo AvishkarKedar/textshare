@@ -1,69 +1,40 @@
 /**
  * anonshare service worker.
- *
- * Caches the shell so the editor opens offline, and stays out of the way of
- * anything live: websockets, room lookups, and the relay are never touched.
- *
- * Only the HTML entry points are precached by name. The script and stylesheet
- * are emitted by Vite as hashed files under /assets/, so naming them here
- * would just cache 404s on every install; they are stored by the network-first
- * handler below the first time they are fetched.
+ * Navigations use the offline app shell; missing assets never receive HTML.
  */
+const VERSION = 'anonshare-v18'
+const SHELL = ['./','./index.html','./security.html','./privacy.html','./terms.html','./manifest.webmanifest']
 
-const VERSION = 'anonshare-v17'
-const SHELL = [
-  './',
-  './index.html',
-  './security.html',
-  './privacy.html',
-  './terms.html',
-  './manifest.webmanifest',
-]
-
-self.addEventListener('install', e => {
+self.addEventListener('install', event => {
   self.skipWaiting()
-  // allSettled, not all: one 404 must not throw away the whole cache.
-  e.waitUntil(caches.open(VERSION).then(c => Promise.allSettled(SHELL.map(u => c.add(u)))))
+  event.waitUntil(caches.open(VERSION).then(cache => Promise.allSettled(SHELL.map(url => cache.add(url)))))
 })
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  )
+self.addEventListener('activate', event => {
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== VERSION).map(key => caches.delete(key)))).then(() => self.clients.claim()))
 })
 
-self.addEventListener('fetch', e => {
-  const req = e.request
-  if (req.method !== 'GET') return
+self.addEventListener('fetch', event => {
+  const request = event.request
+  if (request.method !== 'GET') return
+  const url = new URL(request.url)
+  if (url.origin !== location.origin || url.pathname.startsWith('/room/')) return
 
-  const url = new URL(req.url)
-  if (url.protocol === 'ws:' || url.protocol === 'wss:') return
-  if (url.pathname.startsWith('/room/')) return       // relay traffic, never cached
-  if (url.origin !== location.origin) return
-
-  // Hashed assets never change under the same name, so serve them from cache
-  // first and skip the network entirely once they are stored.
   if (url.pathname.startsWith('/assets/')) {
-    e.respondWith(
-      caches.match(req).then(hit => hit || fetch(req).then(res => {
-        const copy = res.clone()
-        caches.open(VERSION).then(c => c.put(req, copy)).catch(() => {})
-        return res
-      }))
-    )
+    event.respondWith(caches.match(request).then(hit => hit || fetch(request).then(response => {
+      if (response.ok) caches.open(VERSION).then(cache => cache.put(request, response.clone())).catch(() => {})
+      return response
+    })))
     return
   }
 
-  // Our own files: network first, so a deploy is picked up immediately.
-  e.respondWith(
-    fetch(req)
-      .then(res => {
-        const copy = res.clone()
-        caches.open(VERSION).then(c => c.put(req, copy)).catch(() => {})
-        return res
-      })
-      .catch(() => caches.match(req).then(hit => hit || caches.match('./index.html')))
-  )
+  event.respondWith(fetch(request).then(response => {
+    if (response.ok) caches.open(VERSION).then(cache => cache.put(request, response.clone())).catch(() => {})
+    return response
+  }).catch(async () => {
+    const cached = await caches.match(request)
+    if (cached) return cached
+    if (request.mode === 'navigate') return (await caches.match('./index.html')) || Response.error()
+    return Response.error()
+  }))
 })
