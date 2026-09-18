@@ -9,21 +9,38 @@ export function MobileNav() {
     <>
       {/* floating action button — Run */}
       <button
-        onClick={() => {}}
-        className="fixed bottom-16 right-4 z-30 inline-flex h-12 w-12 items-center justify-center bg-[var(--anon-accent)] text-[var(--anon-accent-fg)] shadow-lg shadow-black/40 transition-transform active:scale-95 md:hidden"
+        onClick={() => s.runCode()}
+        disabled={s.running}
+        className="fixed bottom-16 right-4 z-30 inline-flex h-12 w-12 items-center justify-center bg-[var(--anon-accent)] text-[var(--anon-accent-fg)] shadow-lg shadow-black/40 transition-transform active:scale-95 disabled:opacity-60 md:hidden"
         style={{ borderRadius: 0 }}
         title="Run code"
         aria-label="Run code"
       >
-        <Play className="h-5 w-5" />
+        <Play className={`h-5 w-5 ${s.running ? "animate-spin" : ""}`} />
       </button>
 
       {/* bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-20 flex h-12 items-stretch hairline-t anon-raise md:hidden">
         <NavBtn icon={FolderOpen} label="files" onClick={() => s.toggleFiles()} active={s.filesOpen} />
         <NavBtn icon={MessageSquare} label="chat" onClick={() => s.toggleChat()} active={s.chatOpen} />
-        <NavBtn icon={Undo2} label="undo" onClick={() => {}} />
-        <NavBtn icon={Redo2} label="redo" onClick={() => {}} />
+        <NavBtn
+          icon={Undo2}
+          label="undo"
+          onClick={() => {
+            try {
+              document.execCommand("undo");
+            } catch {}
+          }}
+        />
+        <NavBtn
+          icon={Redo2}
+          label="redo"
+          onClick={() => {
+            try {
+              document.execCommand("redo");
+            } catch {}
+          }}
+        />
         <NavBtn icon={MoreHorizontal} label="more" onClick={() => s.togglePalette()} />
       </nav>
 
