@@ -539,122 +539,23 @@ interface AnonState {
   clearNotifications: () => void;
 }
 
-const DEMO_FILES: EditorFile[] = [
+const INITIAL_FILES: EditorFile[] = [
   {
     id: "f1",
-    name: "shareRoom.js",
+    name: "main.js",
     language: "javascript",
-    content: `// Welcome — this is your room. Share ABC123 with someone.
-// Everything here is encrypted. Try typing / for slash commands.
-//
-// Tip: press ⌘K to open the command palette.
-
-function shareRoom(code, opts = {}) {
-  const { ttl = "24h", password } = opts;
-  const key = deriveKey(code, password); // never leaves your browser
-  const auth = deriveAuth(code, password); // relay sees SHA-256(auth) only
-  return connect("wss://relay.avishkark.in/room/" + code, { key, auth, ttl });
-}
-
-const room = shareRoom("ABC123", { ttl: "1h" });
-room.on("peer", (p) => console.log(p.name + " joined"));
-`,
-  },
-  {
-    id: "f2",
-    name: "README.md",
-    language: "markdown",
-    content: `# untitled session
-
-A scratchpad for the API rewrite.
-
-- [ ] spec draft
-- [ ] endpoint list
-- [x] threat model
-`,
-  },
-  {
-    id: "f3",
-    name: "crypto.test.js",
-    language: "javascript",
-    content: `// Press ⌘⇧T or type /test to run these.
-// anonshare parses test() / describe() / assert() patterns.
-
-describe("key derivation", () => {
-  test("key and auth use different salts", () => {
-    const { key, auth } = derive("ABC123", "pw");
-    assert(key !== auth, "expected different outputs");
-  });
-
-  test("PBKDF2 runs 600k rounds", () => {
-    const t = Date.now();
-    derive("ABC123", "pw");
-    assert(Date.now() - t > 100, "should take >100ms");
-  });
-
-  test("wrong password throws", () => {
-    assert.throws(() => decrypt(wrongKey, ciphertext));
-  });
-});
-
-describe("relay auth", () => {
-  test("only SHA-256(auth) is stored", () => {
-    assert(stored !== auth, "raw auth must not be stored");
-  });
-
-  test("constant-time compare", () => {
-    assert(constEq("abc", "abc") === true);
-    assert(constEq("abc", "abd") === false);
-  });
-});
+    content: `// End-to-end encrypted collaborative session
+// Share your room code to invite collaborators in real-time.
 `,
   },
 ];
 
-const DEMO_PARTICIPANTS: Participant[] = [
-  { id: "me", name: "You", color: "#4c8dff", isOwner: true, online: true, cursorLine: 5 },
-  { id: "av", name: "Avishkar", color: "#3ddc84", online: true, cursorLine: 11 },
-  { id: "lz", name: "Lazarus", color: "#c792ea", online: true, cursorLine: 14 },
-];
-
-const DEMO_MESSAGES: ChatMessage[] = [
-  {
-    id: "m1",
-    authorId: "av",
-    authorName: "Avishkar",
-    color: "#3ddc84",
-    body: "pushed the deriveKey split — auth token is now separate from the AES key",
-    ts: Date.now() - 1000 * 60 * 8,
-    pinned: true,
-    codeBlock: null,
-    threadParent: null,
-  },
-  {
-    id: "m2",
-    authorId: "lz",
-    authorName: "Lazarus",
-    color: "#c792ea",
-    body: "nice. does the relay still get the raw auth?",
-    ts: Date.now() - 1000 * 60 * 6,
-    threadParent: null,
-    codeBlock: null,
-  },
-  {
-    id: "m3",
-    authorId: "av",
-    authorName: "Avishkar",
-    color: "#3ddc84",
-    body: "no — only SHA-256(auth). constant-time compared on every request",
-    ts: Date.now() - 1000 * 60 * 5,
-    threadParent: "m2",
-    codeBlock: {
-      lang: "js",
-      src: "const stored = sha256(auth);\nif (!constEq(stored, incoming)) return deny();",
-    },
-  },
+const INITIAL_PARTICIPANTS: Participant[] = [
+  { id: "me", name: "You", color: "#4c8dff", isOwner: true, online: true, cursorLine: 1 },
 ];
 
 function makeRoomCode(): string {
+
   const AL = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
   let s = "";
   for (let i = 0; i < 6; i++) s += AL[Math.floor(Math.random() * AL.length)];
@@ -828,9 +729,9 @@ export const useAnon = create<AnonState>()(
       displayName: "you",
       color: "#4c8dff",
       isOwner: false,
-      participants: DEMO_PARTICIPANTS,
+      participants: INITIAL_PARTICIPANTS,
 
-      files: DEMO_FILES,
+      files: INITIAL_FILES,
       activeFileId: "f1",
       zenMode: false,
       showPreview: false,
@@ -855,7 +756,7 @@ export const useAnon = create<AnonState>()(
       keybindings: "standard",
       notificationsEnabled: false,
 
-      messages: DEMO_MESSAGES,
+      messages: [],
 
       terminalLines: [],
       terminalTab: "output",
@@ -871,16 +772,7 @@ export const useAnon = create<AnonState>()(
       testing: false,
       testExpanded: {},
 
-      snapshots: [
-        {
-          id: "s1",
-          label: "v1 — before deriveKey split",
-          timelineIdx: 2,
-          author: "Avishkar",
-          color: "#3ddc84",
-          ts: Date.now() - 1000 * 60 * 8,
-        },
-      ],
+      snapshots: [],
       newSnapLabel: "",
 
       generatedUis: [],
@@ -920,11 +812,7 @@ export const useAnon = create<AnonState>()(
 
       sharedFiles: [],
 
-      recentRooms: [
-        { code: "K7Q9M2", title: "API rewrite sprint", emoji: "🔥", visitedAt: Date.now() - 1000 * 60 * 30, hasPassword: false, isOwner: true },
-        { code: "XBP3RJ", title: "interview — frontend", emoji: "💼", visitedAt: Date.now() - 1000 * 60 * 60 * 3, hasPassword: true, isOwner: false },
-        { code: "ZNF8HK", title: "design review", emoji: "✦", visitedAt: Date.now() - 1000 * 60 * 60 * 24, hasPassword: false, isOwner: true },
-      ],
+      recentRooms: [],
       bookmarksOpen: false,
       paletteRecents: [],
 
@@ -946,25 +834,8 @@ export const useAnon = create<AnonState>()(
 
       mdPreviewOpen: false,
 
-      notifications: [
-        {
-          id: "n1",
-          kind: "system",
-          title: "Room created",
-          body: "Share the 6-character code to invite collaborators.",
-          ts: Date.now() - 1000 * 60 * 2,
-          read: false,
-        },
-        {
-          id: "n2",
-          kind: "mention",
-          title: "Avishkar mentioned you",
-          body: "@you — can you review the deriveKey split?",
-          ts: Date.now() - 1000 * 60 * 8,
-          read: false,
-        },
-      ],
-      unreadCount: 2,
+      notifications: [],
+      unreadCount: 0,
 
       setView: (v) => set({ view: v }),
       enterRoom: (opts) =>
@@ -974,8 +845,10 @@ export const useAnon = create<AnonState>()(
           const emoji = opts.emoji ?? "✦";
           const hasPassword = opts.hasPassword ?? false;
           const isOwner = opts.isOwner ?? true;
-          // add to recents (dedupe by code, cap 12)
-          const filteredRecents = s.recentRooms.filter((r) => r.code !== code);
+          // add to recents (dedupe by code, filter demo codes, cap 12)
+          const filteredRecents = (s.recentRooms || []).filter(
+            (r) => r.code !== code && !["K7Q9M2", "XBP3RJ", "ZNF8HK"].includes(r.code)
+          );
           const newRecent: RecentRoom = { code, title, emoji, visitedAt: Date.now(), hasPassword, isOwner };
           return {
             view: "editor",
@@ -985,9 +858,11 @@ export const useAnon = create<AnonState>()(
             ttl: opts.ttl ?? "24h",
             hasPassword,
             isOwner,
-            participants: DEMO_PARTICIPANTS.map((p) =>
-              p.id === "me" ? { ...p, name: s.displayName, color: s.color, isOwner: true } : p,
-            ),
+            participants: [
+              { id: "me", name: s.displayName || "You", color: s.color || "#4c8dff", isOwner, online: true, cursorLine: 1 },
+            ],
+            messages: [],
+            snapshots: [],
             recentRooms: [newRecent, ...filteredRecents].slice(0, 12),
           };
         }),
@@ -1508,7 +1383,7 @@ export const useAnon = create<AnonState>()(
       clearNotifications: () => set({ notifications: [], unreadCount: 0 }),
     }),
     {
-      name: "anonshare-prefs",
+      name: "anonshare-prefs-v5",
       partialize: (s) => ({
         theme: s.theme,
         displayName: s.displayName,
@@ -1516,7 +1391,7 @@ export const useAnon = create<AnonState>()(
         fontSize: s.fontSize,
         chatColored: s.chatColored,
         keybindings: s.keybindings,
-        recentRooms: s.recentRooms,
+        recentRooms: (s.recentRooms || []).filter((r) => !["K7Q9M2", "XBP3RJ", "ZNF8HK"].includes(r.code)),
         paletteRecents: s.paletteRecents,
         customKeys: s.customKeys,
         goalText: s.goalText,
