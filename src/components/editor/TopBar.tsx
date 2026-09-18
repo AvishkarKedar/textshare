@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Play,
   MessageSquare,
@@ -38,6 +38,23 @@ import { initials } from "@/lib/themes";
 export function TopBar() {
   const s = useAnon();
   const [overflow, setOverflow] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent | TouchEvent) {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setOverflow(false);
+      }
+    }
+    if (overflow) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [overflow]);
 
   return (
     <header className="sticky top-0 z-30 flex h-10 items-center gap-2 hairline-b anon-raise px-2 sm:px-3">
@@ -172,40 +189,42 @@ export function TopBar() {
         </button>
 
         {/* overflow menu */}
-        <div className="relative">
+        <div className="relative" ref={overflowRef}>
           <button
             onClick={() => setOverflow((v) => !v)}
-            onBlur={() => setTimeout(() => setOverflow(false), 150)}
-            className="anon-mono inline-flex h-7 w-7 items-center justify-center hairline hover:bg-[var(--anon-panel)]"
-            title="More"
+            className={`anon-mono inline-flex h-7 w-7 items-center justify-center hairline hover:bg-[var(--anon-panel)] ${
+              overflow ? "bg-[var(--anon-panel)]" : ""
+            }`}
+            title="More options"
             aria-label="More actions"
+            aria-expanded={overflow}
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>
           {overflow && (
-            <div className="anim-rise absolute right-0 top-8 w-56 hairline anon-panel shadow-xl shadow-black/30">
-              <OverflowItem icon={Eye} label="Markdown preview" k="⌘⇧P" onClick={() => s.toggleMdPreview()} active={s.mdPreviewOpen} />
-              <OverflowItem icon={Files} label="Files" k="⌘B" onClick={() => s.toggleFiles()} active={s.filesOpen} />
-              <OverflowItem icon={History} label="History (time machine)" k="⌘⇧H" onClick={() => s.toggleHistory()} active={s.historyOpen} />
-              <OverflowItem icon={FlaskConical} label="Test runner" k="⌘⇧T" onClick={() => s.toggleTestPanel()} active={s.testPanelOpen} />
-              <OverflowItem icon={Wand2} label="Generative UI" k="⌘⇧G" onClick={() => s.toggleGenerative()} active={s.generativeOpen} />
-              <OverflowItem icon={Radio} label="Voice chat" k="⌘⇧V" onClick={() => s.toggleVoice()} active={s.voiceOpen} />
-              <OverflowItem icon={Globe} label="Browser" k="⌘⇧B" onClick={() => s.toggleBrowser()} active={s.browserOpen} />
-              <OverflowItem icon={Shield} label="Crypto explainer" k="⌘⇧K" onClick={() => s.toggleCrypto()} active={s.cryptoOpen} />
-              <OverflowItem icon={Sparkles} label="Restart onboarding tour" k="⌘⇧O" onClick={() => s.startTour()} />
-              <OverflowItem icon={PenTool} label="Whiteboard" k="⌘⇧W" onClick={() => s.toggleWhiteboard()} active={s.whiteboardOpen} />
-              <OverflowItem icon={TerminalIcon} label="Terminal" k="⌘\\" onClick={() => s.toggleTerminal()} active={s.terminalOpen} />
-              <OverflowItem icon={Download} label="Export project ZIP" k="⌘⇧E" onClick={() => s.exportProjectZip()} />
-              <OverflowItem icon={Bookmark} label="Recent rooms" k="⌘⇧R" onClick={() => s.toggleBookmarks()} active={s.bookmarksOpen} />
-              <OverflowItem icon={Activity} label="System status" k="⌘⇧Y" onClick={() => s.toggleStatus()} active={s.statusOpen} />
-              <OverflowItem icon={Shield} label="Threat model" k="⌘⇧X" onClick={() => s.toggleSecurity()} active={s.securityOpen} />
-              <OverflowItem icon={HelpCircle} label="FAQs & Help" k="⌘⇧F" onClick={() => s.toggleFaq()} active={s.faqOpen} />
+            <div className="anim-rise absolute right-0 top-8 w-56 hairline anon-panel shadow-xl shadow-black/30 z-50">
+              <OverflowItem icon={Eye} label="Markdown preview" k="⌘⇧P" onClick={() => { s.toggleMdPreview(); setOverflow(false); }} active={s.mdPreviewOpen} />
+              <OverflowItem icon={Files} label="Files" k="⌘B" onClick={() => { s.toggleFiles(); setOverflow(false); }} active={s.filesOpen} />
+              <OverflowItem icon={History} label="History (time machine)" k="⌘⇧H" onClick={() => { s.toggleHistory(); setOverflow(false); }} active={s.historyOpen} />
+              <OverflowItem icon={FlaskConical} label="Test runner" k="⌘⇧T" onClick={() => { s.toggleTestPanel(); setOverflow(false); }} active={s.testPanelOpen} />
+              <OverflowItem icon={Wand2} label="Generative UI" k="⌘⇧G" onClick={() => { s.toggleGenerative(); setOverflow(false); }} active={s.generativeOpen} />
+              <OverflowItem icon={Radio} label="Voice chat" k="⌘⇧V" onClick={() => { s.toggleVoice(); setOverflow(false); }} active={s.voiceOpen} />
+              <OverflowItem icon={Globe} label="Browser" k="⌘⇧B" onClick={() => { s.toggleBrowser(); setOverflow(false); }} active={s.browserOpen} />
+              <OverflowItem icon={Shield} label="Crypto explainer" k="⌘⇧K" onClick={() => { s.toggleCrypto(); setOverflow(false); }} active={s.cryptoOpen} />
+              <OverflowItem icon={Sparkles} label="Restart onboarding tour" k="⌘⇧O" onClick={() => { s.startTour(); setOverflow(false); }} />
+              <OverflowItem icon={PenTool} label="Whiteboard" k="⌘⇧W" onClick={() => { s.toggleWhiteboard(); setOverflow(false); }} active={s.whiteboardOpen} />
+              <OverflowItem icon={TerminalIcon} label="Terminal" k="⌘\\" onClick={() => { s.toggleTerminal(); setOverflow(false); }} active={s.terminalOpen} />
+              <OverflowItem icon={Download} label="Export project ZIP" k="⌘⇧E" onClick={() => { s.exportProjectZip(); setOverflow(false); }} />
+              <OverflowItem icon={Bookmark} label="Recent rooms" k="⌘⇧R" onClick={() => { s.toggleBookmarks(); setOverflow(false); }} active={s.bookmarksOpen} />
+              <OverflowItem icon={Activity} label="System status" k="⌘⇧Y" onClick={() => { s.toggleStatus(); setOverflow(false); }} active={s.statusOpen} />
+              <OverflowItem icon={Shield} label="Threat model" k="⌘⇧X" onClick={() => { s.toggleSecurity(); setOverflow(false); }} active={s.securityOpen} />
+              <OverflowItem icon={HelpCircle} label="FAQs & Help" k="⌘⇧F" onClick={() => { s.toggleFaq(); setOverflow(false); }} active={s.faqOpen} />
               <div className="hairline-t" />
-              <OverflowItem icon={Maximize2} label="Zen mode" k="⌘." onClick={() => s.toggleZen()} active={s.zenMode} />
+              <OverflowItem icon={Maximize2} label="Zen mode" k="⌘." onClick={() => { s.toggleZen(); setOverflow(false); }} active={s.zenMode} />
               <div className="hairline-t" />
-              <OverflowItem icon={Settings} label="Settings" k="⌘," onClick={() => s.toggleSettings()} />
-              <OverflowItem icon={Command} label="Command palette" k="⌘K" onClick={() => s.togglePalette()} />
-              <OverflowItem icon={LogOut} label="Leave room" k="" onClick={() => s.exitRoom()} danger />
+              <OverflowItem icon={Settings} label="Settings" k="⌘," onClick={() => { s.toggleSettings(); setOverflow(false); }} />
+              <OverflowItem icon={Command} label="Command palette" k="⌘K" onClick={() => { s.togglePalette(); setOverflow(false); }} />
+              <OverflowItem icon={LogOut} label="Leave room" k="" onClick={() => { s.exitRoom(); setOverflow(false); }} danger />
             </div>
           )}
         </div>
@@ -231,11 +250,8 @@ function OverflowItem({
 }) {
   return (
     <button
-      onMouseDown={(e) => {
-        e.preventDefault();
-        onClick();
-      }}
-      className={`flex w-full items-center gap-2.5 px-3 py-2 text-left anon-mono text-xs hover:bg-[var(--anon-raise)] ${
+      onClick={onClick}
+      className={`flex w-full items-center gap-2.5 px-3 py-2 text-left anon-mono text-xs hover:bg-[var(--anon-raise)] cursor-pointer ${
         danger ? "text-[var(--anon-danger)]" : ""
       }`}
     >
