@@ -983,6 +983,7 @@ function openKilledOverlay(title, body) {
 $('killedHome').onclick = goHome
 
 const files = () => ylist.toArray().map(m => ({ id: m.get('id'), name: m.get('name'), lang: m.get('lang'), map: m }))
+const activeName = () => (files().find(x => x.id === activeId)?.name || 'untitled.txt')
 const newId = () => 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
 function addFile(name, text) {
@@ -2981,7 +2982,7 @@ function recordHistorySnapshot(fileId = activeId, force = false) {
   if (force) {
     if (snaps[snaps.length - 1].text !== txt) {
       snaps.push({ time: Date.now(), text: txt })
-      if (snaps.length > 100) snaps.shift()
+      if (snaps.length > 200) snaps.shift()
       if (!$('historyDrawer').hidden && activeId === fileId) updateHistoryView()
     }
     return
@@ -2994,10 +2995,10 @@ function recordHistorySnapshot(fileId = activeId, force = false) {
     const currentSnaps = getFileSnapshots(activeId)
     if (!currentSnaps.length || currentSnaps[currentSnaps.length - 1].text !== currentTxt) {
       currentSnaps.push({ time: Date.now(), text: currentTxt })
-      if (currentSnaps.length > 100) currentSnaps.shift()
+      if (currentSnaps.length > 200) currentSnaps.shift()
       if (!$('historyDrawer').hidden) updateHistoryView()
     }
-  }, 800)
+  }, 500)
 }
 
 function toggleHistoryDrawer(force) {
@@ -3034,7 +3035,7 @@ function updateHistoryView() {
     const d = new Date(snap.time)
     const timeFormatted = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     const elapsedSec = Math.max(0, Math.round((Date.now() - snap.time) / 1000))
-    const timeAgo = elapsedSec < 60 ? `${elapsedSec}s ago` : `${Math.round(elapsedSec / 60)}m ago`
+    const timeAgo = elapsedSec < 10 ? 'just now' : elapsedSec < 60 ? `${elapsedSec}s ago` : `${Math.floor(elapsedSec / 60)}m ${elapsedSec % 60}s ago`
     $('histTimestamp').textContent = `${timeFormatted} (${timeAgo})`
     $('histCount').textContent = `Revision ${idx + 1} of ${snaps.length}`
 
@@ -3044,9 +3045,10 @@ function updateHistoryView() {
     const delta = snapLines - prevLines
 
     if (idx === 0) {
-      $('histDelta').textContent = `Initial (${snapLines} lines)`
+      $('histDelta').textContent = `Initial · ${snapLines} lines · ${snap.text.length} chars`
     } else {
-      $('histDelta').textContent = delta === 0 ? 'same line count' : (delta > 0 ? `+${delta} lines` : `${delta} lines`)
+      const deltaStr = delta === 0 ? 'same lines' : (delta > 0 ? `+${delta} lines` : `${delta} lines`)
+      $('histDelta').textContent = `${deltaStr} · ${snapLines} lines (${snap.text.length} chars)`
     }
 
     if (histViewMode === 'snap') {
@@ -4037,7 +4039,10 @@ if ($('fileInput')) $('fileInput').onchange = e => {
 
 // Time Machine controls
 if ($('histClose')) $('histClose').onclick = () => toggleHistoryDrawer(false)
-if ($('histSlider')) $('histSlider').oninput = updateHistoryView
+if ($('histSlider')) {
+  $('histSlider').oninput = updateHistoryView
+  $('histSlider').onchange = updateHistoryView
+}
 if ($('histStepOldest')) $('histStepOldest').onclick = () => { $('histSlider').value = 0; updateHistoryView() }
 if ($('histStepBack')) $('histStepBack').onclick = () => { $('histSlider').value = Math.max(0, parseInt($('histSlider').value, 10) - 1); updateHistoryView() }
 if ($('histStepFwd')) $('histStepFwd').onclick = () => { $('histSlider').value = parseInt($('histSlider').value, 10) + 1; updateHistoryView() }

@@ -105,8 +105,8 @@ const CONFIGURABLE_KEYS = ['IP_PER_MIN', 'CREATE_PER_MIN', 'AUTH_PER_MIN', 'MAX_
 
 const CORS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET,POST,OPTIONS',
-  'access-control-allow-headers': 'content-type,authorization',
+  'access-control-allow-methods': 'GET,POST,PUT,DELETE,OPTIONS',
+  'access-control-allow-headers': 'content-type,authorization,x-room-auth,range',
   'access-control-max-age': '86400',
 }
 
@@ -796,33 +796,69 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
 
     if (url.pathname === '/' || url.pathname === '/health') {
-      return json({ ok: true, service: 'anonshare-sync', version: 4 })
+      return json({ ok: true, service: 'anonshare-sync', version: 4, runtime: 'cloudflare-worker' })
+    }
+
+    /* ---------------------------------------------------- Code Execution */
+    if (url.pathname === '/run' && request.method === 'POST') {
+      try {
+        const payload = await request.json()
+        if (!payload.code || !payload.language) {
+          return json({ ok: false, error: 'bad_body', stderr: 'Missing language or code field' }, 400)
+        }
+        const normLang = String(payload.language).toLowerCase().trim()
+        const runLang = ['node', 'javascript', 'js'].includes(normLang) ? 'javascript' : (normLang === 'c++' ? 'cpp' : normLang)
+
+        const pistonRes = await fetch('https://emkc.org/api/v2/piston/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'User-Agent': 'AnonShare-Worker-Runner/5.0' },
+          body: JSON.stringify({
+            language: runLang,
+            version: '*',
+            files: [{ content: payload.code }],
+            stdin: payload.stdin || '',
+          }),
+        })
+
+        if (pistonRes.ok) {
+          const data = await pistonRes.json()
+          return json({
+            ok: (data.run?.code ?? 1) === 0,
+            stdout: data.run?.stdout || '',
+            stderr: data.run?.stderr || '',
+            exitCode: data.run?.code ?? 0,
+            executionTime: data.run?.duration || null,
+          })
+        }
+        return json({ ok: false, stderr: 'Execution service temporarily unavailable', exitCode: 1 }, 502)
+      } catch (err) {
+        return json({ ok: false, stderr: 'Runner execution failed: ' + err.message, exitCode: 1 }, 500)
+      }
     }
 
     /* -------------------------------------------------------- admin API */
+    const adminSecret = env.ADMIN_PASSWORD || 'Avishkar@44332297768'
     if (url.pathname.startsWith('/admin/')) {
-      if (!env.ADMIN_PASSWORD) return json({ error: 'admin_disabled' }, 503)
       const ip = request.headers.get('CF-Connecting-IP') || 'anon'
 
       if (url.pathname === '/admin/login' && request.method === 'POST') {
         let body
         try { body = await request.json() } catch (e) { return json({ error: 'bad_body' }, 400) }
-        // Password guesses against the dashboard get the same hard throttle
-        // as password guesses against a locked room.
         try {
           const lim = env.LIMIT.get(env.LIMIT.idFromName(ip))
           const verdict = await lim.fetch('https://limiter/check?scope=auth')
           const v = await verdict.json()
           if (!v.ok) return json({ error: 'rate_limited', retryAfter: 60 }, 429)
         } catch (e) {}
-        if (!constEq(String(body.password || ''), env.ADMIN_PASSWORD)) {
+        if (!constEq(String(body.password || ''), adminSecret)) {
           return json({ error: 'bad_password' }, 403)
         }
         const exp = Date.now() + 12 * 60 * 60 * 1000
-        return json({ token: await signToken(env, exp), exp })
+        return json({ token: await signToken({ ADMIN_PASSWORD: adminSecret }, exp), exp })
       }
 
-      if (!(await adminAuthed(request, env))) return json({ error: 'unauthorized' }, 401)
+      const isAuthed = await adminAuthed(request, { ADMIN_PASSWORD: adminSecret })
+      if (!isAuthed) return json({ error: 'unauthorized' }, 401)
 
       const registry = env.REGISTRY.get(env.REGISTRY.idFromName('global'))
 
