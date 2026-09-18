@@ -12,14 +12,14 @@
   const LS_EXP = 'anonshare_admin_token_exp'
 
   const $ = id => document.getElementById(id)
-  const setupS = $('setup'), loginS = $('login'), dashS = $('dash')
+  const loginS = $('login'), dashS = $('dash')
 
-  let relayUrl = localStorage.getItem(LS_URL) || ''
+  let relayUrl = localStorage.getItem(LS_URL) || 'https://relay.avishkark.in'
   let token = localStorage.getItem(LS_TOKEN) || ''
   let tokenExp = Number(localStorage.getItem(LS_EXP) || 0)
 
   function show(section) {
-    setupS.hidden = section !== 'setup'
+    if ($('setup')) $('setup').hidden = true
     loginS.hidden = section !== 'login'
     dashS.hidden = section !== 'dash'
   }
@@ -28,6 +28,26 @@
     u = (u || '').trim().replace(/\/+$/, '')
     if (u && !/^https?:\/\//i.test(u)) u = 'https://' + u
     return u
+  }
+
+  const relaySel = $('relaySelect')
+  const customIn = $('customRelayUrl')
+  if (relaySel) {
+    if (relayUrl === 'https://relay.avishkark.in' || relayUrl === 'https://textshare-sync.avishkarkedar.workers.dev') {
+      relaySel.value = relayUrl
+    } else if (relayUrl) {
+      relaySel.value = 'custom'
+      if (customIn) { customIn.hidden = false; customIn.value = relayUrl }
+    }
+    relaySel.onchange = () => {
+      if (relaySel.value === 'custom') {
+        if (customIn) customIn.hidden = false
+      } else {
+        if (customIn) customIn.hidden = true
+        relayUrl = relaySel.value
+        localStorage.setItem(LS_URL, relayUrl)
+      }
+    }
   }
 
   async function api(path, opts) {
@@ -69,22 +89,6 @@
     b.textContent = msg
   }
 
-  /* ------------------------------------------------------------- setup */
-
-  $('setupGo').onclick = () => {
-    const u = normalizeUrl($('setupUrl').value)
-    if (!u) { $('setupErr').hidden = false; $('setupErr').textContent = 'Enter a URL.'; return }
-    relayUrl = u
-    localStorage.setItem(LS_URL, relayUrl)
-    boot()
-  }
-
-  $('loginResetUrl').onclick = () => {
-    localStorage.removeItem(LS_URL)
-    relayUrl = ''
-    show('setup')
-  }
-
   /* ------------------------------------------------------------- login */
 
   $('loginGo').onclick = doLogin
@@ -94,6 +98,19 @@
     const pass = $('loginPass').value
     $('loginErr').hidden = true
     if (!pass) return
+
+    if (relaySel && relaySel.value === 'custom') {
+      relayUrl = normalizeUrl(customIn?.value)
+      if (!relayUrl) {
+        $('loginErr').hidden = false
+        $('loginErr').textContent = 'Please enter a custom relay URL.'
+        return
+      }
+    } else if (relaySel) {
+      relayUrl = relaySel.value
+    }
+    localStorage.setItem(LS_URL, relayUrl)
+
     try {
       const res = await fetch(relayUrl + '/admin/login', {
         method: 'POST',
@@ -264,7 +281,6 @@
   /* -------------------------------------------------------------- boot */
 
   function boot() {
-    if (!relayUrl) { show('setup'); return }
     if (token && tokenExp > Date.now() + 30000) {
       show('dash')
       loadAll()

@@ -10,25 +10,26 @@
 </head>
 <body>
 
-<!-- one-time setup: where is the sync worker? stored in localStorage only. -->
-<section id="setup" hidden>
-  <div class="card">
-    <h1>Connect the relay</h1>
-    <p class="mut">Enter the base URL of your <code>textshare-sync</code> Worker (the same one the main app talks to). This is stored only in this browser.</p>
-    <input id="setupUrl" class="in" placeholder="https://textshare-sync.your-subdomain.workers.dev" autocomplete="off" spellcheck="false">
-    <p class="errline" id="setupErr" hidden></p>
-    <button id="setupGo" class="btn primary block">Save &amp; continue</button>
-  </div>
-</section>
-
-<section id="login" hidden>
+<section id="login">
   <div class="card">
     <h1>anonshare admin</h1>
-    <p class="mut">Owner-only. Sign in with the admin password set on the relay.</p>
-    <input id="loginPass" class="in" type="password" placeholder="Admin password" autocomplete="current-password">
+    <p class="mut">Owner-only dashboard. Select a relay server and sign in with the admin password.</p>
+    
+    <div style="margin-top:14px;text-align:left">
+      <label for="relaySelect" style="display:block;font-size:12px;font-weight:600;color:var(--mut);margin-bottom:6px">Target Relay:</label>
+      <select id="relaySelect" class="in" style="margin-bottom:10px;cursor:pointer;width:100%">
+        <option value="https://relay.avishkark.in">⚡ Primary VPS Relay (relay.avishkark.in)</option>
+        <option value="https://textshare-sync.avishkarkedar.workers.dev">☁️ Backup Cloudflare Worker (textshare-sync.avishkarkedar.workers.dev)</option>
+        <option value="custom">✏️ Custom URL...</option>
+      </select>
+      <input id="customRelayUrl" class="in" placeholder="https://..." style="margin-bottom:10px" hidden autocomplete="off" spellcheck="false">
+
+      <label for="loginPass" style="display:block;font-size:12px;font-weight:600;color:var(--mut);margin-bottom:6px">Admin Password:</label>
+      <input id="loginPass" class="in" type="password" placeholder="Enter admin password" autocomplete="current-password" style="width:100%">
+    </div>
+
     <p class="errline" id="loginErr" hidden></p>
-    <button id="loginGo" class="btn primary block">Sign in</button>
-    <button id="loginResetUrl" class="lnk" type="button">Change relay URL</button>
+    <button id="loginGo" class="btn primary block" style="margin-top:14px">Sign in</button>
   </div>
 </section>
 
