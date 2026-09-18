@@ -373,7 +373,12 @@
 <!-- ============================================== inactivity warning modal -->
 <div id="inactivity" hidden>
   <div class="sheet inactivitySheet" role="alertdialog" aria-modal="true" aria-labelledby="inactivityTitle">
-    <div class="lockmark" aria-hidden="true">&#9200;</div>
+    <div class="inactivity-head">
+      <div class="lockmark" aria-hidden="true">&#9200;</div>
+      <button class="pclose-btn" id="inactivityClose" aria-label="Dismiss warning and keep working" title="Dismiss (Esc)">
+        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
     <h2 id="inactivityTitle">Room Inactivity Warning</h2>
     <p class="msub" id="inactivityBody">No movement or typing detected for 15 minutes. To conserve server resources, this room will be automatically deleted in:</p>
     <div id="inactivityCountdown" class="inactivity-countdown" role="timer" aria-live="assertive">05:00</div>
@@ -399,6 +404,7 @@
     <button class="btn primary ico-text" id="runBtn" title="Run Code (Ctrl+Enter)" aria-label="Run code"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span class="hideS">Run</span></button>
     <button class="btn ico" id="previewBtn" title="Toggle Live Preview" aria-label="Toggle Live Preview"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
     <button class="btn ico" id="filesBtn" title="Encrypted File Sharing (up to 25MB)" aria-label="Share Files"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg><span class="nd" id="filesDot" hidden></span></button>
+    <button class="btn ico hideS" id="browserBtn" title="In-Browser Web & Docs Viewer (/browser)" aria-label="Web Browser"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></button>
     <button class="btn ico hideS" id="bookmarksBtn" title="Recent Rooms / History" aria-label="Recent Rooms"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
     <button class="btn ico hideS" id="zenBtn" title="Zen Mode / Fullscreen (F11)" aria-label="Zen Mode"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
     <button class="btn ico" id="voiceBtn" title="Voice Chat / Walkie-Talkie" aria-label="Voice Chat"><svg class="ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
@@ -412,6 +418,11 @@
       <button data-a="runcode" role="menuitem">Run code <kbd>Ctrl Enter</kbd></button>
       <button data-a="format" role="menuitem">Format document <kbd>Shift Alt F</kbd></button>
       <button data-a="preview" role="menuitem">Toggle live preview</button>
+      <button data-a="teamworkpreview" role="menuitem">Teamwork live preview <kbd>/teamwork-preview</kbd></button>
+      <button data-a="genui" role="menuitem">Generative UI builder <kbd>/generative_ui</kbd></button>
+      <button data-a="browser" role="menuitem">In-browser web &amp; docs <kbd>/browser</kbd></button>
+      <button data-a="goal" role="menuitem">Room goal / objective <kbd>/goal</kbd></button>
+      <button data-a="boost" role="menuitem">Turbo boost mode <kbd>/boost</kbd></button>
       <button data-a="fileshare" role="menuitem">Shared files (25MB)</button>
       <button data-a="recentrooms" role="menuitem">Recent rooms / history</button>
       <button data-a="zenmode" role="menuitem">Zen mode <kbd>F11</kbd></button>
@@ -441,6 +452,9 @@
     <div id="tabs"></div>
     <button class="btn ico flat" id="newFile" title="New file" aria-label="New file">+</button>
     <span class="grow"></span>
+    <button class="btn sm flat hub-tab-btn" id="hubGoalBtn" title="Collaborative Room Goal / Objective (/goal)">
+      🎯 Goal <span class="pill sm" id="hubGoalPill" hidden>Set</span>
+    </button>
     <button class="btn sm flat hub-tab-btn" id="hubHistBtn" title="Time Machine (Document Revisions & Timeline Slider)">
       ⏱️ History
     </button>
@@ -448,6 +462,22 @@
       📁 Shared Files <span class="pill" id="hubFilesCount">0</span>
     </button>
   </nav>
+
+  <!-- Collaborative Room Goal Banner -->
+  <div id="roomGoalBanner" class="room-goal-banner" hidden>
+    <div class="goal-left">
+      <span class="goal-pill">🎯 GOAL</span>
+      <span id="roomGoalText" class="goal-text">No active goal</span>
+      <span id="roomGoalStatus" class="pill sm goal-status-pill">In Progress</span>
+    </div>
+    <div class="goal-right">
+      <button class="btn sm flat goal-act-btn" id="goalDoneBtn" title="Toggle Goal Status">✓ Mark Done</button>
+      <button class="btn sm flat goal-act-btn" id="goalEditBtn" title="Edit Goal">✏️ Edit</button>
+      <button class="pclose-btn goal-close-btn" id="goalClearBtn" aria-label="Clear Goal" title="Clear Goal">
+        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+  </div>
 
   <div id="stage">
     <div id="editorContainer">
@@ -465,19 +495,40 @@
             <button type="button" class="seg" id="prevModeMd" role="radio" aria-checked="false">Markdown</button>
             <button type="button" class="seg" id="prevModeDoc" role="radio" aria-checked="false">Assignment Doc</button>
           </div>
+          <div class="segrow sm device-seg hideS" id="prevDeviceGroup" role="radiogroup" aria-label="Device Viewport">
+            <button type="button" class="seg active" id="prevDevDesk" role="radio" aria-checked="true" title="Desktop view (100%)">🖥️ Desk</button>
+            <button type="button" class="seg" id="prevDevTab" role="radio" aria-checked="false" title="Tablet view (768px)">📱 Tab</button>
+            <button type="button" class="seg" id="prevDevMob" role="radio" aria-checked="false" title="Mobile iPhone/Android (375px)">📱 Mob</button>
+            <button type="button" class="seg" id="prevDevRotate" title="Rotate orientation">🔄</button>
+          </div>
           <span class="grow"></span>
           <div class="phead-actions">
+            <button class="btn sm flat hideS" id="prevGenUiBtn" title="Generate UI Component into Preview">✨ Generate UI</button>
             <button class="btn sm flat" id="prevReload" title="Reload preview">🔄 Reload</button>
-            <button class="btn sm flat" id="prevPopout" title="Open in new window">⛶ Pop out</button>
+            <button class="btn sm flat hideS" id="prevPopout" title="Open in new window">⛶ Pop out</button>
             <button class="pclose-btn" id="previewClose" aria-label="Close preview" title="Close preview (Esc)">
               <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
             </button>
           </div>
         </div>
+        <div id="teamworkBar" class="teamwork-bar hideS">
+          <span class="tw-badge">👥 Teamwork Sync: <span id="twLiveStatus">Live</span></span>
+          <span class="grow"></span>
+          <button class="btn sm flat" id="twConsoleToggle" title="Toggle Preview Console">Console Logs <span id="twLogCount" class="pill sm" hidden>0</span></button>
+        </div>
+        <div id="twConsolePane" class="tw-console-pane" hidden>
+          <div class="tw-console-head">
+            <span>Preview Console</span>
+            <button class="btn sm flat" id="twConsoleClear">Clear</button>
+          </div>
+          <pre id="twConsoleLogs" class="tw-console-logs"></pre>
+        </div>
         <div id="mdPreview" class="preview-pane" hidden></div>
         <div id="docPreview" class="preview-pane doc-preview-pane" hidden></div>
         <iframe id="pdfPreview" class="preview-pane pdf-preview-pane" hidden title="Assignment PDF Viewer"></iframe>
-        <iframe id="htmlPreview" class="preview-pane" sandbox="allow-scripts allow-modals" title="Preview"></iframe>
+        <div id="previewFrameHolder" class="preview-frame-holder">
+          <iframe id="htmlPreview" class="preview-pane" sandbox="allow-scripts allow-modals" title="Preview"></iframe>
+        </div>
       </div>
     </div>
 
@@ -609,6 +660,45 @@
       <div id="bookmarksList" class="bookmarks-body"></div>
     </aside>
 
+    <!-- In-Browser Web & Documentation Browser -->
+    <aside id="browserDrawer" hidden aria-label="In-Browser Web & Docs Viewer">
+      <div class="resizer" id="browserResizer" aria-hidden="true"></div>
+      <div class="phead browser-phead">
+        <div class="browser-head-title">
+          <span>🌐 Web Browser</span>
+          <span class="pill sm hideS">Sandbox</span>
+        </div>
+        <div class="phead-actions">
+          <button class="btn sm flat hideS" id="browserPopout" title="Open in new window">⛶ Pop out</button>
+          <button class="pclose-btn" id="browserClose" aria-label="Close browser" title="Close (Esc)">
+            <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="browser-toolbar">
+        <button class="btn sm ico" id="browserBack" title="Back">◀</button>
+        <button class="btn sm ico" id="browserFwd" title="Forward">▶</button>
+        <button class="btn sm ico" id="browserReload" title="Reload">🔄</button>
+        <input id="browserUrlInput" class="in sm browser-url-in" placeholder="https://..." value="https://devdocs.io">
+        <button class="btn sm primary" id="browserGo">Go</button>
+      </div>
+      <div class="browser-chips">
+        <button type="button" class="b-chip" data-url="https://devdocs.io">DevDocs</button>
+        <button type="button" class="b-chip" data-url="https://developer.mozilla.org">MDN</button>
+        <button type="button" class="b-chip" data-url="https://docs.python.org/3/">Python</button>
+        <button type="button" class="b-chip" data-url="https://en.cppreference.com/w/">C++</button>
+        <button type="button" class="b-chip" data-url="https://www.w3schools.com">W3Schools</button>
+        <button type="button" class="b-chip" data-url="https://stackoverflow.com">StackOverflow</button>
+      </div>
+      <div class="browser-body">
+        <iframe id="browserIframe" class="browser-iframe" sandbox="allow-scripts allow-forms allow-same-origin allow-popups" src="https://devdocs.io"></iframe>
+        <div id="browserNotice" class="browser-frame-notice" hidden>
+          <p>⚠️ If this site restricts embedded viewing, open it in a browser tab:</p>
+          <a id="browserExtLink" href="https://devdocs.io" target="_blank" rel="noopener" class="btn sm primary">Open External ↗</a>
+        </div>
+      </div>
+    </aside>
+
     <button id="zenExit" class="btn sm primary floating-zen-btn" hidden>Exit Zen Mode (Esc)</button>
 
     <aside id="chat" hidden aria-label="Room chat">
@@ -620,7 +710,8 @@
         </button>
       </div>
       <div id="chatList" role="log" aria-live="polite"></div>
-      <form id="chatForm"><input id="chatInput" class="in" placeholder="Message the room" maxlength="500" autocomplete="off" aria-label="Message the room"></form>
+      <div id="chatSlashPopup" class="chat-slash-popup" hidden></div>
+      <form id="chatForm"><input id="chatInput" class="in" placeholder="Message the room (type / for commands)" maxlength="500" autocomplete="off" aria-label="Message the room"></form>
     </aside>
 
     <aside id="panel" hidden aria-label="Settings">
@@ -695,6 +786,7 @@
     <span id="userCount">1 online</span>
     <span class="sep" aria-hidden="true"></span>
     <span id="encBadge" title="End-to-end encrypted in your browser">e2e</span>
+    <button type="button" class="pill turbo-pill" id="turboBadge" hidden title="Turbo Boost Mode: Active (Click for latency & metrics)">⚡ TURBO <span id="turboPing">--ms</span></button>
     <span class="pill" id="offlineBadge" hidden>offline</span>
     <span class="pill" id="roBadge" hidden>view only</span>
     <span class="pill" id="lockBadge" hidden>locked</span>
@@ -734,6 +826,41 @@
   <div class="palBox" role="dialog" aria-modal="true" aria-label="Command palette">
     <input id="palInput" class="palIn" placeholder="Type a command" autocomplete="off" spellcheck="false">
     <div id="palList" role="listbox"></div>
+  </div>
+</div>
+
+<!-- ============================================== generative UI modal -->
+<div id="genUiModal" hidden>
+  <div class="sheet gen-ui-sheet" role="dialog" aria-modal="true" aria-labelledby="genUiTitle">
+    <div class="phead gen-phead">
+      <div class="gen-ui-head-title">
+        <span class="gen-icon">✨</span>
+        <h2 id="genUiTitle">Generative UI Component Builder</h2>
+      </div>
+      <button class="pclose-btn" id="genUiClose" aria-label="Close Generative UI" title="Close (Esc)">
+        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <p class="msub">Generate responsive, interactive HTML/CSS/JS components into your editor and live preview.</p>
+    
+    <div class="gen-input-wrap">
+      <input id="genUiPrompt" class="in" placeholder="Describe a component (e.g. calculator, login form, todo app, hero banner)..." autocomplete="off">
+      <button id="genUiGenerateBtn" class="btn primary">✨ Generate UI</button>
+    </div>
+
+    <div class="sec">Or pick a template:</div>
+    <div class="gen-preset-grid" id="genUiPresets"></div>
+
+    <div class="sec">Live Component Preview:</div>
+    <div class="gen-preview-box">
+      <iframe id="genUiPreviewIframe" class="gen-preview-frame" sandbox="allow-scripts" title="Generative UI Preview"></iframe>
+    </div>
+
+    <div class="gen-actions-row">
+      <button class="btn" id="genUiCopyBtn">📋 Copy Code</button>
+      <button class="btn" id="genUiInsertCursorBtn">⬇️ Insert at Cursor</button>
+      <button class="btn primary" id="genUiNewTabBtn">📂 Open as New Tab</button>
+    </div>
   </div>
 </div>
 
