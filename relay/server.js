@@ -254,6 +254,46 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
+/* ------------------------------------------- ephemeral chunk disk persistence */
+
+const CHUNK_STORAGE_DIR = process.env.CHUNK_STORAGE_DIR || path.join(os.tmpdir(), 'anonshare-chunks')
+try { fs.mkdirSync(CHUNK_STORAGE_DIR, { recursive: true }) } catch (e) {}
+
+function getChunkDir(code, fileId) {
+  return path.join(CHUNK_STORAGE_DIR, String(code).toUpperCase(), String(fileId))
+}
+
+async function saveChunkToDisk(code, fileId, chunkIdx, buffer) {
+  try {
+    const dir = getChunkDir(code, fileId)
+    await fs.promises.mkdir(dir, { recursive: true })
+    await fs.promises.writeFile(path.join(dir, String(chunkIdx)), buffer)
+  } catch (err) {
+    console.error(`[relay] Error writing chunk to disk:`, err)
+  }
+}
+
+async function readChunkFromDisk(code, fileId, chunkIdx) {
+  try {
+    const filePath = path.join(getChunkDir(code, fileId), String(chunkIdx))
+    return await fs.promises.readFile(filePath)
+  } catch (err) {
+    return null
+  }
+}
+
+async function deleteFileFromDisk(code, fileId) {
+  try {
+    await fs.promises.rm(getChunkDir(code, fileId), { recursive: true, force: true })
+  } catch (err) {}
+}
+
+async function deleteRoomChunksFromDisk(code) {
+  try {
+    await fs.promises.rm(path.join(CHUNK_STORAGE_DIR, String(code).toUpperCase()), { recursive: true, force: true })
+  } catch (err) {}
+}
+
 /* --------------------------------------------------- remote code runner */
 
 const RUNNER_CACHE = new Map()
@@ -855,7 +895,7 @@ const server = http.createServer(async (req, res) => {
   if (!CODE_RE.test(code)) return sendJson(res, { error: 'bad_code' }, 400)
 
   const subAction = roomMatch[2]
-  const room = rooms.get(code)
+  let room = rooms.get(code)
 
   // /room/:code/exists
   if (subAction === 'exists') {
@@ -896,6 +936,7 @@ const server = http.createServer(async (req, res) => {
             try { ws.close(4001, reason) } catch (e) {}
           }
           rooms.delete(code)
+          deleteRoomChunksFromDisk(code)
           return sendJson(res, { ok: true, deleted: true })
         }
 
@@ -935,7 +976,26 @@ const server = http.createServer(async (req, res) => {
     const fileId = roomMatch[3]
     const chunkIdx = roomMatch[4] ? parseInt(roomMatch[4], 10) : null
 
-    if (!room) return sendJson(res, { error: 'no_room' }, 404)
+    // If server restarted, re-hydrate room if valid auth is provided
+    if (!room) {
+      const authHeader = url.searchParams.get('a') || req.headers['x-room-auth']
+      if (authHeader) {
+        const meta = {
+          c: Date.now(),
+          p: false,
+          a: sha256(authHeader),
+          o: null,
+          s: false,
+          sa: false,
+          r: false,
+          ttl: DEFAULT_TTL,
+        }
+        room = new RoomState(code, meta)
+        rooms.set(code, room)
+      } else {
+        return sendJson(res, { error: 'no_room' }, 404)
+      }
+    }
 
     // Verify room auth
     const authHeader = url.searchParams.get('a') || req.headers['x-room-auth']
@@ -952,13 +1012,15 @@ const server = http.createServer(async (req, res) => {
         size += chunk.length
         if (size > 1024 * 1024) req.destroy() // max 1MB per chunk
       })
-      req.on('end', () => {
+      req.on('end', async () => {
+        const fullBuf = Buffer.concat(chunks)
         let fileMap = room.fileChunks.get(fileId)
         if (!fileMap) {
           fileMap = new Map()
           room.fileChunks.set(fileId, fileMap)
         }
-        fileMap.set(chunkIdx, Buffer.concat(chunks))
+        fileMap.set(chunkIdx, fullBuf)
+        await saveChunkToDisk(code, fileId, chunkIdx, fullBuf)
         room.touch()
         return sendJson(res, { ok: true, fileId, chunkIndex: chunkIdx })
       })
@@ -967,8 +1029,18 @@ const server = http.createServer(async (req, res) => {
 
     // GET chunk
     if (req.method === 'GET' && fileId && chunkIdx !== null) {
-      const fileMap = room.fileChunks.get(fileId)
-      const data = fileMap?.get(chunkIdx)
+      let data = room.fileChunks.get(fileId)?.get(chunkIdx)
+      if (!data) {
+        data = await readChunkFromDisk(code, fileId, chunkIdx)
+        if (data) {
+          let fileMap = room.fileChunks.get(fileId)
+          if (!fileMap) {
+            fileMap = new Map()
+            room.fileChunks.set(fileId, fileMap)
+          }
+          fileMap.set(chunkIdx, data)
+        }
+      }
       if (!data) return sendJson(res, { error: 'chunk_not_found' }, 404)
 
       res.writeHead(200, {
@@ -982,6 +1054,7 @@ const server = http.createServer(async (req, res) => {
     // DELETE file
     if (req.method === 'DELETE' && fileId) {
       room.fileChunks.delete(fileId)
+      await deleteFileFromDisk(code, fileId)
       return sendJson(res, { ok: true, deleted: fileId })
     }
 
@@ -1224,10 +1297,12 @@ setInterval(() => {
     // 1. Purge abandoned file chunks older than 25 minutes
     if (room.fileChunks && room.fileChunks.size > 0 && now - room.lastActive > 25 * 60 * 1000) {
       room.fileChunks.clear()
+      deleteRoomChunksFromDisk(code)
     }
     // 2. Expire empty rooms past TTL
     if (room.sockets.size === 0 && now - room.lastActive > (room.meta.ttl || DEFAULT_TTL)) {
       rooms.delete(code)
+      deleteRoomChunksFromDisk(code)
     }
   }
 }, 60000)
