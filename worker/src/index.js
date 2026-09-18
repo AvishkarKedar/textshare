@@ -333,7 +333,9 @@ export class Room {
         })
       }
       if (!meta) return json({ error: 'no_room' }, 404)
-      const token = q.get('a') || request.headers.get('x-room-auth')
+      const authHeader = request.headers.get('authorization')
+      const bearerToken = authHeader && /^Bearer\s+/i.test(authHeader) ? authHeader.replace(/^Bearer\s+/i, '').trim() : null
+      const token = q.get('a') || request.headers.get('x-room-auth') || bearerToken
       if (meta.a && (!token || !constEq(await sha256(token), meta.a))) {
         return json({ error: 'unauthorized' }, 403)
       }

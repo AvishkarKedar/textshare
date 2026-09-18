@@ -976,9 +976,17 @@ const server = http.createServer(async (req, res) => {
     const fileId = roomMatch[3]
     const chunkIdx = roomMatch[4] ? parseInt(roomMatch[4], 10) : null
 
+    const getAuth = () => {
+      if (url.searchParams.get('a')) return url.searchParams.get('a')
+      if (req.headers['x-room-auth']) return req.headers['x-room-auth']
+      const auth = req.headers['authorization']
+      if (auth && /^Bearer\s+/i.test(auth)) return auth.replace(/^Bearer\s+/i, '').trim()
+      return null
+    }
+
     // If server restarted, re-hydrate room if valid auth is provided
     if (!room) {
-      const authHeader = url.searchParams.get('a') || req.headers['x-room-auth']
+      const authHeader = getAuth()
       if (authHeader) {
         const meta = {
           c: Date.now(),
@@ -998,7 +1006,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Verify room auth
-    const authHeader = url.searchParams.get('a') || req.headers['x-room-auth']
+    const authHeader = getAuth()
     if (room.meta.a && (!authHeader || !constEq(sha256(authHeader), room.meta.a))) {
       return sendJson(res, { error: 'unauthorized' }, 403)
     }
