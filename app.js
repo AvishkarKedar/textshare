@@ -1966,15 +1966,23 @@ $('undoBtn').onclick = () => { if (undoManager) undoManager.undo(); if (view) vi
 $('redoBtn').onclick = () => { if (undoManager) undoManager.redo(); if (view) view.focus() }
 
 function setMenu(open) {
-  $('menu').hidden = !open
-  $('moreBtn').setAttribute('aria-expanded', String(open))
+  const m = $('menu')
+  if (!m) return
+  m.hidden = !open
+  if ($('moreBtn')) $('moreBtn').setAttribute('aria-expanded', String(open))
 }
-$('moreBtn').onclick = e => {
-  e.stopPropagation()
-  setMenu($('menu').hidden)
+if ($('moreBtn')) {
+  $('moreBtn').onclick = e => {
+    e.stopPropagation()
+    setMenu($('menu').hidden)
+  }
 }
-addEventListener('click', e => {
-  if (!$('menu').hidden && !$('menu').contains(e.target) && e.target !== $('moreBtn')) setMenu(false)
+addEventListener('pointerdown', e => {
+  const m = $('menu')
+  if (!m || m.hidden) return
+  if (!m.contains(e.target) && e.target !== $('moreBtn') && !$('moreBtn').contains(e.target)) {
+    setMenu(false)
+  }
 })
 
 function downloadBlob(blob, name) {
@@ -3154,6 +3162,9 @@ async function importFromGitHub() {
 }
 
 // --- Feature 8: Collaborative Whiteboard Canvas Tab ---
+const WB_V_WIDTH = 1600
+const WB_V_HEIGHT = 1000
+
 let whiteboardOpen = false
 let wbCanvas = null, wbCtx = null
 let wbTool = 'pen' // 'pen' | 'highlighter' | 'eraser'
@@ -3169,6 +3180,32 @@ function initWhiteboard() {
   ywhiteboard.observe(() => {
     if (whiteboardOpen) renderWhiteboardStrokes()
   })
+}
+
+function getWbViewport(rect) {
+  const w = rect.width || 300
+  const h = rect.height || 300
+  const scale = Math.min(w / WB_V_WIDTH, h / WB_V_HEIGHT)
+  const drawW = WB_V_WIDTH * scale
+  const drawH = WB_V_HEIGHT * scale
+  const offsetX = (w - drawW) / 2
+  const offsetY = (h - drawH) / 2
+  return { scale, offsetX, offsetY, drawW, drawH, w, h }
+}
+
+function getNormalizedPoint(pt, vp) {
+  let vx = 0, vy = 0
+  if (pt && pt.nx != null && pt.ny != null) {
+    vx = pt.nx * WB_V_WIDTH
+    vy = pt.ny * WB_V_HEIGHT
+  } else if (pt && pt.x != null && pt.y != null) {
+    vx = pt.x
+    vy = pt.y
+  }
+  return {
+    x: vp.offsetX + vx * vp.scale,
+    y: vp.offsetY + vy * vp.scale,
+  }
 }
 
 function setupWhiteboardCanvas() {
@@ -3192,6 +3229,24 @@ function renderWhiteboardStrokes() {
   const rect = holder ? holder.getBoundingClientRect() : wbCanvas.getBoundingClientRect()
   wbCtx.clearRect(0, 0, rect.width, rect.height)
 
+  const vp = getWbViewport(rect)
+  const isLight = document.documentElement.dataset.theme === 'light'
+
+  // Draw virtual canvas sheet background
+  wbCtx.fillStyle = isLight ? '#ffffff' : '#0e1014'
+  wbCtx.fillRect(vp.offsetX, vp.offsetY, vp.drawW, vp.drawH)
+
+  // Draw sheet boundary outline
+  wbCtx.strokeStyle = isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)'
+  wbCtx.lineWidth = 1
+  wbCtx.strokeRect(vp.offsetX, vp.offsetY, vp.drawW, vp.drawH)
+
+  // Clip drawings strictly inside the canvas sheet
+  wbCtx.save()
+  wbCtx.beginPath()
+  wbCtx.rect(vp.offsetX, vp.offsetY, vp.drawW, vp.drawH)
+  wbCtx.clip()
+
   const strokes = ywhiteboard.toArray()
   for (const s of strokes) {
     if (!s || !Array.isArray(s.points) || s.points.length < 2) continue
@@ -3200,30 +3255,37 @@ function renderWhiteboardStrokes() {
     wbCtx.lineCap = 'round'
     wbCtx.lineJoin = 'round'
 
+    const baseSize = s.size || 4
+    const scaledWidth = Math.max(1.5, baseSize * (vp.scale / 0.8))
+
     if (s.tool === 'highlighter') {
-      wbCtx.globalAlpha = 0.35
+      wbCtx.globalAlpha = 0.38
       wbCtx.strokeStyle = s.color || '#e8d44d'
-      wbCtx.lineWidth = (s.size || 4) * 3.5
+      wbCtx.lineWidth = scaledWidth * 3.5
       wbCtx.globalCompositeOperation = 'source-over'
     } else if (s.tool === 'eraser') {
       wbCtx.globalAlpha = 1.0
-      wbCtx.globalCompositeOperation = 'destination-out'
-      wbCtx.lineWidth = (s.size || 4) * 5
+      wbCtx.strokeStyle = isLight ? '#ffffff' : '#0e1014'
+      wbCtx.lineWidth = scaledWidth * 5
+      wbCtx.globalCompositeOperation = 'source-over'
     } else {
       wbCtx.globalAlpha = 1.0
       wbCtx.strokeStyle = s.color || '#4c8dff'
-      wbCtx.lineWidth = s.size || 4
+      wbCtx.lineWidth = scaledWidth
       wbCtx.globalCompositeOperation = 'source-over'
     }
 
     const pts = s.points
-    wbCtx.moveTo(pts[0].x, pts[0].y)
+    const p0 = getNormalizedPoint(pts[0], vp)
+    wbCtx.moveTo(p0.x, p0.y)
     for (let i = 1; i < pts.length; i++) {
-      wbCtx.lineTo(pts[i].x, pts[i].y)
+      const pi = getNormalizedPoint(pts[i], vp)
+      wbCtx.lineTo(pi.x, pi.y)
     }
     wbCtx.stroke()
     wbCtx.restore()
   }
+  wbCtx.restore()
 }
 
 function toggleWhiteboard(force) {
@@ -3250,20 +3312,17 @@ function clearWhiteboard() {
 }
 
 function downloadWhiteboardPng() {
-  if (!wbCanvas || !ywhiteboard) return
-  const holder = wbCanvas.parentElement
-  const rect = holder ? holder.getBoundingClientRect() : wbCanvas.getBoundingClientRect()
-  const dpr = window.devicePixelRatio || 1
+  if (!ywhiteboard) return
   const offscreen = document.createElement('canvas')
-  offscreen.width = Math.max(300, Math.floor(rect.width * dpr))
-  offscreen.height = Math.max(300, Math.floor(rect.height * dpr))
+  offscreen.width = WB_V_WIDTH
+  offscreen.height = WB_V_HEIGHT
   const offCtx = offscreen.getContext('2d')
-  offCtx.scale(dpr, dpr)
 
   const isLight = document.documentElement.dataset.theme === 'light'
-  offCtx.fillStyle = isLight ? '#ffffff' : '#080808'
-  offCtx.fillRect(0, 0, rect.width, rect.height)
+  offCtx.fillStyle = isLight ? '#ffffff' : '#0e1014'
+  offCtx.fillRect(0, 0, WB_V_WIDTH, WB_V_HEIGHT)
 
+  const vp = { scale: 1.0, offsetX: 0, offsetY: 0, drawW: WB_V_WIDTH, drawH: WB_V_HEIGHT }
   const strokes = ywhiteboard.toArray()
   for (const s of strokes) {
     if (!s || !Array.isArray(s.points) || s.points.length < 2) continue
@@ -3272,24 +3331,27 @@ function downloadWhiteboardPng() {
     offCtx.lineCap = 'round'
     offCtx.lineJoin = 'round'
 
+    const baseSize = s.size || 4
     if (s.tool === 'highlighter') {
-      offCtx.globalAlpha = 0.35
+      offCtx.globalAlpha = 0.38
       offCtx.strokeStyle = s.color || '#e8d44d'
-      offCtx.lineWidth = (s.size || 4) * 3.5
+      offCtx.lineWidth = baseSize * 3.5
     } else if (s.tool === 'eraser') {
       offCtx.globalAlpha = 1.0
-      offCtx.strokeStyle = isLight ? '#ffffff' : '#080808'
-      offCtx.lineWidth = (s.size || 4) * 5
+      offCtx.strokeStyle = isLight ? '#ffffff' : '#0e1014'
+      offCtx.lineWidth = baseSize * 5
     } else {
       offCtx.globalAlpha = 1.0
       offCtx.strokeStyle = s.color || '#4c8dff'
-      offCtx.lineWidth = s.size || 4
+      offCtx.lineWidth = baseSize
     }
 
     const pts = s.points
-    offCtx.moveTo(pts[0].x, pts[0].y)
+    const p0 = getNormalizedPoint(pts[0], vp)
+    offCtx.moveTo(p0.x, p0.y)
     for (let i = 1; i < pts.length; i++) {
-      offCtx.lineTo(pts[i].x, pts[i].y)
+      const pi = getNormalizedPoint(pts[i], vp)
+      offCtx.lineTo(pi.x, pi.y)
     }
     offCtx.stroke()
     offCtx.restore()
@@ -3298,7 +3360,7 @@ function downloadWhiteboardPng() {
   offscreen.toBlob(blob => {
     if (blob) saveBlobAsFile(blob, `whiteboard-${CODE}.png`)
   })
-  toast('💾 Saved whiteboard as PNG image')
+  toast('💾 Saved whiteboard as high-res PNG image')
 }
 
 // --- Feature 9: ZIP Archive Exporters ---
@@ -3415,7 +3477,7 @@ const ACTIONS = {
   genui: () => openGenerativeUi(),
   undo: () => $('undoBtn').click(),
   redo: () => $('redoBtn').click(),
-  more: () => $('moreBtn').click(),
+  more: () => setMenu($('menu').hidden),
 }
 
 $('menu').addEventListener('click', e => {
@@ -4108,49 +4170,72 @@ if (wbCanvasEl) {
     try { wbCanvasEl.setPointerCapture(e.pointerId) } catch (_) {}
     wbIsDrawing = true
     const rect = wbCanvasEl.getBoundingClientRect()
-    const x = Math.round(e.clientX - rect.left)
-    const y = Math.round(e.clientY - rect.top)
+    const vp = getWbViewport(rect)
+    const rawX = e.clientX - rect.left
+    const rawY = e.clientY - rect.top
+    const vx = Math.max(0, Math.min(WB_V_WIDTH, (rawX - vp.offsetX) / vp.scale))
+    const vy = Math.max(0, Math.min(WB_V_HEIGHT, (rawY - vp.offsetY) / vp.scale))
+    const nx = vx / WB_V_WIDTH
+    const ny = vy / WB_V_HEIGHT
     wbCurrentStroke = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       color: wbColor,
       size: wbSize,
       tool: wbTool,
-      points: [{ x, y }]
+      points: [{ x: Math.round(vx * 10) / 10, y: Math.round(vy * 10) / 10, nx, ny }]
     }
   })
 
   wbCanvasEl.addEventListener('pointermove', e => {
     if (!wbIsDrawing || !wbCurrentStroke) return
     const rect = wbCanvasEl.getBoundingClientRect()
-    const x = Math.round(e.clientX - rect.left)
-    const y = Math.round(e.clientY - rect.top)
+    const vp = getWbViewport(rect)
+    const rawX = e.clientX - rect.left
+    const rawY = e.clientY - rect.top
+    const vx = Math.max(0, Math.min(WB_V_WIDTH, (rawX - vp.offsetX) / vp.scale))
+    const vy = Math.max(0, Math.min(WB_V_HEIGHT, (rawY - vp.offsetY) / vp.scale))
+    const nx = vx / WB_V_WIDTH
+    const ny = vy / WB_V_HEIGHT
+
     const pts = wbCurrentStroke.points
     const last = pts[pts.length - 1]
-    if (Math.hypot(x - last.x, y - last.y) < 2) return
-    pts.push({ x, y })
+    if (Math.hypot(vx - last.x, vy - last.y) < 1.5) return
+    const curPt = { x: Math.round(vx * 10) / 10, y: Math.round(vy * 10) / 10, nx, ny }
+    pts.push(curPt)
 
     if (wbCtx) {
+      const isLight = document.documentElement.dataset.theme === 'light'
+      const baseSize = wbCurrentStroke.size || 4
+      const scaledWidth = Math.max(1.5, baseSize * (vp.scale / 0.8))
+      const pLast = getNormalizedPoint(last, vp)
+      const pCur = getNormalizedPoint(curPt, vp)
+
       wbCtx.save()
+      wbCtx.beginPath()
+      wbCtx.rect(vp.offsetX, vp.offsetY, vp.drawW, vp.drawH)
+      wbCtx.clip()
+
       wbCtx.beginPath()
       wbCtx.lineCap = 'round'
       wbCtx.lineJoin = 'round'
       if (wbTool === 'highlighter') {
-        wbCtx.globalAlpha = 0.35
+        wbCtx.globalAlpha = 0.38
         wbCtx.strokeStyle = wbColor
-        wbCtx.lineWidth = wbSize * 3.5
+        wbCtx.lineWidth = scaledWidth * 3.5
         wbCtx.globalCompositeOperation = 'source-over'
       } else if (wbTool === 'eraser') {
         wbCtx.globalAlpha = 1.0
-        wbCtx.globalCompositeOperation = 'destination-out'
-        wbCtx.lineWidth = wbSize * 5
+        wbCtx.strokeStyle = isLight ? '#ffffff' : '#0e1014'
+        wbCtx.lineWidth = scaledWidth * 5
+        wbCtx.globalCompositeOperation = 'source-over'
       } else {
         wbCtx.globalAlpha = 1.0
         wbCtx.strokeStyle = wbColor
-        wbCtx.lineWidth = wbSize
+        wbCtx.lineWidth = scaledWidth
         wbCtx.globalCompositeOperation = 'source-over'
       }
-      wbCtx.moveTo(last.x, last.y)
-      wbCtx.lineTo(x, y)
+      wbCtx.moveTo(pLast.x, pLast.y)
+      wbCtx.lineTo(pCur.x, pCur.y)
       wbCtx.stroke()
       wbCtx.restore()
     }

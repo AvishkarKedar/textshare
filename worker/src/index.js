@@ -568,11 +568,20 @@ export class Room {
         try {
           const targetLen = payload[0]
           const targetCid = new TextDecoder().decode(payload.subarray(1, 1 + targetLen))
+          let delivered = false
           for (const peer of this.sockets()) {
             const pa = this.att(peer)
-            if (pa && pa.cid === targetCid) {
+            if (peer !== ws && (pa && pa.cid === targetCid)) {
               peer.send(frame(T_P2P, payload.buffer))
+              delivered = true
               break
+            }
+          }
+          if (!delivered) {
+            for (const peer of this.sockets()) {
+              if (peer !== ws) {
+                peer.send(frame(T_P2P, payload.buffer))
+              }
             }
           }
         } catch (e) {}

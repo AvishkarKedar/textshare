@@ -359,13 +359,19 @@ select.in{-webkit-appearance:none;appearance:none;font-family:var(--mono);font-s
 
 /* overflow / context menu */
 #menu{
-  position:absolute;top:calc(var(--bar) - 2px);right:8px;z-index:30;min-width:210px;
-  background:var(--raise);border:1px solid var(--line2);padding:4px;
-  box-shadow:0 14px 34px rgba(0,0,0,.6);
+  position:fixed;top:calc(var(--bar) + 2px);right:8px;z-index:1000;min-width:220px;
+  max-width:calc(100vw - 16px);max-height:calc(100vh - 60px);overflow-y:auto;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  background:var(--raise);border:1px solid var(--line2);border-radius:var(--rad);padding:4px;
+  box-shadow:0 14px 34px rgba(0,0,0,.7);
 }
-#menu button{display:flex;justify-content:space-between;gap:14px;width:100%;text-align:left;padding:7px 10px;font:12px/1 var(--mono);color:var(--fg)}
-#menu button:hover{background:var(--panel);color:var(--accent)}
-#menu kbd{font:10px/1 var(--mono);color:var(--dim);border:1px solid var(--line2);padding:2px 4px}
+#menu button{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;min-height:36px;
+  text-align:left;padding:8px 12px;font:12px/1.2 var(--mono);color:var(--fg);border-radius:var(--rad);
+  cursor:pointer;touch-action:manipulation;
+}
+#menu button:hover,#menu button:active{background:var(--panel);color:var(--accent)}
+#menu kbd{font:10px/1 var(--mono);color:var(--dim);border:1px solid var(--line2);padding:2px 4px;border-radius:3px;flex-shrink:0}
 .msep{height:1px;background:var(--line);margin:4px 0}
 
 #banner{padding:7px 12px;background:var(--panel);border-bottom:1px solid var(--line);font:11px/1.5 var(--mono);color:var(--mut);flex:none}
@@ -578,6 +584,8 @@ body.doc-page{overflow:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:to
   #topbar::-webkit-scrollbar{display:none}
   #editorContainer{flex-direction:column}
   #previewWrap{height:50%;border-left:0;border-top:1px solid var(--line)}
+  .wb-toolbar{padding:4px 8px;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .wb-toolbar::-webkit-scrollbar{display:none}
   #terminal{height:50%;max-height:50vh}
   #historyDrawer{height:50%;max-height:50vh}
   .term-head,.phead{min-height:36px}
