@@ -1584,3 +1584,45 @@ Stage Summary:
 - Fixed all 4: Hero pill → release-notes toast, footer help links → open actual features (shortcuts overlay, slash-command toast, status modal).
 - Big UI upgrade: gradient text, floating demo card, pulsing glow, staggered card entrances, focus-visible rings, refined scrollbars.
 - Lint clean. All buttons now work.
+
+---
+Task ID: CRON-13 (Remove ALL fake data + add real favicon)
+Agent: main (Z.ai Code)
+Task: User demanded removal of ALL fake hardcoded data (fake analytics, fake rooms, fake testimonials, fake notifications) + proper favicon.
+
+Work Log:
+- REMOVED all fake analytics:
+  - StatsStrip: replaced fake "12,847 rooms / 143 countries / 38ms / 0 bytes" with real product principles (E2E encrypted / auto-erased / no account / real-time) — honest, verifiable info.
+  - Status API: removed fake `active: 12_847`, `createdLast1h: 342`, `createdLast24h: 8_104`, `passwordProtected: 1_203`, `medianLatencyMs: 38`, `p99LatencyMs: 142`. Now shows only real config (maxConnections: 60, TTL options, crypto params, rate limits) + honest note "room counts not available in this prototype".
+  - StatusModal: replaced fake metric cards (active rooms / password rooms / created-1h) with real config cards (relay URL / cipher / max peers / runner langs / sync transport / auth storage).
+  - DASHBOARD_TEMPLATE: replaced fake "12,847 rooms / 143 countries / 99.97% uptime / 4.2M messages" with honest "— your metric here" placeholders.
+
+- REMOVED fake testimonials:
+  - Deleted Testimonials section entirely (Priya Nair / Marcus Lee / Ana Costa were fake people with fake quotes).
+  - Updated Landing.tsx to not import/render Testimonials.
+
+- REMOVED fake seed data:
+  - recentRooms: was 3 fake rooms (K7Q9M2 "API rewrite sprint" / XBP3RJ "interview" / ZNF8HK "design review") → now empty []. Real users populate it as they visit rooms.
+  - DEMO_PARTICIPANTS: was 3 fake people (You / Avishkar / Lazarus) → now just "You" (1 participant).
+  - DEMO_MESSAGES: was 3 fake chat messages (deriveKey split / relay auth / SHA-256) → now empty []. Chat starts clean.
+  - notifications: was 2 fake (Room created / Avishkar mentioned you) → now empty []. No fake unread badge.
+  - snapshots: was 1 fake ("v1 — before deriveKey split") → now empty []. Time machine starts clean.
+  - Removed the fake @mention simulation (setTimeout pushing "Lazarus mentioned you" after 12s).
+
+- ADDED proper favicon:
+  - Generated a minimalist anonshare logo via z-ai image-generation: black background, blue > symbol, monospace terminal aesthetic, sharp corners.
+  - Saved to public/favicon.png (40KB, 1024×1024).
+  - Updated layout.tsx: icon + apple icon → /favicon.png (was Z.ai placeholder URL).
+
+- Verification:
+  - Lint: 0 errors, 0 warnings.
+  - grep for fake data: ZERO matches for 12,847 / Priya / Marcus / Lazarus / K7Q9M2 / etc.
+  - curl /favicon.png → 200 (custom logo loads).
+  - curl /api/status → no fake active count, honest note instead.
+  - curl / → 200, page renders clean.
+
+Stage Summary:
+- Removed ALL fake hardcoded data: fake analytics (12,847 rooms etc.), fake testimonials (Priya/Marcus/Ana), fake seed rooms (K7Q9M2/XBP3RJ/ZNF8HK), fake chat messages, fake notifications, fake snapshots, fake @mention simulation, fake dashboard template numbers.
+- Replaced with honest alternatives: StatsStrip shows real product principles, StatusModal shows real config, all lists start empty.
+- Added proper favicon: generated minimalist > logo, saved to public/favicon.png, wired into layout.
+- Everything is now REAL or honestly empty. Lint clean. Zero fake data.

@@ -19,9 +19,9 @@ interface StatusData {
   service: string;
   version: string;
   uptimeHuman: string;
-  relay: { url: string; status: string; medianLatencyMs: number; p99LatencyMs: number };
+  relay: { url: string; status: string };
   crypto: { algorithm: string; iterations: number; cipher: string };
-  rooms: { active: number; createdLast1h: number; createdLast24h: number; passwordProtected: number };
+  rooms: { maxConnections: number; ttlOptions: string[]; note: string };
   runner: { languages: number; sandbox: string; maxRamMb: number };
   limits: { ipPerMin: number; createPerMin: number; authAttemptsPerMin: number };
 }
@@ -99,14 +99,14 @@ export function StatusModal() {
                   </div>
                 </div>
 
-                {/* grid of metric cards */}
+                {/* grid of real config cards */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  <MetricCard icon={Server} label="relay" value={data.relay.url} sub={`${data.relay.medianLatencyMs}ms p50 · ${data.relay.p99LatencyMs}ms p99`} color="var(--anon-accent)" />
-                  <MetricCard icon={Shield} label="cipher" value={data.crypto.cipher} sub={`${(data.crypto.iterations / 1000).toFixed(0)}k rounds`} color="var(--anon-ok)" />
-                  <MetricCard icon={Activity} label="active rooms" value={data.rooms.active.toLocaleString()} sub={`${data.rooms.createdLast24h.toLocaleString()} / 24h`} color="var(--anon-accent)" />
+                  <MetricCard icon={Server} label="relay" value={data.relay.url} sub={data.relay.status} color="var(--anon-accent)" />
+                  <MetricCard icon={Shield} label="cipher" value={data.crypto.cipher} sub={`${(data.crypto.iterations / 1000).toFixed(0)}k PBKDF2 rounds`} color="var(--anon-ok)" />
+                  <MetricCard icon={Activity} label="max peers" value={`${data.rooms.maxConnections}`} sub={`TTL: ${data.rooms.ttlOptions.join(" / ")}`} color="var(--anon-accent)" />
                   <MetricCard icon={Zap} label="runner" value={`${data.runner.languages} langs`} sub={`${data.runner.maxRamMb}MB cap`} color="var(--anon-warn)" />
-                  <MetricCard icon={Shield} label="password rooms" value={data.rooms.passwordProtected.toLocaleString()} sub={`${Math.round((data.rooms.passwordProtected / data.rooms.active) * 100)}% of active`} color="var(--anon-warn)" />
-                  <MetricCard icon={Globe} label="created / 1h" value={data.rooms.createdLast1h.toLocaleString()} sub="rate-limited" color="var(--anon-accent)" />
+                  <MetricCard icon={Globe} label="sync" value="socket.io" sub="port 3003 · websocket" color="var(--anon-accent)" />
+                  <MetricCard icon={Shield} label="auth storage" value="SHA-256" sub="relay never sees raw auth" color="var(--anon-ok)" />
                 </div>
 
                 {/* limits */}

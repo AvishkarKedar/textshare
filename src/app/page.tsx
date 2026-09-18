@@ -22,6 +22,7 @@ import { BookmarksDrawer } from "@/components/palette/BookmarksDrawer";
 import { StatusModal } from "@/components/palette/StatusModal";
 import { SecurityModal } from "@/components/palette/SecurityModal";
 import { PrivacyTermsModals } from "@/components/palette/PrivacyTermsModals";
+import { FaqModal } from "@/components/palette/FaqModal";
 
 export default function Home() {
   const view = useAnon((s) => s.view);
@@ -71,6 +72,7 @@ export default function Home() {
         if (store.bookmarksOpen) { store.toggleBookmarks(); return; }
         if (store.statusOpen) { store.toggleStatus(); return; }
         if (store.securityOpen) { store.toggleSecurity(); return; }
+        if (store.faqOpen) { store.toggleFaq(); return; }
         return;
       }
 
@@ -115,6 +117,9 @@ export default function Home() {
       } else if (mod && e.shiftKey && e.key.toLowerCase() === "x") {
         e.preventDefault();
         store.toggleSecurity();
+      } else if (mod && e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        store.toggleFaq();
       } else if (mod && e.shiftKey && e.key.toLowerCase() === "t") {
         e.preventDefault();
         store.runTests();
@@ -177,27 +182,6 @@ export default function Home() {
     }
   }, [view, store]);
 
-  // simulate a @mention notification arriving after 12s
-  useEffect(() => {
-    if (view !== "editor") return;
-    const t = setTimeout(() => {
-      const hasMention = store.notifications.some((n) => n.kind === "mention" && n.title.includes("Lazarus"));
-      if (!hasMention) {
-        store.pushNotification({
-          kind: "mention",
-          title: "Lazarus mentioned you",
-          body: "@you — check line 11, the auth derivation looks off",
-        });
-        if (store.notificationsEnabled && typeof Notification !== "undefined") {
-          new Notification("Lazarus mentioned you", {
-            body: "@you — check line 11, the auth derivation looks off",
-          });
-        }
-      }
-    }, 12000);
-    return () => clearTimeout(t);
-  }, [view, store]);
-
   return (
     <>
       {view === "landing" ? <Landing /> : <AppShell />}
@@ -220,6 +204,7 @@ export default function Home() {
       <StatusModal />
       <SecurityModal />
       <PrivacyTermsModals />
+      <FaqModal />
     </>
   );
 }

@@ -30,6 +30,7 @@ import {
   Radio,
   Bookmark,
   Activity,
+  HelpCircle,
 } from "lucide-react";
 import { useAnon } from "@/lib/store";
 import { initials } from "@/lib/themes";
@@ -198,6 +199,7 @@ export function TopBar() {
               <OverflowItem icon={Bookmark} label="Recent rooms" k="⌘⇧R" onClick={() => s.toggleBookmarks()} active={s.bookmarksOpen} />
               <OverflowItem icon={Activity} label="System status" k="⌘⇧Y" onClick={() => s.toggleStatus()} active={s.statusOpen} />
               <OverflowItem icon={Shield} label="Threat model" k="⌘⇧X" onClick={() => s.toggleSecurity()} active={s.securityOpen} />
+              <OverflowItem icon={HelpCircle} label="FAQs & Help" k="⌘⇧F" onClick={() => s.toggleFaq()} active={s.faqOpen} />
               <div className="hairline-t" />
               <OverflowItem icon={Maximize2} label="Zen mode" k="⌘." onClick={() => s.toggleZen()} active={s.zenMode} />
               <div className="hairline-t" />

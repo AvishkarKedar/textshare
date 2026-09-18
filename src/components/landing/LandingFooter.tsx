@@ -10,7 +10,17 @@ export function LandingFooter() {
   const toggleTerms = useAnon((s) => s.toggleTerms);
   const toggleStatus = useAnon((s) => s.toggleStatus);
   const toggleShortcuts = useAnon((s) => s.toggleShortcuts);
-  const setView = useAnon((s) => s.setView);
+  const toggleFaq = useAnon((s) => s.toggleFaq);
+
+  const scrollToFaq = () => {
+    const el = document.getElementById("faq");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth" });
+    } else {
+      toggleFaq();
+    }
+  };
+
   return (
     <footer className="mt-auto hairline-t anon-raise">
       <div className="mx-auto max-w-7xl px-6 py-10">
@@ -38,9 +48,10 @@ export function LandingFooter() {
               help
             </div>
             <ul className="space-y-2 anon-sans text-sm anon-mut">
-              <li><button onClick={() => { setView("editor"); setTimeout(() => toggleShortcuts(), 200); }} className="hover:anon-fg">Keyboard shortcuts</button></li>
-              <li><button onClick={() => { setView("editor"); setTimeout(() => toast("Type / in the editor", { description: "Slash commands: /run /test /clear /whiteboard /crypto /export …" }), 200); }} className="hover:anon-fg">Slash commands</button></li>
-              <li><button onClick={() => { setView("editor"); setTimeout(() => toggleStatus(), 200); }} className="hover:anon-fg">Status</button></li>
+              <li><button onClick={scrollToFaq} className="hover:anon-fg text-left cursor-pointer">Frequently Asked Questions (FAQ)</button></li>
+              <li><button onClick={() => toggleShortcuts()} className="hover:anon-fg text-left cursor-pointer">Keyboard shortcuts</button></li>
+              <li><button onClick={() => toast("Slash commands in editor", { description: "Type / in any line: /run /test /clear /whiteboard /crypto /faq /export …" })} className="hover:anon-fg text-left cursor-pointer">Slash commands</button></li>
+              <li><button onClick={() => toggleStatus()} className="hover:anon-fg text-left cursor-pointer">System status</button></li>
             </ul>
           </div>
 
@@ -49,9 +60,9 @@ export function LandingFooter() {
               legal
             </div>
             <ul className="space-y-2 anon-sans text-sm anon-mut">
-              <li><button onClick={() => { setView("editor"); setTimeout(() => toggleSecurity(), 200); }} className="hover:anon-fg inline-flex items-center gap-1"><Shield className="h-3 w-3" /> Security</button></li>
-              <li><button onClick={() => { setView("editor"); setTimeout(() => togglePrivacy(), 200); }} className="hover:anon-fg inline-flex items-center gap-1"><FileText className="h-3 w-3" /> Privacy</button></li>
-              <li><button onClick={() => { setView("editor"); setTimeout(() => toggleTerms(), 200); }} className="hover:anon-fg inline-flex items-center gap-1"><FileText className="h-3 w-3" /> Terms</button></li>
+              <li><button onClick={() => toggleSecurity()} className="hover:anon-fg inline-flex items-center gap-1 cursor-pointer"><Shield className="h-3 w-3" /> Security & Threat Model</button></li>
+              <li><button onClick={() => togglePrivacy()} className="hover:anon-fg inline-flex items-center gap-1 cursor-pointer"><FileText className="h-3 w-3" /> Privacy Policy</button></li>
+              <li><button onClick={() => toggleTerms()} className="hover:anon-fg inline-flex items-center gap-1 cursor-pointer"><FileText className="h-3 w-3" /> Terms of Service</button></li>
             </ul>
           </div>
 

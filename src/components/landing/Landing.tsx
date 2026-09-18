@@ -4,7 +4,6 @@ import { Hero } from "./Hero";
 import { StatsStrip } from "./StatsStrip";
 import { UseCases } from "./UseCases";
 import { HowItWorks } from "./HowItWorks";
-import { Testimonials } from "./Testimonials";
 import { FAQ } from "./FAQ";
 import { CtaBanner } from "./CtaBanner";
 import { LandingFooter } from "./LandingFooter";
@@ -16,7 +15,6 @@ export function Landing() {
       <StatsStrip />
       <UseCases />
       <HowItWorks />
-      <Testimonials />
       <FAQ />
       <CtaBanner />
       <LandingFooter />

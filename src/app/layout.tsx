@@ -36,8 +36,8 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "anonshare" }],
   icons: {
-    icon: "/logo.svg",
-    shortcut: "/favicon.svg",
+    icon: "/favicon.png",
+    apple: "/favicon.png",
   },
   openGraph: {
     title: "anonshare — Live coding with anyone, in six characters",
