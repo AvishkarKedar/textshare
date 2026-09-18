@@ -4,6 +4,7 @@ import { parseErrorPositions } from '../lib/runner.js'
 import { computeDiff, renderVisualDiff } from '../lib/preview.js'
 import { getBookmarks, saveBookmark, removeBookmark, clearBookmarks } from '../lib/bookmarks.js'
 import { parseDocxXmlToHtml } from '../lib/docx-viewer.js'
+import { isCodeOrTextFile } from '../lib/file-sharing.js'
 
 describe('Auto-Language Detector', () => {
   it('detects Python via shebang or syntax', () => {
@@ -163,5 +164,25 @@ describe('Java Compiler Class Extractor', () => {
 
   it('defaults to Main when no public class is declared', () => {
     expect(getJavaClassName('class Helper { public static void main(String[] args) {} }')).toBe('Main')
+  })
+})
+
+describe('File Classifier (isCodeOrTextFile)', () => {
+  it('identifies code and plain text files', () => {
+    expect(isCodeOrTextFile({ name: 'main.py', type: '' })).toBe(true)
+    expect(isCodeOrTextFile({ name: 'solution.cpp', type: '' })).toBe(true)
+    expect(isCodeOrTextFile({ name: 'index.html', type: 'text/html' })).toBe(true)
+    expect(isCodeOrTextFile({ name: 'style.css', type: 'text/css' })).toBe(true)
+    expect(isCodeOrTextFile({ name: 'config.json', type: 'application/json' })).toBe(true)
+    expect(isCodeOrTextFile({ name: 'README.md', type: '' })).toBe(true)
+  })
+
+  it('rejects binary files, documents, and media from plain text import', () => {
+    expect(isCodeOrTextFile({ name: 'assignment1.pdf', type: 'application/pdf' })).toBe(false)
+    expect(isCodeOrTextFile({ name: 'lab_manual.docx', type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })).toBe(false)
+    expect(isCodeOrTextFile({ name: 'notes.doc', type: '' })).toBe(false)
+    expect(isCodeOrTextFile({ name: 'diagram.png', type: 'image/png' })).toBe(false)
+    expect(isCodeOrTextFile({ name: 'archive.zip', type: 'application/zip' })).toBe(false)
+    expect(isCodeOrTextFile({ name: 'recording.mp4', type: 'video/mp4' })).toBe(false)
   })
 })

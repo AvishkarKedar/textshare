@@ -17,7 +17,7 @@ import { tags as t } from '@lezer/highlight'
 import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from '@codemirror/autocomplete'
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
 import { runCode, parseErrorPositions } from './lib/runner.js'
-import { uploadEncryptedFile, downloadAndDecryptFile, saveBlobAsFile } from './lib/file-sharing.js'
+import { uploadEncryptedFile, downloadAndDecryptFile, saveBlobAsFile, isCodeOrTextFile } from './lib/file-sharing.js'
 import { formatCode } from './lib/formatter.js'
 import { renderMarkdown, updateHtmlPreview, buildStandaloneHtml, renderVisualDiff } from './lib/preview.js'
 import { renderDocxToHtml } from './lib/docx-viewer.js'
@@ -53,7 +53,10 @@ const T_UPDATE = 0, T_AWARE = 1, T_SNAPSHOT = 2, T_SYNCED = 3,
 
 const norm = v => (v || '').toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, LEN)
 const cleanHost = v => (v || '').trim().replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/+$/, '')
-const relayHost = () => cleanHost(QS.get('relay') || LS.get('ts.relay', '') || DEFAULT_RELAY)
+const relayHost = () => {
+  if (typeof relay !== 'undefined' && relay && relay.host) return relay.host
+  return cleanHost(QS.get('relay') || LS.get('ts.relay', '') || DEFAULT_RELAY)
+}
 
 const safeColor = c => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#4c8dff')
 const safeName = n => String(n == null ? '' : n).slice(0, 24) || 'anon'
@@ -399,7 +402,14 @@ class Relay {
     if (this.dead) return
     this.onstate()
     clearTimeout(this.timer)
-    this.timer = setTimeout(() => this.connect(), Math.min(15000, 600 * Math.pow(1.6, this.tries++)))
+    this.tries++
+    if (this.tries >= 3 && this.host === DEFAULT_RELAY && FALLBACK_RELAY) {
+      console.warn(`[Relay] Primary relay ${this.host} unreachable; failing over to ${FALLBACK_RELAY}`)
+      this.host = FALLBACK_RELAY
+      toast('Connecting to backup sync relay...')
+      this.tries = 0
+    }
+    this.timer = setTimeout(() => this.connect(), Math.min(15000, 600 * Math.pow(1.6, this.tries)))
   }
 
   close() {
@@ -1926,10 +1936,46 @@ function updateLivePreview() {
       $('docPreview').innerHTML = `
         <div class="docx-document" style="text-align:center;padding:40px 20px;color:var(--mut)">
           <h2 style="color:var(--fg);margin-bottom:8px">📄 Assignment Document Viewer</h2>
-          <p style="max-width:440px;margin:0 auto 16px">Open any assignment <strong>PDF</strong> or <strong>Word (.docx)</strong> file from the Shared Files Hub to read the problem statement side-by-side with your code.</p>
-          <button class="btn primary sm" onclick="document.getElementById('hubFilesBtn').click()">Open Shared Files Hub</button>
+          <p style="max-width:440px;margin:0 auto 16px">Open any assignment <strong>PDF</strong> or <strong>Word (.docx)</strong> file to read the problem statement side-by-side with your code.</p>
+          <div style="display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap">
+            <button class="btn primary sm" id="prevOpenPickerBtn">📂 Choose PDF or Word Doc</button>
+            <button class="btn sm" onclick="document.getElementById('hubFilesBtn').click()">Open Shared Files Hub</button>
+          </div>
+          <input type="file" id="prevDocPicker" accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none">
         </div>
       `
+      const pickerBtn = $('prevOpenPickerBtn')
+      const docPicker = $('prevDocPicker')
+      if (pickerBtn && docPicker) {
+        pickerBtn.onclick = () => docPicker.click()
+        docPicker.onchange = async e => {
+          const file = e.target.files?.[0]
+          if (!file) return
+          try {
+            if (file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf') {
+              const url = URL.createObjectURL(file)
+              $('docPreview').hidden = true
+              $('pdfPreview').hidden = false
+              $('pdfPreview').src = url
+              toast('📖 Loaded ' + file.name + ' in split view')
+            } else if (file.name.toLowerCase().endsWith('.docx') || file.type.includes('wordprocessingml')) {
+              toast('Rendering Word document...')
+              const buf = await file.arrayBuffer()
+              const html = await renderDocxToHtml(buf, file.name)
+              $('pdfPreview').hidden = true
+              $('docPreview').hidden = false
+              $('docPreview').innerHTML = html
+              toast('📖 Loaded ' + file.name + ' in split view')
+            } else {
+              toast('Please choose a .docx or .pdf file')
+              return
+            }
+            handleFileUpload(file)
+          } catch (err) {
+            toast('Failed to load document: ' + err.message)
+          }
+        }
+      }
     }
     return
   }
@@ -2526,7 +2572,7 @@ const ACTIONS = {
   settings: () => showPanel($('panel')),
   leave: () => leaveRoom(),
   say: () => cursorChat(),
-  files: () => $('tabbar').scrollIntoView(),
+  files: () => toggleFileDrawer(),
   chat: () => showPanel($('chat')),
   undo: () => $('undoBtn').click(),
   redo: () => $('redoBtn').click(),
@@ -3013,9 +3059,38 @@ if ($('zenBtn')) $('zenBtn').onclick = () => toggleZenMode()
 if ($('zenExit')) $('zenExit').onclick = () => toggleZenMode(false)
 if ($('termClose')) $('termClose').onclick = () => { $('terminal').hidden = true; updateButtonActiveStates() }
 if ($('termClear')) $('termClear').onclick = () => { $('termOut').textContent = '' }
-if ($('termRerun')) $('termRerun').onclick = triggerRunCode
-if ($('fileDropzone')) $('fileDropzone').onclick = e => { if (e.target.tagName !== 'INPUT') $('fileInput').click() }
-if ($('fileInput')) $('fileInput').onchange = e => { if (e.target.files && e.target.files[0]) handleFileUpload(e.target.files[0]) }
+const fDrop = $('fileDropzone')
+if (fDrop) {
+  fDrop.onclick = e => { if (e.target.tagName !== 'INPUT') $('fileInput').click() }
+  fDrop.addEventListener('dragover', e => {
+    e.preventDefault()
+    e.stopPropagation()
+    fDrop.classList.add('drop-active')
+  })
+  fDrop.addEventListener('dragleave', e => {
+    e.preventDefault()
+    e.stopPropagation()
+    fDrop.classList.remove('drop-active')
+  })
+  fDrop.addEventListener('drop', e => {
+    e.preventDefault()
+    e.stopPropagation()
+    fDrop.classList.remove('drop-active')
+    if (readOnlyNow()) return toast('This room is read-only')
+    const droppedFiles = e.dataTransfer?.files
+    if (droppedFiles && droppedFiles.length > 0) {
+      for (const f of droppedFiles) {
+        handleFileUpload(f)
+      }
+    }
+  })
+}
+if ($('fileInput')) $('fileInput').onchange = e => {
+  if (e.target.files && e.target.files[0]) {
+    handleFileUpload(e.target.files[0])
+    e.target.value = ''
+  }
+}
 
 // Time Machine controls
 if ($('histClose')) $('histClose').onclick = () => toggleHistoryDrawer(false)
@@ -3066,8 +3141,7 @@ if (edWrap) {
 
     if (file.size > 25 * 1024 * 1024) return toast(file.name + ' is too large (25 MB max)')
 
-    const isText = file.type.startsWith('text/') || /\.(txt|md|js|ts|py|c|cpp|h|hpp|go|rs|sh|json|html|css|yaml|yml|toml)$/i.test(file.name)
-    if (!isText && file.size > 1024) {
+    if (!isCodeOrTextFile(file)) {
       toggleFileDrawer(true)
       handleFileUpload(file)
       return
@@ -3094,13 +3168,13 @@ addEventListener('drop', async e => {
   const list = [...(e.dataTransfer ? e.dataTransfer.files : [])].slice(0, 8)
   let last = null, added = 0
   for (const file of list) {
-    if (file.size > 512 * 1024) {
-      if (file.size <= 25 * 1024 * 1024) {
-        toggleFileDrawer(true)
-        handleFileUpload(file)
-        continue
-      }
+    if (file.size > 25 * 1024 * 1024) {
       toast(file.name + ' is too large (25 MB max)')
+      continue
+    }
+    if (!isCodeOrTextFile(file)) {
+      toggleFileDrawer(true)
+      handleFileUpload(file)
       continue
     }
     try { last = addFile(file.name.slice(0, 40), await file.text()); added++ } catch (err) {}

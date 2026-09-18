@@ -678,7 +678,7 @@ body.doc-page{overflow:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:to
   border:2px dashed var(--line2);padding:22px 14px;text-align:center;
   background:var(--raise);cursor:pointer;transition:border-color .18s,background .18s;border-radius:4px;
 }
-.dropzone:hover{border-color:var(--accent);background:var(--bg)}
+.dropzone:hover, .dropzone.drop-active{border-color:var(--accent);background:rgba(96,165,250,.08);box-shadow:0 0 0 2px rgba(96,165,250,.2)}
 .drop-lead{margin:8px 0 4px;font:500 12px/1.4 var(--sans);color:var(--fg)}
 .drop-sub{margin:4px 0 0;font-size:11px;color:var(--mut)}
 .file-browse-btn{cursor:pointer;display:inline-block;margin-left:4px}
