@@ -1263,10 +1263,19 @@ wss.on('connection', (ws, req, room) => {
         try {
           const targetLen = payload[0]
           const targetCid = payload.subarray(1, 1 + targetLen).toString('utf8')
+          let delivered = false
           for (const peer of room.sockets) {
-            if (peer._att?.cid === targetCid && peer.readyState === WebSocket.OPEN) {
+            if (peer !== ws && peer._att?.cid === targetCid && peer.readyState === WebSocket.OPEN) {
               peer.send(frame(T_P2P, payload))
+              delivered = true
               break
+            }
+          }
+          if (!delivered) {
+            for (const peer of room.sockets) {
+              if (peer !== ws && peer.readyState === WebSocket.OPEN) {
+                peer.send(frame(T_P2P, payload))
+              }
             }
           }
         } catch (e) {}
