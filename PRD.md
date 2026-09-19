@@ -1,305 +1,344 @@
 # anonshare — Product Requirements Document (PRD)
 
-> **Document Standard:** RFC-Style Technical Specification  
-> **Version:** 5.3.0 (Production Master)  
-> **Last Updated:** September 2026  
-> **Author & Maintainer:** Avishkar Kedar ([https://avishkark.in](https://avishkark.in) · `avishkarkedar+text@gmail.com`)  
-> **Production Endpoint:** [https://code.avishkark.in](https://code.avishkark.in)  
-> **Source Repository:** [https://github.com/AvishkarKedar/textshare](https://github.com/AvishkarKedar/textshare)  
+> **Document Type:** Master Product & Engineering Requirements Specification (RFC-Standard)  
+> **Document Version:** 5.3.0-EXTENDED  
+> **Release Target:** Production Baseline  
+> **Author & Project Architect:** Avishkar Kedar ([https://avishkark.in](https://avishkark.in) · `avishkarkedar+text@gmail.com`)  
+> **Production URL:** [https://code.avishkark.in](https://code.avishkark.in)  
+> **Repository:** [https://github.com/AvishkarKedar/textshare](https://github.com/AvishkarKedar/textshare)  
 > **License:** MIT License  
 
 ---
 
-## 1. Product Overview & Vision
+## 1. Executive Summary, Philosophy & Terminology
 
 ### 1.1 Executive Summary
-**anonshare** is an ultra-fast, zero-knowledge, end-to-end encrypted (E2EE) collaborative scratchpad and pair-programming IDE. It empowers software engineers, technical interviewers, educators, security researchers, and teams to establish an instant collaborative coding session in seconds using a 6-character room code. 
+**anonshare** is an ultra-fast, zero-knowledge, end-to-end encrypted (E2EE) collaborative scratchpad and pair-programming IDE designed for developers, technical interviewers, educators, and security researchers. Users create or join a collaborative workspace in under a second using a 6-character room code. 
 
-All communications—including document text, multi-file source code, terminal input/output, real-time audio voice chat, and shared binary files—are encrypted directly inside the client's browser before transmission over the wire. When the last participant leaves, an automated countdown purges the room from memory and relay storage, leaving zero persistent server-side trace.
+All communications—multi-file source code, terminal input/output, real-time voice audio, cursor awareness, and binary attachments—are encrypted directly in the client browser using WebCrypto AES-GCM before leaving the machine. The server infrastructure (Cloudflare Pages, Cloudflare Functions, Oracle VPS Relay) operates as a zero-knowledge transport broker, forwarding opaque ciphertext frames without possessing the keys to decrypt or inspect room content. When all participants exit or the room reaches its Time-To-Live (TTL) expiration, all room state is permanently purged from memory and storage.
 
-### 1.2 Core Product Principles & Invariants
-1. **Zero Knowledge / Client-Side Cryptography**: The server relay and hosting infrastructure never possess the cryptographic keys needed to inspect room text, code, files, or audio. The relay operates solely as an opaque ciphertext broker.
-2. **Zero Registration / Zero Identity Tracking**: No user accounts, passwords saved on servers, email verification, OAuth logins, cookies, localStorage tracking identifiers, or external telemetry analytics.
-3. **Strict Ephemerality**: Rooms exist solely in transient memory and temporary storage. Inactivity triggers permanent self-destruction.
-4. **Tactile Craftsmanship**: A high-density, terminal-inspired interface utilizing monospace typography, 0px border-radius geometry, 1px tactile hairline borders, sub-50ms sync latency, and 100% genuine real-time metrics (zero mock or simulated data).
+### 1.2 Core Product Principles & Non-Negotiables
+1. **Zero Knowledge by Design**: The server relay never receives plaintext document text, voice audio, file uploads, or encryption keys. Decryption keys exist exclusively in ephemeral client RAM.
+2. **Zero Identity Tracking**: No accounts, passwords stored on servers, email verifications, OAuth providers, tracking cookies, advertising pixels, or telemetry beacons.
+3. **Strict Ephemerality**: Rooms, chats, files, and audio sessions exist only during active participation. Disconnection and TTL expiration trigger permanent self-destruction.
+4. **Tactile Craftsmanship**: Dense, high-contrast monospace typography, 0px sharp-corner geometry, 1px tactile hairlines, $< 50\text{ ms}$ synchronization latency, and 100% genuine real-time metrics (zero simulated or mock data).
 
----
-
-## 2. Product Metadata & Author Integrity (Strict Invariant)
-
-The application maintains strict author provenance across all UI layers, metadata tags, and documentation:
-- **Product Name**: `anonshare`
-- **Internal System Name / Repository**: `textshare`
-- **Lead Architect & Developer**: **Avishkar Kedar**
-- **Author URL**: [https://avishkark.in](https://avishkark.in)
-- **Author Email**: `avishkarkedar+text@gmail.com`
-- **GitHub Repository**: [https://github.com/AvishkarKedar/textshare](https://github.com/AvishkarKedar/textshare)
-- **Live Production URL**: [https://code.avishkark.in](https://code.avishkark.in)
-- **Hosting & Infrastructure**: Cloudflare Pages (Frontend Edge) + Cloudflare Pages Functions (Serverless APIs) + Oracle VPS Relay (WebSocket Synchronization & Bubblewrap Code Sandbox).
+### 1.3 Terminology & Technical Glossary
+- **CRDT (Conflict-Free Replicated Data Type)**: A data structure that converges deterministically across distributed peers without central lock arbitration (implemented via Yjs).
+- **Awareness**: Ephemeral state sharing (presence, cursor line/column coordinates, active selection, identity color, and typing indicator) distributed among room peers.
+- **Glare / Offer Collision**: A WebRTC condition where two peers simultaneously transmit an SDP offer to each other. Resolved via deterministic *Polite Peer Negotiation*.
+- **Polite Peer**: The peer designated to yield (rollback its local offer) upon an offer collision based on lexicographical UUID sorting.
+- **DTLS-SRTP**: Datagram Transport Layer Security / Secure Real-Time Transport Protocol used for encrypting WebRTC voice media packets.
+- **PBKDF2**: Password-Based Key Derivation Function 2 with SHA-256 HMAC executed at $600,000$ iterations.
+- **AES-GCM**: Advanced Encryption Standard in Galois/Counter Mode providing authenticated symmetric encryption with 96-bit initialization vectors (IV) and 128-bit authentication tags.
+- **VAD (Voice Activity Detection)**: Real-time amplitude and frequency analysis powered by the Web Audio API (`AnalyserNode`) detecting active speech without server processing.
+- **Bubblewrap (`bwrap`)**: Low-level Linux unprivileged user namespace sandbox enforcing strict file system isolation, cgroup memory ceilings, and read-only system mounts during code execution.
 
 ---
 
-## 3. User Personas & Detailed Workflows
+## 2. Author Provenance & Credential Integrity (Strict Invariant)
 
-### 3.1 Persona A: Pair Programmers & Remote Interviewers ("Alex")
-- **Profile**: Senior software engineer conducting technical interviews or debugging production outages with teammates.
-- **Pain Points**: Heavy IDEs require account setup; existing scratchpads store code unencrypted; voice chat requires opening a separate Zoom/Discord call.
-- **Workflow**:
-  1. Opens `code.avishkark.in`, clicks **"Create a room"** $\rightarrow$ room `K9X2P1` is minted in $< 700\text{ms}$.
-  2. Copies invite link or displays QR code (`⌘I`).
-  3. Joins the built-in WebRTC **Voice Mesh** (`⌘⇧V`), grants mic permission $\rightarrow$ real-time P2P audio is active.
-  4. Creates multiple tabs (`index.py`, `data.json`, `test.py`).
-  5. Runs code with `⌘↵` $\rightarrow$ output executes inside an isolated Linux sandbox with live stdout/stderr.
-  6. Leaves the room $\rightarrow$ room is wiped 10 minutes later.
+The system maintains strict attribution to its author across all legal notices, metadata schemas, documentation, and user interfaces:
+- **Author & Architect**: **Avishkar Kedar**
+- **Personal Website**: [https://avishkark.in](https://avishkark.in)
+- **Contact Email**: [avishkarkedar+text@gmail.com](mailto:avishkarkedar+text@gmail.com)
+- **Source Code Repository**: [https://github.com/AvishkarKedar/textshare](https://github.com/AvishkarKedar/textshare)
+- **Production Host**: [https://code.avishkark.in](https://code.avishkark.in)
+- **Relay VPS Host**: `https://relay.avishkark.in` (`wss://relay.avishkark.in`)
+- **License**: MIT License (Permissive open source)
 
-### 3.2 Persona B: Security-Conscious Teams & Privacy Advocates ("Maya")
-- **Profile**: Security consultant sharing sensitive production credentials, API secrets, or architecture vulnerability reports.
-- **Pain Points**: Corporate Slack/Teams logs retain search history permanently; pastebins are indexed by search engines.
-- **Workflow**:
-  1. Enters room `SEC882` with an optional passphrase.
-  2. The browser computes dual PBKDF2 keys at 600,000 iterations: AES-GCM encryption key stays in local RAM, while a separate auth token is sent to the relay.
-  3. Uploads an encrypted configuration file via the **Files Drawer** (`⌘B`).
-  4. Reviews threat model in the **Security Modal** (`⌘⇧X`) and inspects raw PBKDF2 derivations in the **Crypto Explainer** (`⌘⇧K`).
-  5. Sets room TTL to `10m` $\rightarrow$ both participants exit $\rightarrow$ relay purges all ciphertext.
+---
 
-### 3.3 Persona C: Students & Computer Science Educators ("Dev")
-- **Profile**: University professor teaching algorithms and data structures to a group of 20 students.
-- **Pain Points**: Students struggle with local environment configuration and Git merge conflicts.
-- **Workflow**:
-  1. Creates a room with TTL set to `24h`.
-  2. Marks room as **Read-Only** from the **Settings Panel** (`⌘,`).
-  3. Uses **Time Machine** (`⌘⇧H`) to scrub back through snapshots and demonstrate algorithm steps.
-  4. Executes test suites via `/test` slash command.
-  5. Students export the completed project as a `.zip` archive via `⌘⇧E`.
+## 3. User Personas & Exhaustive Journey Workflows
+
+```
++-----------------------------------------------------------------------------------------------------------------------+
+|                                              User Persona Specifications                                              |
++---------------------+-------------------------------+-----------------------------------+-----------------------------+
+| Persona             | Role / Environment            | Key Pain Points Addressed         | Primary Features Utilized   |
++---------------------+-------------------------------+-----------------------------------+-----------------------------+
+| Alex (Pair Coder)   | Senior Engineer / Remote Team | Heavy IDE setup, video call lag,  | Multi-file tabs, CodeRunner |
+|                     |                               | lack of live stdin/stdout         | WebRTC voice mesh, Diff view|
++---------------------+-------------------------------+-----------------------------------+-----------------------------+
+| Maya (Security Eng) | Pentester / SecOps Team       | Permanent logs in Slack/Teams,    | Zero-knowledge PBKDF2 crypto|
+|                     |                               | public pastebin scraping          | 10m TTL, Threat model modal |
++---------------------+-------------------------------+-----------------------------------+-----------------------------+
+| Dev (CS Instructor) | Professor / 30-Student Lab    | Local compiler install issues,    | Read-only mode, Time machine|
+|                     |                               | students breaking starter code    | /test assertion suite, ZIP  |
++---------------------+-------------------------------+-----------------------------------+-----------------------------+
+| Sam (Mobile Coder)  | Developer on Phone / Tablet   | Tiny buttons, broken hover states,| #mbar mobile bar, 44px touch|
+|                     |                               | viewport zoom glitches            | responsive drawer sheets    |
++---------------------+-------------------------------+-----------------------------------+-----------------------------+
+```
+
+### 3.1 Step-by-Step Scenario: Pair Programming Technical Interview
+1. **Creation**: Alex opens `https://code.avishkark.in`, clicks **"Create a room"**. The client generates a random 6-character code (`X8K2M9`), verifies exclusivity with the relay via `GET /room/X8K2M9?create=1&excl=1` ($200\text{ OK}$), and mints a 256-bit owner token saved in `localStorage`.
+2. **Invitation**: Alex presses `⌘I` to open the **Invite Modal**, copies the link `https://code.avishkark.in/#X8K2M9`, and sends it to the candidate.
+3. **Voice Connection**: Alex clicks the microphone icon (`⌘⇧V`), browser prompts for microphone permission. Upon acceptance, `VoiceMesh` connects to `https://relay.avishkark.in`, sets up Web Audio `AnalyserNode` monitoring, and listens for candidate offers.
+4. **Candidate Arrival**: The candidate opens the link. The client computes PBKDF2 keys, connects to the WebSocket relay, and emits `join`. Candidate joins voice; `VoiceMesh` establishes a direct P2P DTLS-SRTP audio stream with Alex.
+5. **Coding & Tab Management**: Alex creates `solution.py` and `tests.py`. Both collaborate in real-time with multi-cursor presence and syntax highlighting.
+6. **Execution & Stdin Input**: Alex presses `⌘↵` to execute `solution.py`. The request routes to `/api/run` $\rightarrow$ VPS Bubblewrap sandbox. Output streams into the **Terminal Panel** with exit code and duration ($42\text{ ms}$).
+7. **Session Teardown**: Both participants close their browser tabs. The relay's 10-minute countdown ticker starts. At $0:00$, the room buffer is purged from VPS RAM.
 
 ---
 
 ## 4. Comprehensive Functional Specifications
 
-### 4.1 Room Creation, Authentication & Cryptography
+### 4.1 Room Lifecycle & Cryptographic Specifications
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Idle: Browser loads landing
-    Idle --> Generating: Click "Create a room"
-    Generating --> Reserving: Pick random 6-char code
-    Reserving --> CollisionCheck: GET /room/CODE?create=1&excl=1
-    CollisionCheck --> Reserving: 409 Conflict (Code taken)
-    CollisionCheck --> KeyDerivation: 200 OK (Code reserved)
-    KeyDerivation --> Connected: Derive PBKDF2 (600k rounds)
-    Connected --> Active: Sync & Voice joined
-    Active --> IdleTimer: No key/mouse activity
-    IdleTimer --> Countdown: 15m elapsed
-    Countdown --> Destroyed: 5m countdown expires
-    Countdown --> Active: User clicks "Keep Working"
-    Active --> Destroyed: All peers leave + TTL expires
-    Destroyed --> [*]
+    [*] --> Landing: User navigates to code.avishkark.in
+    Landing --> RoomAllocation: Click "Create a room"
+    RoomAllocation --> CodeReservation: Generate 6-char [A-Z0-9]{6}
+    CodeReservation --> CollisionRetry: Relay returns 409 Conflict
+    CollisionRetry --> CodeReservation: Pick new code
+    CodeReservation --> PBKDF2Derivation: Relay returns 200 OK
+    PBKDF2Derivation --> WebSocketUpgrade: Derive AES-GCM (600k rounds)
+    WebSocketUpgrade --> RoomActive: HTTP 426 -> WSS Connected
+    RoomActive --> InactivityIdle: 15m without key/pointer input
+    InactivityIdle --> InactivityWarning: Show 5-minute countdown modal
+    InactivityWarning --> RoomActive: User clicks "Keep Working"
+    InactivityWarning --> RoomDestroyed: 5-minute timer reaches 0:00
+    RoomActive --> RoomGraceTTL: Last peer disconnects
+    RoomGraceTTL --> RoomDestroyed: TTL timer (10m / 1h / 24h) expires
+    RoomDestroyed --> [*]: Memory purged, storage unlinked
 ```
 
-#### 4.1.1 Room Code Generation & Collision Handling
-- **Format**: Exactly 6 uppercase alphanumeric characters excluding ambiguous glyphs (`[A-Z0-9]{6}`).
-- **Reservation Guarantee**: Client requests exclusive allocation (`?create=1&excl=1`). If a room code already exists with an active session, the relay returns `409 Conflict`, instructing the client to generate a fresh code.
-- **Owner Privileges**: Room creator mints a cryptographic 256-bit owner token (`ownerKey`). The owner token grants exclusive authority to:
-  - Toggle Read-Only mode for other participants.
-  - Change room Time-to-Live (`10m`, `1h`, `24h`).
-  - Instantly destroy the room and terminate all active WebSocket connections.
+#### 4.1.1 Room Code Allocation & HTTP Status Protocol
+- **Room Code Alphabet**: `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (32 characters; excludes ambiguous glyphs `0`, `O`, `1`, `I`). Total namespace: $32^6 = 1,073,741,824$ unique rooms.
+- **Relay Handshake Status Codes**:
+  - `426 Upgrade Required`: Auth token accepted, client proceeds to WebSocket upgrade (`wss://relay.avishkark.in/room/CODE?a=AUTH`).
+  - `403 Forbidden`: Auth token invalid / wrong password.
+  - `404 Not Found`: Room does not exist or has expired.
+  - `409 Conflict`: Room code already occupied during exclusive creation attempt.
+  - `423 Locked / Suspended`: Room has been locked or suspended by the room owner.
 
-#### 4.1.2 Cryptographic Key Derivation Specifications
-All encryption utilizes browser-native `window.crypto.subtle` (WebCrypto API):
-1. **PBKDF2 Derivation Function**:
-   - Algorithm: PBKDF2 with SHA-256 HMAC.
-   - Iterations: Exactly $600,000$ rounds.
-2. **Dual-Salt Architecture**:
-   - **Document Encryption Key ($K_{\text{enc}}$)**:
-     $$\text{Salt}_{\text{enc}} = \text{TextEncoder().encode}(\text{"textshare|" } + \text{RoomCode})$$
-     $$K_{\text{enc}} = \text{PBKDF2}(\text{RoomCode} + \text{":"} + \text{Password}, \text{Salt}_{\text{enc}}, 600000) \longrightarrow \text{AES-GCM 256-bit}$$
-     *$K_{\text{enc}}$ is NEVER transmitted across the network. It resides exclusively in browser memory.*
-   - **Relay Authentication Token ($T_{\text{auth}}$)**:
-     $$\text{Salt}_{\text{auth}} = \text{TextEncoder().encode}(\text{"textshare-auth|" } + \text{RoomCode})$$
-     $$T_{\text{auth}} = \text{PBKDF2}(\text{RoomCode} + \text{":"} + \text{Password}, \text{Salt}_{\text{auth}}, 600000) \longrightarrow 32\text{ bytes hex}$$
-     *$T_{\text{auth}}$ is sent to the relay during WebSocket upgrade. The relay computes and stores only $\text{SHA-256}(T_{\text{auth}})$.*
-3. **Ciphertext Frame Structure**:
-   - Cipher: AES-GCM with 96-bit random initialization vector (IV) per message.
-   - Authentication Tag: 128-bit authentication tag appended to ciphertext.
+#### 4.1.2 Dual-Salt PBKDF2 Mathematical Formulation
+Every room session derives two cryptographically independent keys from the user password (or default empty password) and room code:
 
----
+$$\text{PasswordString} = \text{RoomCode} \parallel \text{":"} \parallel \text{UserPassword}$$
 
-### 4.2 Collaborative Multi-File Code Editor
+1. **Document Encryption Key ($K_{\text{enc}}$)**:
+   $$\text{Salt}_{\text{enc}} = \text{TextEncoder("textshare|" } \parallel \text{RoomCode)}$$
+   $$K_{\text{enc}} = \text{PBKDF2-HMAC-SHA256}(\text{PasswordString}, \text{Salt}_{\text{enc}}, \text{iterations}=600000, \text{keyLength}=256\text{ bits})$$
+   *Exported as `CryptoKey` with algorithm `AES-GCM`. Stored exclusively in local JavaScript variable scope.*
 
-#### 4.2.1 Tab & File System Management ([`TabBar.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/editor/TabBar.tsx))
-- **File Tabs**: Support creating, renaming, reordering, and deleting multiple files.
-- **Close Button Invariant**: Every tab displays an explicit close button (`X`) when 2 or more files exist. Closing a tab safely shifts active focus to the adjacent tab.
-- **Export System**: Export active file or package all open tabs into a `.zip` archive (`exportProjectZip`) generated directly in browser memory without server uploads.
+2. **Relay Authentication Token ($T_{\text{auth}}$)**:
+   $$\text{Salt}_{\text{auth}} = \text{TextEncoder("textshare-auth|" } \parallel \text{RoomCode)}$$
+   $$T_{\text{auth}} = \text{PBKDF2-HMAC-SHA256}(\text{PasswordString}, \text{Salt}_{\text{auth}}, \text{iterations}=600000, \text{keyLength}=256\text{ bits}) \longrightarrow \text{Hex String}$$
+   *Transmitted to relay over TLS. The relay stores $\text{SHA-256}(T_{\text{auth}})$ to verify subsequent join attempts.*
 
-#### 4.2.2 Language Engine & Syntax Tokenization ([`highlight.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/highlight.ts), [`detect.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/detect.ts))
-- **Supported Languages (15+)**: JavaScript (`js`), TypeScript (`ts`, `tsx`), Python (`py`), HTML (`html`), CSS (`css`), JSON (`json`), Rust (`rs`), Go (`go`), C (`c`), C++ (`cpp`), Java (`java`), SQL (`sql`), Markdown (`md`), YAML (`yaml`), Shell/Bash (`sh`).
-- **Auto-Detection Heuristic**:
-  - Automatically identifies code syntax on paste using regex signatures:
-    - Python: `/^(?:import\s+\w+|from\s+\w+\s+import|def\s+\w+\s*\(|class\s+\w+:)/m`
-    - TypeScript/React: `/(?:import\s+.*from\s+['"]react['"]|export\s+(?:default\s+)?(?:function|const)\s+\w+.*(?:=>|return\s*<))/`
-    - Rust: `/(?:fn\s+main\s*\(\)|let\s+mut\s+\w+|use\s+std::)/`
-    - Go: `/^package\s+\w+|func\s+\w+\s*\(/m`
-    - C/C++: `/#include\s+<[\w.]+>|int\s+main\s*\(/`
-    - SQL: `/^(?:SELECT\s+.*FROM|INSERT\s+INTO|CREATE\s+TABLE)/im`
-
-#### 4.2.3 Editor Utilities & Tooling
-- **Search & Replace Bar (`⌘F` / `⌘⌥F`)**: Case-sensitive search, whole-word matching, regular expression evaluation, and single/batch replacement.
-- **Line & Column Status**: Real-time cursor coordinates (`Ln X, Col Y`), character counts, and selection ranges displayed in [`StatusBar.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/editor/StatusBar.tsx).
-- **Per-User Scoped Undo/Redo**: Undo stack tracks only local user edits via Yjs transaction origin tagging, preventing local undo from erasing remote peer typing.
+3. **AES-GCM Frame Encryption Protocol**:
+   - For every outbound binary frame $M$:
+     $$\text{IV} \xleftarrow{\text{RNG}} \text{crypto.getRandomValues}(\text{new Uint8Array}(12)) \quad (96\text{ bits})$$
+     $$C, \text{Tag} = \text{SubtleCrypto.encrypt}(\{\text{name: "AES-GCM", iv: IV}\}, K_{\text{enc}}, M)$$
+     $$\text{OutboundPacket} = \text{IV} \parallel C \parallel \text{Tag}$$
 
 ---
 
-### 4.3 Real-Time WebRTC Voice Mesh ([`voice.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/voice.ts), [`VoicePanel.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/palette/VoicePanel.tsx))
+### 4.2 Multi-File Editor & Language Engine Specifications
+
+#### 4.2.1 Multi-File Tab Management ([`TabBar.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/editor/TabBar.tsx))
+- **File Buffer Model**:
+  ```ts
+  export interface EditorFile {
+    id: string;        // UUIDv4 (e.g., "f-1726789012-abc")
+    name: string;      // Filename with extension (e.g., "main.py")
+    language: string;  // Canonical language identifier (e.g., "python")
+    content: string;   // Full document text content
+  }
+  ```
+- **Tab Invariants**:
+  - Closing an active tab automatically activates the adjacent left tab (or right if at index 0).
+  - Close button (`X`) is visible on hover (desktop) and permanently visible on touch screens when `files.length >= 2`.
+  - Adding a new tab defaults to `untitled-{n}.js` and focuses the editor immediately.
+  - Export Project as ZIP (`⌘⇧E`) executes client-side via `buildZip()` and triggers an immediate browser file download.
+
+#### 4.2.2 Language Syntax Engine & Grammar Tokenizer ([`highlight.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/highlight.ts))
+Tokenizes 15+ grammars using high-speed regular expressions into categorized syntax tokens:
+```ts
+export interface SyntaxToken {
+  type: "keyword" | "string" | "comment" | "number" | "function" | "operator" | "plain";
+  value: string;
+}
+```
+- **Language Detection Table**:
+
+| Language | Recognized Extensions | Heuristic Paste Signatures |
+|---|---|---|
+| **Python** | `.py`, `.pyw`, `.ipynb` | `/^(?:import\s+\w+|from\s+\w+\s+import|def\s+\w+\s*\(|class\s+\w+:)/m` |
+| **TypeScript** | `.ts`, `.tsx`, `.mts` | `/(?:import\s+.*from\s+['"]react['"]|export\s+(?:default\s+)?(?:function|const)\s+\w+.*(?:=>|return\s*<)|interface\s+\w+)/` |
+| **JavaScript** | `.js`, `.jsx`, `.mjs` | `/(?:const\s+\w+\s*=|let\s+\w+\s*=|function\s+\w+\s*\(|console\.log\()/` |
+| **Rust** | `.rs` | `/(?:fn\s+main\s*\(\)|let\s+mut\s+\w+|use\s+std::|impl\s+\w+)/` |
+| **Go** | `.go` | `/^package\s+\w+|func\s+\w+\s*\(|import\s+\(\s*"/m` |
+| **C / C++** | `.c`, `.cpp`, `.h`, `.hpp` | `/#include\s+<[\w.]+>|int\s+main\s*\(/` |
+| **Java** | `.java` | `/(?:public\s+class\s+\w+|public\s+static\s+void\s+main)/` |
+| **SQL** | `.sql` | `/^(?:SELECT\s+.*FROM|INSERT\s+INTO|CREATE\s+TABLE|UPDATE\s+\w+\s+SET)/im` |
+| **HTML / SVG** | `.html`, `.svg` | `/<!DOCTYPE\s+html>|<html|<svg/i` |
+| **JSON** | `.json` | `/^\s*[\{\[][\s\S]*[\}\]]\s*$/` |
+| **Markdown** | `.md`, `.markdown` | `/^#{1,6}\s+|^\s*[-*+]\s+|\[.*\]\(.*\)/m` |
+
+---
+
+### 4.3 Real-Time WebRTC Voice Mesh Specifications ([`voice.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/voice.ts))
 
 ```mermaid
-flowchart LR
-    subgraph LocalPeer ["Local Client (Microphone & Web Audio)"]
-        Mic[navigator.mediaDevices.getUserMedia] --> Analyser[AudioContext AnalyserNode]
-        Analyser --> RMS[Calculate 0-100% Volume Level]
-        Analyser --> VAD{Volume > 20% ?}
-        VAD -->|Yes| SetSpeaking[Broadcast speaking: true]
-        VAD -->|No| SetSilent[Broadcast speaking: false]
-        Mic --> EncryptAudio[WebRTC DTLS-SRTP Audio Track]
+sequenceDiagram
+    autonumber
+    participant ClientA as Peer A (Initiator)
+    participant Relay as Sync Signaling Channel (:3003)
+    participant ClientB as Peer B (Receiver)
+
+    Note over ClientA,ClientB: Signaling Connected via Socket.io
+    ClientA->>Relay: socket.emit("voice-signal", { target: "PeerB", signal: { type: "voice-offer", sdp } })
+    Relay->>ClientB: socket.on("voice-signal", { sender: "PeerA", signal: { type: "voice-offer", sdp } })
+    ClientB->>ClientB: Evaluate glare: isPolite ? rollback : ignore
+    ClientB->>ClientB: pc.setRemoteDescription(offer)
+    ClientB->>ClientB: const answer = await pc.createAnswer()
+    ClientB->>ClientB: pc.setLocalDescription(answer)
+    ClientB->>Relay: socket.emit("voice-signal", { target: "PeerA", signal: { type: "voice-answer", sdp } })
+    Relay->>ClientA: socket.on("voice-signal", { sender: "PeerB", signal: { type: "voice-answer", sdp } })
+    ClientA->>ClientA: pc.setRemoteDescription(answer)
+
+    par ICE Candidate Exchange
+        ClientA->>Relay: socket.emit("voice-signal", { target: "PeerB", signal: { type: "voice-candidate", candidate } })
+        Relay->>ClientB: socket.on("voice-signal", candidate)
+        ClientB->>ClientB: pc.addIceCandidate(candidate)
+    and
+        ClientB->>Relay: socket.emit("voice-signal", { target: "PeerA", signal: { type: "voice-candidate", candidate } })
+        Relay->>ClientA: socket.on("voice-signal", candidate)
+        ClientA->>ClientA: pc.addIceCandidate(candidate)
     end
 
-    subgraph PeerConnections ["P2P WebRTC Mesh"]
-        EncryptAudio --> PeerA[Remote Peer A]
-        EncryptAudio --> PeerB[Remote Peer B]
-        EncryptAudio --> PeerC[Remote Peer C]
-    end
+    Note over ClientA,ClientB: Direct P2P DTLS-SRTP Audio Flow Active
 ```
 
-#### 4.3.1 WebRTC Protocol Architecture
-- **Mesh Topology**: Full P2P mesh across all room participants with zero audio traversing intermediate servers.
-- **Polite Peer Negotiation**: Resolves simultaneous SDP offer collisions (glare) by comparing client UUIDs lexicographically:
-  $$\text{isPolite} = \text{myCid.localeCompare}(\text{peerCid}) < 0$$
-  The polite peer performs `pc.setLocalDescription({ type: 'rollback' })` and accepts incoming offers.
-- **Asymmetric Receiver Mode**: Participants without microphone hardware or permission answer offers with `{ direction: 'recvonly' }` transceivers, enabling them to hear others without errors.
+#### 4.3.1 Web Audio Frequency Analysis & VAD Algorithm
+Every $100\text{ ms}$, the local audio monitor executes:
+1. `analyser.getByteFrequencyData(buffer)` fills $128$ frequency bins ($FFT = 256$, sample rate $44.1\text{ kHz}$).
+2. Computes mean frequency amplitude:
+   $$\bar{A} = \frac{1}{128} \sum_{i=0}^{127} \text{buffer}[i]$$
+3. Computes normalized microphone volume percentage ($0\dots 100\%$):
+   $$\text{VolumeLevel} = \min\left(100, \text{round}\left(\frac{\bar{A}}{128} \times 100\right)\right)$$
+4. Voice Activity Detection: If $\bar{A} > 20$, updates `voice.speaking = true` and broadcasts `voice-state { speaking: true }`. If $\bar{A} \le 20$, sets `voice.speaking = false`.
 
-#### 4.3.2 Real Audio Analysis & Voice Activity Detection (VAD)
-- **Web Audio Engine**: Connected via `AudioContext` with `AnalyserNode` ($FFT = 256$, sample rate $44.1\text{kHz}$).
-- **Microphone Level**: Real-time RMS calculation mapped linearly to $0\dots 100\%$ displayed on the level meter. Zero `Math.random()` values permitted.
-- **Speaking Indicators**: Emits `voice-state { speaking: true }` when average frequency power exceeds threshold ($> 20$). Renders animated green pulse rings on avatars.
-
-#### 4.3.3 Hardware & User Controls
-- **Push-to-Talk**: Unmutes audio stream on `onMouseDown` / `onTouchStart` and mutes on release.
-- **Hardware Mute**: Sets `track.enabled = false` directly on the local `MediaStreamTrack`.
-- **Hardware Deafen**: Mutes all remote `<audio>` elements simultaneously.
-- **Autoplay Recovery**: Binds `click`, `touchstart`, and `keydown` one-shot listeners to resume `AudioContext` if browser autoplay policies prevent audio playback.
+#### 4.3.2 Hardware Controls & Autoplay Recovery
+- **Hardware Mute**: `localStream.getAudioTracks().forEach(t => t.enabled = !muted)`. Emits `voice-state { muted }`.
+- **Hardware Deafen**: Sets `audioEl.muted = true` on all peer audio elements.
+- **Push-to-Talk**: Unmutes microphone on `onMouseDown` / `onTouchStart` and mutes on `onMouseUp` / `onTouchEnd`.
+- **Autoplay Recovery**: If browser blocks `<audio>.play()`, attaches one-shot `click`, `touchstart`, and `keydown` listeners to resume `AudioContext` and trigger audio playback upon user interaction.
 
 ---
 
-### 4.4 Sandboxed Code Runner (`/run` & Terminal)
+### 4.4 Sandboxed Code Execution Engine (`/run`)
 
-#### 4.4.1 Execution Architecture & Runtimes
-Code execution requests flow from the frontend through Cloudflare Pages Functions to an Oracle VPS Bubblewrap sandbox:
+#### 4.4.1 Execution Request Pipeline
+1. Client issues `POST /api/run` with body `{ language, code, stdin }`.
+2. Cloudflare Pages Function (`functions/api/run.ts`) validates payload size ($< 64\text{ KB}$) and supported language identifiers.
+3. Function proxies request over HTTPS to Oracle VPS Relay (`https://relay.avishkark.in/run`).
+4. VPS executes process inside Bubblewrap sandbox with CPU execution timeout ($5000\text{ ms}$) and memory limits ($128\text{ MB}$).
+5. Returns JSON `{ stdout, stderr, exitCode, durationMs }` to client terminal panel.
 
-| Language | Compiler / Runtime | Flags / Command | Timeout | Memory Limit |
-|---|---|---|---|---|
-| **Python** | Python 3.11.8 | `python3 -u main.py` | 5000 ms | 128 MB |
-| **Node.js** | Node.js 22.14.0 | `node main.js` | 5000 ms | 128 MB |
-| **C** | GCC 13.2.0 | `gcc -O2 main.c -o out && ./out` | 5000 ms | 128 MB |
-| **C++** | G++ 13.2.0 | `g++ -O2 -std=c++20 main.cpp -o out && ./out` | 5000 ms | 128 MB |
-| **Rust** | Rustc 1.77.0 | `rustc -O main.rs -o out && ./out` | 5000 ms | 128 MB |
-| **Go** | Go 1.22.1 | `go run main.go` | 5000 ms | 128 MB |
-| **Java** | OpenJDK 21.0.2 | `javac Main.java && java Main` | 5000 ms | 192 MB |
-| **Bash** | GNU Bash 5.2 | `bash script.sh` | 5000 ms | 64 MB |
-
-#### 4.4.2 Sandbox Security Constraints
-- **Bubblewrap Namespace Isolation**: Unshares network, PID, IPC, and UTS namespaces (`bwrap --unshare-all`).
-- **Read-Only Root Filesystem**: Mounts host binaries in read-only mode (`--ro-bind /usr /usr`, `--ro-bind /lib /lib`).
-- **Ephemeral Scratchpad**: Mounts a transient 32MB `tmpfs` at `/tmp` destroyed immediately on process termination.
-- **CPU & Memory Quotas**: Enforced via Linux `cgroups v2` to prevent fork bombs and infinite resource exhaustion.
+#### 4.4.2 Sandbox Security Flags (`bwrap`)
+```bash
+bwrap \
+  --unshare-all \
+  --ro-bind /usr /usr \
+  --ro-bind /lib /lib \
+  --ro-bind /lib64 /lib64 \
+  --ro-bind /bin /bin \
+  --tmpfs /tmp --tmpfs /run \
+  --proc /proc --dev /dev \
+  --chdir /tmp \
+  --timeout 5000 \
+  python3 -u main.py
+```
 
 ---
 
-### 4.5 Modals, Drawers & Overlays Catalog
+### 4.5 Complete Overlay, Modal & Drawer Catalog
 
 ```
-+---------------------------------------------------------------------------------+
-|                               anonshare Overlays                                |
-+------------------------------------+--------------------------------------------+
-| Drawers (Slide-Over Right)         | Centered Modal Dialogs                     |
-+------------------------------------+--------------------------------------------+
-| 1. VoicePanel (⌘⇧V)                | 7. CommandPalette (⌘K)                     |
-| 2. FilesDrawer (⌘B)                | 8. CryptoModal (⌘⇧K)                       |
-| 3. HistoryDrawer / Time Machine(⌘⇧H)| 9. SecurityModal / Threat Model (⌘⇧X)     |
-| 4. BookmarksDrawer (⌘⇧R)           | 10. StatusModal / Diagnostics (⌘⇧Y)        |
-| 5. NotificationsPanel (⌘N)         | 11. FaqModal / Help Center (⌘⇧F)           |
-| 6. BrowserDrawer (⌘⇧B)             | 12. WhiteboardModal (⌘⇧W)                  |
-|                                    | 13. OnboardingTour (⌘⇧O)                   |
-|                                    | 14. InviteModal (⌘I)                       |
-+------------------------------------+--------------------------------------------+
++-----------------------------------------------------------------------------------------------------------------------+
+|                                              Overlays & Modals Taxonomy                                               |
++-------------------+---------------+-------------------+---------------------------------------------------------------+
+| Component Name    | Shortcut      | Visual Type       | Core Purpose & Key Functional Actions                         |
++-------------------+---------------+-------------------+---------------------------------------------------------------+
+| CommandPalette    | ⌘K            | Centered Modal    | Fuzzy search across 24 actions, view toggles, themes, exports |
+| HistoryDrawer     | ⌘⇧H           | Right Slide-Over  | Time Machine revision scrubber, diff viewer, revert, save-tab |
+| FilesDrawer       | ⌘B            | Right Slide-Over  | 50MB encrypted file uploads, image/pdf/docx previews, download|
+| BookmarksDrawer   | ⌘⇧R           | Right Slide-Over  | Local storage recent room history with one-click rejoin       |
+| VoicePanel        | ⌘⇧V           | Right Slide-Over  | WebRTC P2P audio controls, mic level gauge, mute/deafen/PTT   |
+| NotificationsPanel| ⌘N            | Right Slide-Over  | Chronological list of user mentions, joins, and room warnings |
+| BrowserDrawer     | ⌘⇧B           | Right Slide-Over  | Sandboxed web preview drawer for external documentation       |
+| CryptoModal       | ⌘⇧K           | Centered Modal    | Interactive PBKDF2 derivation explainer and salt verification |
+| SecurityModal     | ⌘⇧X           | Centered Modal    | Plain-language threat model (protected vs out-of-scope risks)  |
+| StatusModal       | ⌘⇧Y           | Centered Modal    | Live WebSocket latency ping, memory heap, and system health   |
+| FaqModal          | ⌘⇧F           | Centered Modal    | Searchable FAQ accordion across 6 categorized sections        |
+| WhiteboardModal   | ⌘⇧W           | Centered Modal    | Collaborative vector drawing canvas with pencil, shapes, text |
+| OnboardingTour    | ⌘⇧O           | Centered Spotlight| 6-step guided walkthrough for first-time pair programmers      |
+| InviteModal       | ⌘I            | Centered Modal    | Instant URL copy, QR code display, and view-only link generator|
+| SettingsPanel     | ⌘,            | Centered Modal    | Room TTL cycle (10m/1h/24h), password lock, read-only toggle |
++-------------------+---------------+-------------------+---------------------------------------------------------------+
 ```
-
-1. **Command Palette (`⌘K`)**: Fuzzy finder indexing 24 actions, view toggles, export tools, and color themes.
-2. **Time Machine (`⌘⇧H`)**: Visual revision scrubber stepping through historical snapshots with live side-by-side diffing, "Revert to here", and "Save as tab".
-3. **Files Drawer (`⌘B`)**: Client-side encrypted file uploads (up to 50MB) with thumbnail generation and built-in viewers for Images, Markdown, PDFs, and Word DOCX files.
-4. **Bookmarks Drawer (`⌘⇧R`)**: Local storage of recently visited rooms with timestamp and one-click rejoin.
-5. **Crypto Explainer (`⌘⇧K`)**: Interactive visual proof showing real PBKDF2 derived keys, salt strings, and AES-GCM verification.
-6. **Threat Model (`⌘⇧X`)**: Plain-language breakdown of protected threat vectors (ISP snooping, relay server dumps) vs out-of-scope risks (compromised endpoint machines).
-7. **System Status (`⌘⇧Y`)**: Live latency diagnostic, WebSocket round-trip ping, memory heap counter, and socket transport indicator.
-8. **FAQ Modal (`⌘⇧F`)**: Instant category filter search across 6 sections (Security, Rooms, Voice, Runner, Storage, Privacy).
-9. **Onboarding Tour (`⌘⇧O`)**: Guided 6-step spotlight tutorial introducing core pair-programming workflows.
-10. **Collaborative Whiteboard (`⌘⇧W`)**: Multi-color vector drawing canvas with pencil, rectangle, arrow, text, and eraser tools.
 
 ---
 
 ### 4.6 Slash Commands Directory
 
-Typing `/` on a blank line inside the editor opens the interactive slash menu:
-
-| Command | Label | Function |
-|---|---|---|
-| `/faq` | FAQs & Help | Opens searchable FAQ help modal with category filters |
-| `/run` | Run Code | Triggers execution of the active file in the sandbox |
-| `/test` | Run Tests | Scans file for assertions and test suites |
-| `/voice` | Voice Mesh | Opens voice panel and requests microphone access |
-| `/zen` | Zen Mode | Hides all toolbars and sidebars for distraction-free coding |
-| `/theme` | Switch Theme | Cycles between Obsidian, Dracula, Nord, Amber, and Paper |
-| `/crypto` | Crypto Explainer | Displays live PBKDF2 keys and encryption parameters |
-| `/clean` | Clear Terminal | Purges all stdout and stderr logs from terminal |
-| `/zip` | Export ZIP | Packages all open tabs into a downloadable `.zip` file |
+| Slash Command | Label | Hint | Execution Action |
+|---|---|---|---|
+| `/faq` | FAQs & Help | Honest answers to all questions | Opens `FaqModal` with instant search |
+| `/run` | Run Code | Execute the active file | Invokes `/api/run` sandbox execution |
+| `/test` | Run Tests | Parse test()/assert patterns | Runs assertion test suite in terminal |
+| `/voice` | Start Voice | Join the voice mesh | Prompts microphone access & joins WebRTC mesh |
+| `/zen` | Toggle Zen | Distraction-free editor | Hides all toolbars, tabs, and status strips |
+| `/theme` | Switch Theme | Cycle color themes | Cycles Obsidian $\rightarrow$ Dracula $\rightarrow$ Nord $\rightarrow$ Amber $\rightarrow$ Paper |
+| `/crypto` | Crypto Breakdown | Inspect encryption keys | Opens `CryptoModal` showing PBKDF2 parameters |
+| `/clean` | Clear Terminal | Wipe terminal logs | Purges all stdout and stderr terminal lines |
+| `/zip` | Export ZIP | Download project ZIP | Generates and downloads `anonshare-{room}.zip` |
 
 ---
 
-### 4.7 Inactivity Protection & Room Teardown
-
-1. **Idle Event Detector**: Tracks `keydown`, `pointermove`, `touchstart`, and `wheel` events.
-2. **15-Minute Inactivity Threshold**: If no input is detected for 15 minutes, the room enters `Idle` state.
-3. **5-Minute Countdown Dialog**: A high-contrast modal appears displaying a 5:00 countdown timer with audio warning chimes. Clicking **"Keep Working"** resets the idle timer immediately.
-4. **Permanent Purge**: When the timer reaches 0:00 or all participants disconnect and the room TTL expires:
+### 4.7 Inactivity Protection & Teardown Protocol
+1. **Event Listeners**: Window listens for `keydown`, `pointermove`, `touchstart`, and `wheel` events.
+2. **15-Minute Idle Threshold**: If no input is received for 15 minutes ($900,000\text{ ms}$), room transitions to `Idle` state.
+3. **5-Minute Countdown Warning**: Modal displays a 5:00 countdown timer with audio warning chimes. Clicking **"Keep Working"** resets the idle timer immediately.
+4. **Permanent Purge**: If timer reaches 0:00 or all peers disconnect and TTL expires:
    - In-memory Yjs CRDT documents are wiped.
    - Encrypted file chunks are unlinked from disk.
    - Relays broadcast `T_KILLED` and sever all WebSocket connections.
 
 ---
 
-## 5. Non-Functional & Operational Performance Targets
+## 5. Non-Functional Requirements & Performance Matrix
 
 ```
-+-------------------------------------------------------------------------------+
-|                      Performance & Operational SLA Matrix                     |
-+-----------------------------+-------------------+-----------------------------+
-| Metric                      | Target Threshold  | Measurement Method          |
-+-----------------------------+-------------------+-----------------------------+
-| First Contentful Paint      | < 500 ms          | Lighthouse / Web Vitals 4G  |
-| Time to Interactive (TTI)   | < 800 ms          | Headless Chrome Puppeteer   |
-| WebSocket Round-Trip Time   | < 40 ms           | WSS Ping-Pong to Relay VPS  |
-| WebRTC Audio Latency        | < 60 ms           | P2P Direct DTLS-SRTP Mesh   |
-| Key Derivation Duration     | 150 ms - 350 ms   | WebCrypto 600k PBKDF2 Iter. |
-| Sandbox Execution Spawn     | < 120 ms          | Bubblewrap Namespace Launch |
-| Static Bundle Total Size    | < 450 KB gzip     | Next.js Turbopack Export    |
-+-----------------------------+-------------------+-----------------------------+
++-----------------------------------------------------------------------------------------------+
+|                             Operational Performance SLA Matrix                                |
++-----------------------------+-------------------+---------------------------------------------+
+| Metric                      | Target Threshold  | Measurement Methodology                     |
++-----------------------------+-------------------+---------------------------------------------+
+| First Contentful Paint (FCP)| < 500 ms          | Lighthouse on 4G Throttle                   |
+| Time to Interactive (TTI)   | < 800 ms          | Puppeteer Headless Chrome Benchmark         |
+| WebSocket Latency (RTT)     | < 40 ms           | WSS Ping/Pong to Oracle VPS Relay           |
+| WebRTC Audio End-to-End Lag | < 60 ms           | Direct DTLS-SRTP P2P Audio Stream           |
+| PBKDF2 Key Derivation Time  | 150 ms - 350 ms   | WebCrypto 600,000 Iterations Benchmark      |
+| Code Sandbox Startup Time   | < 120 ms          | Linux Bubblewrap Namespace Creation         |
+| Static Export Bundle Size   | < 450 KB gzip     | Next.js Turbopack dist/ Build Output        |
+| Unit & Feature Test Suite   | 56/56 Passing     | Vitest Automation Suite                     |
+| TypeScript Type Diagnostics | 0 Errors          | Strict npx tsc --noEmit Typecheck           |
++-----------------------------+-------------------+---------------------------------------------+
 ```
 
 ---
 
-## 6. System Limits & Quotas
+## 6. System Limits & Quotas Table
 
-- **Room Code Expiry (TTL)**: 10 minutes (default), 1 hour, or 24 hours after last disconnect.
+- **Room Code Lifetime (TTL)**: Choice of 10 minutes (default), 1 hour, or 24 hours after last disconnect.
 - **Maximum Concurrent Peers per Room**: 120 peers on VPS relay (30 peers on Cloudflare Worker fallback).
-- **Maximum Frame Size**: 512 KB per individual WebSocket binary message.
-- **Maximum Log Compaction Threshold**: 10 MB document CRDT history before automated snapshot compaction.
-- **File Upload Ceiling**: 50 MB per encrypted file chunk.
-- **Rate Limiting**: 600 room lookups / min per IP; 60 room creations / min per IP.
+- **Maximum Binary Frame Size**: 512 KB per individual WebSocket binary message.
+- **Maximum Compaction Threshold**: 10 MB document CRDT history before automated snapshot compaction.
+- **Maximum File Attachment Size**: 50 MB per client-encrypted file chunk.
+- **IP Rate Limiting**: 600 room lookups / min per IP; 60 room creations / min per IP.
