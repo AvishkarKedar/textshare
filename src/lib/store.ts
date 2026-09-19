@@ -13,6 +13,8 @@ export interface Participant {
   cursorLine?: number;
   isOwner?: boolean;
   speaking?: boolean;
+  muted?: boolean;
+  deafened?: boolean;
   online?: boolean;
 }
 
@@ -433,6 +435,8 @@ interface AnonState {
   // voice
   toggleVoice: () => void;
   setVoiceConnected: (b: boolean) => void;
+  setMuted: (b: boolean) => void;
+  setDeafened: (b: boolean) => void;
   toggleMute: () => void;
   toggleDeafen: () => void;
   setPushToTalk: (b: boolean) => void;
@@ -1367,12 +1371,10 @@ export const useAnon = create<AnonState>()(
         set((s) => ({ sharedFiles: s.sharedFiles.filter((f) => f.id !== id) })),
 
       // ---------- voice chat ----------
-      toggleVoice: () =>
-        set((s) => ({
-          voiceOpen: !s.voiceOpen,
-          voice: { ...s.voice, connected: !s.voiceOpen },
-        })),
+      toggleVoice: () => set((s) => ({ voiceOpen: !s.voiceOpen })),
       setVoiceConnected: (b) => set((s) => ({ voice: { ...s.voice, connected: b } })),
+      setMuted: (b) => set((s) => ({ voice: { ...s.voice, muted: b } })),
+      setDeafened: (b) => set((s) => ({ voice: { ...s.voice, deafened: b, muted: b ? true : s.voice.muted } })),
       toggleMute: () => set((s) => ({ voice: { ...s.voice, muted: !s.voice.muted } })),
       toggleDeafen: () =>
         set((s) => ({ voice: { ...s.voice, deafened: !s.voice.deafened, muted: !s.voice.deafened ? true : s.voice.muted } })),

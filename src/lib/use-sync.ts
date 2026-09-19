@@ -4,13 +4,93 @@ import { useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useAnon } from "@/lib/store";
 import type { Participant } from "@/lib/store";
+import { VoiceMesh, VoiceSignal } from "@/lib/voice";
+
+let activeVoiceMesh: VoiceMesh | null = null;
+
+export function getActiveVoiceMesh(): VoiceMesh | null {
+  return activeVoiceMesh;
+}
+
+export async function joinVoiceMesh(): Promise<boolean> {
+  const socket = (typeof window !== "undefined" && (window as unknown as { __anonSocket?: Socket }).__anonSocket) || null;
+  if (!socket || !socket.connected) {
+    // If not connected to signaling socket, create standalone mesh
+    if (!activeVoiceMesh) {
+      activeVoiceMesh = new VoiceMesh("me", () => {});
+    }
+  }
+  if (!activeVoiceMesh && socket) {
+    activeVoiceMesh = new VoiceMesh(socket.id || "me", (target, signal) => {
+      socket.emit("voice-signal", { target, signal });
+    });
+  }
+
+  if (activeVoiceMesh) {
+    activeVoiceMesh.onSpeaking = (cid, speaking) => {
+      if (cid === (socket?.id || "me") || cid === "me") {
+        useAnon.getState().setSpeaking(speaking);
+        socket?.emit("voice-state", {
+          speaking,
+          muted: useAnon.getState().voice.muted,
+          deafened: useAnon.getState().voice.deafened,
+        });
+      } else {
+        useAnon.setState((s) => ({
+          participants: s.participants.map((p) => (p.id === cid ? { ...p, speaking } : p)),
+        }));
+      }
+    };
+
+    activeVoiceMesh.onLevel = (level) => {
+      useAnon.getState().setMicLevel(level);
+    };
+
+    try {
+      await activeVoiceMesh.start();
+      useAnon.getState().setVoiceConnected(true);
+      return true;
+    } catch (err) {
+      console.warn("[voice] Error accessing microphone:", err);
+      useAnon.getState().setVoiceConnected(false);
+      throw err;
+    }
+  }
+  return false;
+}
+
+export function leaveVoiceMesh() {
+  if (activeVoiceMesh) {
+    activeVoiceMesh.stop();
+  }
+  useAnon.getState().setVoiceConnected(false);
+  useAnon.getState().setSpeaking(false);
+  useAnon.getState().setMicLevel(0);
+}
+
+export function setVoiceMute(muted: boolean) {
+  if (activeVoiceMesh) {
+    activeVoiceMesh.setMuted(muted);
+  }
+  useAnon.getState().setMuted(muted);
+}
+
+export function setVoiceDeafen(deafened: boolean) {
+  if (activeVoiceMesh) {
+    activeVoiceMesh.setDeafened(deafened);
+  }
+  useAnon.getState().setDeafened(deafened);
+}
+
+export function setVoicePushToTalk(speaking: boolean) {
+  if (activeVoiceMesh) {
+    activeVoiceMesh.setMuted(!speaking);
+  }
+  useAnon.getState().setPushToTalk(speaking);
+}
 
 /**
- * Connects to the anonshare-sync mini-service (port 3003) via the gateway.
- * Syncs: presence (peers), cursor positions, edits, chat messages.
- *
- * The URL uses the relative path "/" with XTransformPort=3003 so Caddy
- * forwards to the mini-service correctly.
+ * Connects to the real-time sync relay and manages presence, chat, edits, and WebRTC voice mesh.
  */
 export function useSync() {
   const socketRef = useRef<Socket | null>(null);
@@ -23,18 +103,53 @@ export function useSync() {
   useEffect(() => {
     if (view !== "editor" || !roomCode) return;
 
-    const socket = io("/?XTransformPort=3003", {
+    // Resolve relay URL: In production use relay.avishkark.in with fallback
+    let relayUrl = "https://relay.avishkark.in";
+    if (typeof window !== "undefined") {
+      if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+        relayUrl = "http://localhost:3003";
+      } else if (process.env.NEXT_PUBLIC_RELAY_URL) {
+        relayUrl = process.env.NEXT_PUBLIC_RELAY_URL;
+      }
+    }
+
+    const socket = io(relayUrl, {
       path: "/",
-      transports: ["websocket"],
+      transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionDelay: 1000,
+      reconnectionAttempts: 10,
     });
     socketRef.current = socket;
 
     socket.on("connect", () => {
       console.log("[sync] connected", socket.id);
-      // expose socket globally so other components (chat, editor) can emit
       (window as unknown as { __anonSocket?: Socket }).__anonSocket = socket;
+
+      // Initialize voice mesh with socket signaling
+      activeVoiceMesh = new VoiceMesh(socket.id || "me", (target, signal) => {
+        socket.emit("voice-signal", { target, signal });
+      });
+
+      activeVoiceMesh.onSpeaking = (cid, speaking) => {
+        if (cid === socket.id || cid === "me") {
+          useAnon.getState().setSpeaking(speaking);
+          socket.emit("voice-state", {
+            speaking,
+            muted: useAnon.getState().voice.muted,
+            deafened: useAnon.getState().voice.deafened,
+          });
+        } else {
+          useAnon.setState((s) => ({
+            participants: s.participants.map((p) => (p.id === cid ? { ...p, speaking } : p)),
+          }));
+        }
+      };
+
+      activeVoiceMesh.onLevel = (level) => {
+        useAnon.getState().setMicLevel(level);
+      };
+
       socket.emit("join", {
         room: roomCode,
         name: displayName || "you",
@@ -45,7 +160,6 @@ export function useSync() {
     });
 
     socket.on("peers", (peers: PeerWire[]) => {
-      // merge: always keep "me" as the first entry, replace the rest with wire peers
       const me = useAnon.getState().participants.find((p) => p.id === "me");
       const others: Participant[] = peers
         .filter((p) => p.id !== socket.id)
@@ -56,10 +170,32 @@ export function useSync() {
           cursorLine: p.cursorLine,
           isOwner: p.isOwner,
           online: true,
+          speaking: false,
         }));
       useAnon.setState({
-        participants: [me ?? { id: "me", name: displayName, color, isOwner, online: true, cursorLine: 1 }, ...others],
+        participants: [me ?? { id: "me", name: displayName, color, isOwner, online: true, cursorLine: 1, speaking: false }, ...others],
       });
+
+      // If active voice is running, connect peer mesh
+      if (activeVoiceMesh && activeVoiceMesh.isActive) {
+        others.forEach((p) => {
+          activeVoiceMesh?.callPeer(p.id);
+        });
+      }
+    });
+
+    socket.on("voice-signal", ({ sender, signal }: { sender: string; signal: VoiceSignal }) => {
+      if (activeVoiceMesh) {
+        activeVoiceMesh.handleSignal(sender, signal);
+      }
+    });
+
+    socket.on("voice-state", (data: { id: string; speaking: boolean; muted?: boolean; deafened?: boolean }) => {
+      useAnon.setState((s) => ({
+        participants: s.participants.map((p) =>
+          p.id === data.id ? { ...p, speaking: data.speaking, muted: data.muted, deafened: data.deafened } : p
+        ),
+      }));
     });
 
     socket.on("cursor", (data: { id: string; line: number }) => {
@@ -71,14 +207,12 @@ export function useSync() {
     });
 
     socket.on("edit", (data: { id: string; fileId: string; content: string }) => {
-      // apply remote edit if it's for the active file
       useAnon.setState((s) => ({
         files: s.files.map((f) => (f.id === data.fileId ? { ...f, content: data.content } : f)),
       }));
     });
 
     socket.on("chat", (msg: ChatMessageWire) => {
-      // skip if it's our own message (we already added it locally)
       if (msg.authorId === socket.id) return;
       useAnon.getState().addMessage({
         authorId: msg.authorId,
@@ -100,6 +234,10 @@ export function useSync() {
     });
 
     return () => {
+      if (activeVoiceMesh) {
+        activeVoiceMesh.destroy();
+        activeVoiceMesh = null;
+      }
       socket.disconnect();
       socketRef.current = null;
       delete (window as unknown as { __anonSocket?: Socket }).__anonSocket;
