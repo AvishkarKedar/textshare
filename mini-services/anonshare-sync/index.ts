@@ -103,6 +103,24 @@ io.on("connection", (socket) => {
     io.to(currentRoom).emit("chat", msg);
   });
 
+  socket.on("voice-signal", (data: { target: string; signal: unknown }) => {
+    if (!currentRoom) return;
+    io.to(data.target).emit("voice-signal", {
+      sender: socket.id,
+      signal: data.signal,
+    });
+  });
+
+  socket.on("voice-state", (data: { speaking: boolean; muted: boolean; deafened: boolean }) => {
+    if (!currentRoom || !currentPeer) return;
+    socket.to(currentRoom).emit("voice-state", {
+      id: socket.id,
+      speaking: data.speaking,
+      muted: data.muted,
+      deafened: data.deafened,
+    });
+  });
+
   socket.on("disconnect", () => {
     if (currentRoom && currentPeer) {
       getRoom(currentRoom).delete(socket.id);
