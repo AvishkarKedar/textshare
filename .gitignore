@@ -12,4 +12,9 @@ dist/
 !.env.example
 .vscode/
 .idea/
+tsconfig.tsbuildinfo
 
+# Build and runtime data
+db/*.db
+tool-results/
+research/

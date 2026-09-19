@@ -6,36 +6,38 @@
   Cross-Origin-Resource-Policy: same-origin
   Permissions-Policy: geolocation=(), camera=(), microphone=(self), payment=(), usb=(), interest-cohort=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
-  # The boot script now lives at /boot.js instead of an inline <script>, so
-  # script-src no longer needs 'unsafe-inline' at all - any future markup
-  # injection can no longer execute an attacker-supplied inline script.
-  # Dependencies are bundled locally, so no CDN origin is allowed except the
-  # cookieless Cloudflare Web Analytics beacon.
-  # connect-src stays open because the relay host is user-configurable.
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: wss:; frame-src 'self' https: blob: data:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; frame-src 'self' https: blob: data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
 
-# Hashed filenames, so a new build is a new URL and this can be cached hard.
-/assets/*
+# Next.js static immutable chunks
+/_next/static/*
   Cache-Control: public, max-age=31536000, immutable
 
-/sw.js
-  Cache-Control: no-cache
+/favicon.png
+  Cache-Control: public, max-age=86400
 
-/index.html
-  Cache-Control: no-cache
+/favicon.svg
+  Cache-Control: public, max-age=86400
+
+/icon-180.png
+  Cache-Control: public, max-age=86400
+
+/og.png
+  Cache-Control: public, max-age=86400
+
+/logo.svg
+  Cache-Control: public, max-age=86400
 
 /manifest.webmanifest
+  Cache-Control: no-cache
+
+/sw.js
   Cache-Control: no-cache
 
 /boot.js
   Cache-Control: no-cache
 
-# Unhashed, hand-edited files served straight from the repo root - a stale
-# cached copy of either has previously caused phones to keep showing a UI
-# element that was already removed from source, so both must always
-# revalidate instead of relying on a default heuristic cache lifetime.
-/app.css
+/index.html
   Cache-Control: no-cache
 
-/app.js
+/404.html
   Cache-Control: no-cache
