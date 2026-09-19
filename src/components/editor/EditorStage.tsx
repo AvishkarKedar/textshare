@@ -21,14 +21,14 @@ function highlightLine(line: string, language: string) {
 
 export function EditorStage() {
   const s = useAnon();
-  const file = s.files.find((f) => f.id === s.activeFileId)!;
+  const file = s.files.find((f) => f.id === s.activeFileId) || s.files[0] || { id: "f1", name: "main.js", language: "javascript", content: "" };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [cursorLine, setCursorLine] = useState(5);
   const [slashRect, setSlashRect] = useState<DOMRect | null>(null);
   const [slashQ, setSlashQ] = useState("");
 
   // derived: show placeholder only when file is empty
-  const showPlaceholder = file.content.trim() === "";
+  const showPlaceholder = (file?.content || "").trim() === "";
 
   function openSlash(q: string) {
     setSlashQ(q);

@@ -289,17 +289,30 @@ export function HistoryDrawer() {
           {/* actions */}
           <div className="hairline-t p-3 flex gap-2">
             <button
-              onClick={() => toast.success("Reverted", { description: `Editor restored to ${TIMELINE[pos].label}` })}
-              className="anon-mono inline-flex h-9 flex-1 items-center justify-center gap-1.5 bg-[var(--anon-accent)] text-[var(--anon-accent-fg)] text-xs hover:brightness-110"
+              onClick={() => {
+                if (s.activeFileId) {
+                  s.updateFileContent(s.activeFileId, TIMELINE[pos].code);
+                }
+                toast.success("Reverted", { description: `Editor restored to ${TIMELINE[pos].label}` });
+                s.toggleHistory();
+              }}
+              className="anon-mono inline-flex h-9 flex-1 items-center justify-center gap-1.5 bg-[var(--anon-accent)] text-[var(--anon-accent-fg)] text-xs hover:brightness-110 cursor-pointer"
             >
               <RotateCcw className="h-3.5 w-3.5" /> Revert to here
             </button>
             <button
               onClick={() => {
-                s.addFile(`snapshot-${pos}.txt`, "text");
-                toast.success("Saved as new tab");
+                const name = `snapshot-${TIMELINE[pos].label.replace(/\s+/g, "-")}.js`;
+                s.addFile(name, "javascript");
+                setTimeout(() => {
+                  const state = useAnon.getState();
+                  const targetId = state.activeFileId;
+                  if (targetId) state.updateFileContent(targetId, TIMELINE[pos].code);
+                }, 50);
+                toast.success("Saved as new tab", { description: name });
+                s.toggleHistory();
               }}
-              className="anon-mono inline-flex h-9 items-center justify-center gap-1.5 hairline px-3 text-xs hover:bg-[var(--anon-raise)]"
+              className="anon-mono inline-flex h-9 items-center justify-center gap-1.5 hairline px-3 text-xs hover:bg-[var(--anon-raise)] cursor-pointer"
             >
               <Download className="h-3.5 w-3.5" /> Save as tab
             </button>

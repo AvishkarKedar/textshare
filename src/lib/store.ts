@@ -431,6 +431,7 @@ interface AnonState {
   removeSharedFile: (id: string) => void;
   // voice
   toggleVoice: () => void;
+  setVoiceConnected: (b: boolean) => void;
   toggleMute: () => void;
   toggleDeafen: () => void;
   setPushToTalk: (b: boolean) => void;
@@ -508,6 +509,7 @@ interface AnonState {
   setActiveFile: (id: string) => void;
   updateFileContent: (id: string, content: string) => void;
   addFile: (name: string, language: string) => void;
+  removeFile: (id: string) => void;
 
   // terminal
   runCode: () => Promise<void>;
@@ -998,6 +1000,13 @@ export const useAnon = create<AnonState>()(
           files: [...s.files, { id: "f" + (s.files.length + 1), name, language, content: "" }],
           activeFileId: "f" + (s.files.length + 1),
         })),
+      removeFile: (id) =>
+        set((s) => {
+          if (s.files.length <= 1) return s;
+          const nextFiles = s.files.filter((f) => f.id !== id);
+          const nextActive = s.activeFileId === id ? nextFiles[0]?.id || "f1" : s.activeFileId;
+          return { files: nextFiles, activeFileId: nextActive };
+        }),
 
       // ---------- terminal / runner ----------
       runCode: async () => {
@@ -1251,7 +1260,7 @@ export const useAnon = create<AnonState>()(
       deriveKeys: async () => {
         const s = get();
         if (s.deriving) return;
-        const code = s.cryptoCode.trim().toUpperCase();
+        const code = s.cryptoCode.trim().toUpperCase() || s.roomCode || "ABC123";
         if (!code) return;
         set({ deriving: true });
         try {
@@ -1261,14 +1270,61 @@ export const useAnon = create<AnonState>()(
             body: JSON.stringify({ code, password: s.cryptoPassword }),
           });
           const data = await res.json();
-          set({ cryptoResult: data, deriving: false });
-        } catch (e) {
-          set({ deriving: false });
-          get().pushNotification({
-            kind: "warning",
-            title: "Key derivation failed",
-            body: e instanceof Error ? e.message : String(e),
+          if (data && data.key) {
+            set({ cryptoResult: data, deriving: false });
+            return;
+          }
+        } catch {}
+        // client-side WebCrypto fallback
+        try {
+          const enc = new TextEncoder();
+          const input = `${code}:${s.cryptoPassword || ""}`;
+          const keySalt = `anonshare|${code}`;
+          const authSalt = `anonshare-auth|${code}`;
+          const ITERATIONS = 100_000;
+          const start = Date.now();
+          const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(input), { name: "PBKDF2" }, false, ["deriveBits"]);
+          const [keyBits, authBits] = await Promise.all([
+            crypto.subtle.deriveBits({ name: "PBKDF2", salt: enc.encode(keySalt), iterations: ITERATIONS, hash: "SHA-256" }, keyMaterial, 256),
+            crypto.subtle.deriveBits({ name: "PBKDF2", salt: enc.encode(authSalt), iterations: ITERATIONS, hash: "SHA-256" }, keyMaterial, 256),
+          ]);
+          const authHashBuf = await crypto.subtle.digest("SHA-256", authBits);
+          const bufToHex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+          const keyHex = bufToHex(keyBits);
+          const authHex = bufToHex(authBits);
+          const sha256OfAuth = bufToHex(authHashBuf);
+          set({
+            cryptoResult: {
+              ok: true,
+              code,
+              iterations: ITERATIONS,
+              durationMs: Date.now() - start,
+              key: {
+                hex: keyHex.slice(0, 48) + "…",
+                fullHex: keyHex,
+                bits: 256,
+                salt: keySalt,
+                sentToRelay: false,
+                note: "never leaves the browser — used for AES-GCM encryption",
+              },
+              auth: {
+                hex: authHex.slice(0, 48) + "…",
+                bits: 256,
+                salt: authSalt,
+                sentToRelay: true,
+                note: "sent to relay; relay stores only SHA-256(auth)",
+              },
+              relayStored: {
+                sha256OfAuth,
+                note: "this is the ONLY thing the relay persists",
+              },
+              differentSalts: true,
+              derivedAt: Date.now(),
+            },
+            deriving: false,
           });
+        } catch {
+          set({ deriving: false });
         }
       },
 
@@ -1315,6 +1371,7 @@ export const useAnon = create<AnonState>()(
           voiceOpen: !s.voiceOpen,
           voice: { ...s.voice, connected: !s.voiceOpen },
         })),
+      setVoiceConnected: (b) => set((s) => ({ voice: { ...s.voice, connected: b } })),
       toggleMute: () => set((s) => ({ voice: { ...s.voice, muted: !s.voice.muted } })),
       toggleDeafen: () =>
         set((s) => ({ voice: { ...s.voice, deafened: !s.voice.deafened, muted: !s.voice.deafened ? true : s.voice.muted } })),

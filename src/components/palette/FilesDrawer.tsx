@@ -183,7 +183,7 @@ export function FilesDrawer() {
                         <span>{new Date(f.uploadedAt).toLocaleTimeString()}</span>
                       </div>
                     </div>
-                    <div className="flex flex-none items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div className="flex flex-none items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                       {isTextFile(f.type, f.name) && (
                         <button
                           onClick={() => setPreviewing(f)}
