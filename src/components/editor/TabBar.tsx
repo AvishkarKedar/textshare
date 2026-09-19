@@ -13,26 +13,42 @@ export function TabBar() {
         {s.files.map((f) => {
           const active = f.id === s.activeFileId;
           return (
-            <button
+            <div
               key={f.id}
-              onClick={() => s.setActiveFile(f.id)}
-              className={`group flex h-9 items-center gap-2 px-3 text-xs anon-mono transition-colors ${
+              className={`group flex h-9 items-center gap-1.5 px-3 text-xs anon-mono transition-colors ${
                 active
                   ? "bg-[var(--anon-bg)] anon-fg hairline-r"
                   : "anon-mut hover:bg-[var(--anon-panel)] hairline-r"
               }`}
             >
-              <FileCode2 className="h-3 w-3" />
-              <span className="whitespace-nowrap">{f.name}</span>
-              {active && (
-                <span className="h-1.5 w-1.5 rounded-full anim-beat" style={{ background: "var(--anon-ok)" }} />
+              <button
+                onClick={() => s.setActiveFile(f.id)}
+                className="flex items-center gap-2 cursor-pointer"
+              >
+                <FileCode2 className="h-3 w-3" />
+                <span className="whitespace-nowrap">{f.name}</span>
+                {active && (
+                  <span className="h-1.5 w-1.5 rounded-full anim-beat" style={{ background: "var(--anon-ok)" }} />
+                )}
+              </button>
+              {s.files.length > 1 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    s.removeFile(f.id);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 hover:text-[var(--anon-danger)] ml-1 transition-opacity cursor-pointer p-0.5"
+                  title="Close tab"
+                >
+                  <X className="h-3 w-3" />
+                </button>
               )}
-            </button>
+            </div>
           );
         })}
         <button
           onClick={() => s.addFile("untitled.txt", "text")}
-          className="flex h-9 w-9 items-center justify-center anon-mut hover:bg-[var(--anon-panel)] hairline-r"
+          className="flex h-9 w-9 items-center justify-center anon-mut hover:bg-[var(--anon-panel)] hairline-r cursor-pointer"
           title="New file"
         >
           <Plus className="h-3.5 w-3.5" />

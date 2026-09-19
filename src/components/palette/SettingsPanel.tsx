@@ -197,7 +197,15 @@ export function SettingsPanel() {
                 <button className="anon-mono flex w-full items-center gap-2 py-2 text-left text-xs hairline px-3 hover:bg-[var(--anon-raise)]">
                   <Ban className="h-3.5 w-3.5" style={{ color: "var(--anon-warn)" }} /> Suspend room
                 </button>
-                <button className="anon-mono flex w-full items-center gap-2 py-2 text-left text-xs hairline px-3 hover:bg-[var(--anon-raise)]">
+                <button
+                  onClick={() => {
+                    const ttls: ("10m" | "1h" | "24h")[] = ["10m", "1h", "24h"];
+                    const nextTtl = ttls[(ttls.indexOf(s.ttl) + 1) % ttls.length];
+                    useAnon.setState({ ttl: nextTtl });
+                    toast.success(`Room TTL changed to ${nextTtl}`);
+                  }}
+                  className="anon-mono flex w-full items-center gap-2 py-2 text-left text-xs hairline px-3 hover:bg-[var(--anon-raise)] cursor-pointer"
+                >
                   <Timer className="h-3.5 w-3.5" style={{ color: "var(--anon-warn)" }} /> Change TTL (now: {s.ttl})
                 </button>
                 <button

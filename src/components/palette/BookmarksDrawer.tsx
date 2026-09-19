@@ -111,14 +111,14 @@ export function BookmarksDrawer() {
                       )}
                     </div>
                   </div>
-                  <ArrowRight className="h-3.5 w-3.5 flex-none anon-mut opacity-0 transition-opacity group-hover:opacity-100 anon-accent" />
+                  <ArrowRight className="h-3.5 w-3.5 flex-none anon-mut opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity anon-accent" />
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       s.removeRecentRoom(r.code);
                       toast.success("Removed from recents");
                     }}
-                    className="anon-mut hover:anon-fg opacity-0 transition-opacity group-hover:opacity-100 flex-none"
+                    className="anon-mut hover:anon-fg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-none p-1"
                     title="Remove"
                   >
                     <Trash2 className="h-3.5 w-3.5" />

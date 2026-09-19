@@ -65,15 +65,25 @@ export function VoicePanel() {
                   {v.connected ? "WebRTC · DTLS-SRTP · 3 peers" : "click connect to join the voice mesh"}
                 </div>
               </div>
-              {!v.connected && (
+              {!v.connected ? (
                 <button
                   onClick={() => {
-                    s.toggleVoice();
-                    toast.success("Joining voice mesh", { description: "Negotiating WebRTC with 3 peers…" });
+                    s.setVoiceConnected(true);
+                    toast.success("Joining voice mesh", { description: "Connected via WebRTC DTLS-SRTP P2P" });
                   }}
-                  className="anon-mono inline-flex h-8 items-center gap-1.5 bg-[var(--anon-ok)] px-3 text-xs text-black hover:brightness-110"
+                  className="anon-mono inline-flex h-8 items-center gap-1.5 bg-[var(--anon-ok)] px-3 text-xs text-black hover:brightness-110 cursor-pointer font-medium"
                 >
                   <Radio className="h-3.5 w-3.5" /> join
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    s.setVoiceConnected(false);
+                    toast.info("Left voice mesh");
+                  }}
+                  className="anon-mono inline-flex h-8 items-center gap-1.5 hairline px-3 text-xs anon-mut hover:text-[var(--anon-danger)] hover:bg-[var(--anon-raise)] cursor-pointer"
+                >
+                  disconnect
                 </button>
               )}
             </div>
