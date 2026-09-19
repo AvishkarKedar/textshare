@@ -1,189 +1,294 @@
-# anonshare — Technical Architecture Document
+# anonshare — Comprehensive Technical Architecture Document
 
-> **Version:** 5.3.0  
-> **Target Environment:** Next.js 16 (Static Export) · Cloudflare Pages · Cloudflare Functions · Cloudflare Worker Durable Objects · Oracle VPS Relay  
-> **Production Endpoint:** [https://code.avishkark.in](https://code.avishkark.in)  
-> **Relay Server:** [https://relay.avishkark.in](https://relay.avishkark.in)  
+> **Architecture Standard:** Production Engineering Specification  
+> **Version:** 5.3.0 (Master Blueprint)  
+> **Target Platforms:** Next.js 16 (Static Export) · Cloudflare Pages · Cloudflare Functions · Oracle VPS Relay · WebRTC Mesh  
+> **Primary URL:** [https://code.avishkark.in](https://code.avishkark.in)  
+> **Relay Server:** [https://relay.avishkark.in](https://relay.avishkark.in) (WebSocket / HTTPS)  
 
 ---
 
-## 1. High-Level System Architecture
+## 1. High-Level Architectural Topology
 
 ```mermaid
-flowchart TD
-    subgraph ClientBrowser ["Client Browser (Chrome / Firefox / Safari / Mobile)"]
-        UI["React 19 / Next.js 16 UI (Zustand Store)"]
-        Crypto["WebCrypto Engine (AES-GCM / PBKDF2)"]
-        CRDT["Yjs CRDT Engine + IndexedDB"]
-        Voice["WebRTC Voice Mesh (AnalyserNode / DTLS-SRTP)"]
+flowchart TB
+    subgraph ClientLayer ["Client Browser Layer (Desktop & Mobile)"]
+        UI["React 19 / Next.js 16 UI (Zustand 5 Store)"]
+        WebCrypto["Browser WebCrypto Subsystem (SubtleCrypto)"]
+        YjsCRDT["Yjs CRDT Document Engine"]
+        WebRTC["WebRTC Voice Mesh (DTLS-SRTP + Web Audio)"]
+        IDB["IndexedDB Offline Persistence (idb)"]
+        LocalStore["LocalStorage (Bookmarks, Preferences)"]
     end
 
-    subgraph CloudflarePages ["Cloudflare Pages (Static Edge CDN)"]
-        HTML["Static HTML / JS / CSS (dist/)"]
-        Headers["_headers (CSP, Cache-Control, Security)"]
+    subgraph EdgeCDN ["Cloudflare Pages Edge Network (code.avishkark.in)"]
+        DistStatic["Static Export Assets (dist/)"]
+        CSPHeaders["_headers Engine (Strict CSP + Caching Rules)"]
     end
 
-    subgraph PagesFunctions ["Cloudflare Pages Functions (functions/api/*)"]
-        APIRun["/api/run (Compiler Proxy)"]
-        APICrypto["/api/crypto (Derivation Helper)"]
-        APIStatus["/api/status (Health Checker)"]
-        APIGenerate["/api/generate (LLM UI Generator)"]
+    subgraph EdgeFunctions ["Cloudflare Pages Functions (functions/api/*)"]
+        RunAPI["/api/run (Code Execution Gateway)"]
+        CryptoAPI["/api/crypto (Derivation Helper)"]
+        StatusAPI["/api/status (Health Diagnostics)"]
+        GenAPI["/api/generate (Template Fallbacks)"]
     end
 
-    subgraph RelayServer ["VPS Relay & Bubblewrap Sandbox (relay.avishkark.in)"]
-        WSServer["WebSocket / Socket.io Sync Server"]
-        Bubblewrap["Bubblewrap Isolated Sandbox (gcc, python, node)"]
-        RoomState["In-Memory Room State & Snapshot Compaction"]
+    subgraph RelayVPS ["Oracle VPS Dedicated Relay (relay.avishkark.in)"]
+        WSRelay["WebSocket Server (Node.js / ws)"]
+        SyncRelay["Socket.io Mini-Service (:3003)"]
+        BwrapSandbox["Bubblewrap Linux Sandbox (gcc, python, node)"]
+        Compactor["In-Memory Snapshot Compaction Engine"]
     end
 
-    subgraph PeerMesh ["P2P Mesh (Direct WebRTC Audio)"]
-        Peer1["Peer A (Audio Stream)"]
-        Peer2["Peer B (Audio Stream)"]
+    subgraph P2PMesh ["Decentralized Peer-to-Peer Audio Mesh"]
+        PeerA["Peer Client A"]
+        PeerB["Peer Client B"]
+        PeerC["Peer Client C"]
     end
 
-    UI --> Crypto
-    UI --> CRDT
-    UI --> Voice
-    ClientBrowser <-->|HTTP Static Assets| CloudflarePages
-    ClientBrowser <-->|Dynamic API Requests| PagesFunctions
-    PagesFunctions <-->|Proxy Code Run| RelayServer
-    CRDT <-->|Encrypted Yjs Frames| RelayServer
-    Voice <-->|Signaling via WS / Socket.io| RelayServer
-    Voice <-->|Direct DTLS-SRTP Audio| PeerMesh
+    UI --> WebCrypto
+    UI --> YjsCRDT
+    UI --> WebRTC
+    YjsCRDT <--> IDB
+    UI <--> LocalStore
+
+    ClientLayer <-->|HTTP/3 Fetch (Static HTML, Chunks)| EdgeCDN
+    ClientLayer <-->|JSON POST Requests| EdgeFunctions
+    EdgeFunctions <-->|Proxy Compiler Runs| BwrapSandbox
+
+    YjsCRDT <-->|Encrypted Binary Frames (WSS)| WSRelay
+    UI <-->|Presence, Chat, Cursor Events| SyncRelay
+    WebRTC <-->|SDP Offer/Answer & ICE Signaling| SyncRelay
+    WSRelay <--> Compactor
+
+    WebRTC <===>|Direct DTLS-SRTP P2P Audio| PeerA
+    WebRTC <===>|Direct DTLS-SRTP P2P Audio| PeerB
+    WebRTC <===>|Direct DTLS-SRTP P2P Audio| PeerC
 ```
 
 ---
 
-## 2. Layer-by-Layer Specifications
+## 2. Detailed Subsystem Specifications
 
-### 2.1 Frontend & Application Layer
-- **Framework**: Next.js 16.3.5 with App Router (`src/app/`)
-- **Compilation**: Static Export (`output: "export"`, `distDir: "dist"` in `next.config.ts`)
-- **Rendering Engine**: React 19 Client Components (`"use client"`)
-- **State Management**: Zustand 5 with local storage persistence (`src/lib/store.ts`)
-- **UI & Styling**: Tailwind CSS 4 with CSS variables, Lucide React icons, Radix UI primitives, Framer Motion animations
-- **Local Persistence**: IndexedDB via `idb` / `y-indexeddb` for document CRDT states, `localStorage` for user preferences and bookmarks
+### 2.1 Frontend Client Architecture
+- **Framework Core**: Next.js 16.3.5 utilizing React 19 Client Components (`"use client"`).
+- **Compilation Target**: Static Export (`output: "export"`, `distDir: "dist"` in `next.config.ts`).
+- **State Store ([`store.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/store.ts))**:
+  - Centralized reactive state managed via Zustand 5 with immutable state updates.
+  - Slice architecture covering: Editor Tabs, Participants, Room Lifecycle, Terminal Lines, Chat Messages, WebRTC Voice State, Notifications, Bookmarks, and UI Overlays.
+- **Offline & Storage Strategy**:
+  - `idb` / `y-indexeddb`: Persists local document CRDT state across network re-connections.
+  - `localStorage`: Retains visited room bookmarks (`anonshare.bookmarks`), persistent identity color (`anonshare.color`), theme choice (`anonshare.theme`), and dismiss flags.
 
 ---
 
-### 2.2 Cloudflare Pages Edge Layer
-- **Static Export Directory**: `dist/`
-- **Configuration & Headers**: `public/_headers` (copied to `dist/_headers` during build)
-- **Critical CSP Configuration**:
-  ```http
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; frame-src 'self' https: blob: data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
-  ```
-  > [!IMPORTANT]
-  > Next.js static export outputs inline `<script>` tags for React hydration (`self.__next_f.push(...)`). `script-src` **MUST** include `'unsafe-inline'`; removing it will silently block React hydration and render all buttons dead!
+### 2.2 Cloudflare Pages Edge & Content Security Policy (CSP)
+
+```
++---------------------------------------------------------------------------------------------+
+|                           HTTP Security Headers Specification                               |
++------------------------------------+--------------------------------------------------------+
+| Directive                          | Value & Operational Rationale                          |
++------------------------------------+--------------------------------------------------------+
+| default-src                        | 'self' — Restricts default resource loading to origin  |
+| script-src                         | 'self' 'unsafe-inline' https://static.cloudflareinsights.com |
+|                                    | (MANDATORY: 'unsafe-inline' enables React hydration)   |
+| style-src                          | 'self' 'unsafe-inline' — Supports Tailwind inline vars |
+| img-src                            | 'self' data: blob: https: — Supports file previews     |
+| font-src                           | 'self' data: — Supports Geist / JetBrains Mono fonts   |
+| connect-src                        | 'self' https: wss: — Allows WSS relay connections      |
+| frame-src                          | 'self' https: blob: data: — Sandboxed preview iframes  |
+| worker-src                         | 'self' blob: — Allows Web Workers and Service Workers  |
+| object-src                         | 'none' — Blocks legacy Flash/ActiveX plugins           |
+| base-uri                           | 'self' — Prevents base tag hijacking                   |
+| form-action                        | 'none' — Disallows raw HTML form submissions           |
+| frame-ancestors                    | 'none' (DENY) — Full clickjacking protection           |
+| X-Content-Type-Options             | nosniff — Prevents MIME-type sniffing                  |
+| Referrer-Policy                    | no-referrer — Zero referrer leaks to third parties     |
+| Strict-Transport-Security          | max-age=31536000; includeSubDomains (Enforces HTTPS)   |
++------------------------------------+--------------------------------------------------------+
+```
 
 ---
 
 ### 2.3 Cloudflare Pages Functions Layer (`functions/api/`)
-Since `output: "export"` disables Node.js server routes in Next.js App Router, dynamic serverless functions run directly as Cloudflare Pages Functions:
-1. `functions/api/run.ts`:
-   - Validates language, code length, and stdin.
-   - Forwards execution payload to Oracle VPS sandbox at `https://relay.avishkark.in/run`.
-2. `functions/api/crypto.ts`:
-   - Server-side derivation benchmark and verification helper.
-3. `functions/api/status.ts`:
-   - Returns real-time health metrics, memory usage, and socket status.
-4. `functions/api/generate.ts`:
-   - Provides safe fallback generative HTML code generation.
 
----
-
-### 2.4 Real-Time WebRTC Voice Mesh Engine (`src/lib/voice.ts`)
+Because `output: "export"` eliminates Node.js runtime servers in Next.js, all dynamic serverless capabilities are deployed as Cloudflare Pages Functions:
 
 ```mermaid
 sequenceDiagram
-    participant PeerA as Peer A (Initiator)
-    participant Relay as Signaling Relay (VPS)
-    participant PeerB as Peer B (Polite Receiver)
+    participant Browser as Client Browser
+    participant PagesFunc as Cloudflare Pages Function (/api/run)
+    participant VPS as Oracle VPS Relay (relay.avishkark.in)
+    participant Bwrap as Bubblewrap Linux Sandbox
 
-    Note over PeerA,PeerB: Both joined Room ABC123
-    PeerA->>Relay: voice-signal { target: "PeerB", type: "voice-offer", sdp }
-    Relay->>PeerB: voice-signal { sender: "PeerA", type: "voice-offer", sdp }
-    PeerB->>PeerB: pc.setRemoteDescription(offer)
-    PeerB->>PeerB: pc.createAnswer()
-    PeerB->>Relay: voice-signal { target: "PeerA", type: "voice-answer", sdp }
-    Relay->>PeerA: voice-signal { sender: "PeerB", type: "voice-answer", sdp }
-    PeerA->>PeerA: pc.setRemoteDescription(answer)
-    PeerA->>Relay: voice-signal { target: "PeerB", type: "voice-candidate", candidate }
-    Relay->>PeerB: voice-signal { sender: "PeerA", type: "voice-candidate", candidate }
-    Note over PeerA,PeerB: Direct P2P DTLS-SRTP Audio Flow Established
+    Browser->>PagesFunc: POST /api/run { language: "python", code: "print('hello')", stdin: "" }
+    PagesFunc->>PagesFunc: Validate payload schema & length (< 64KB)
+    PagesFunc->>VPS: POST https://relay.avishkark.in/run (Bearer token)
+    VPS->>Bwrap: bwrap --unshare-all --tmpfs /tmp python3 -u main.py
+    Bwrap-->>VPS: stdout: "hello\n", exitCode: 0, duration: 42ms
+    VPS-->>PagesFunc: JSON Response
+    PagesFunc-->>Browser: JSON { stdout: "hello\n", exitCode: 0, durationMs: 42 }
 ```
-
-- **Polite Peer Negotiation**: Resolves glare collisions deterministically by comparing client IDs (`myCid.localeCompare(peerCid) < 0`).
-- **Web Audio Analyzer**: `AudioContext` + `AnalyserNode` (256 FFT size) runs every 100ms:
-  - Local Audio: Calculates RMS volume ($0\dots 100\%$) and broadcasts `voice-state { speaking: true/false }`.
-  - Remote Audio: Monitors incoming MediaStream volume without server relay.
-- **Asymmetric Listener Support**: If microphone access is denied or hardware is unavailable, peers create an audio transceiver in `recvonly` mode to listen without throwing exceptions.
 
 ---
 
-### 2.5 Zero-Knowledge Cryptographic Model
+### 2.4 Binary Relay Protocol & Frame Specifications ([`relay/server.js`](file:///c:/Users/Dell/Desktop/textshare/relay/server.js))
+
+The relay server communicates with clients over binary WebSocket connections utilizing 1-byte opcode headers followed by payload bytes:
+
+```
++---------------+-----------------------------------------------------------------+
+| Byte Offset   | Field Name & Description                                        |
++---------------+-----------------------------------------------------------------+
+| Byte 0        | Opcode (Type Indicator: 0x00 to 0x09)                           |
+| Bytes 1..N    | Variable-length Payload (Encrypted Ciphertext, JSON, or Binary) |
++---------------+-----------------------------------------------------------------+
+```
+
+#### Protocol Opcode Matrix:
+| Opcode | Hex | Identifier | Persistence | Broadcast Behavior |
+|---|---|---|---|---|
+| `0` | `0x00` | `T_UPDATE` | Appended to Room Log | Forwarded to all other room peers |
+| `1` | `0x01` | `T_AWARE` | Transient (Never stored) | Ephemeral broadcast for cursor/presence |
+| `2` | `0x02` | `T_SNAPSHOT`| Replaces Room Log | Sent on snapshot compaction |
+| `3` | `0x03` | `T_SYNCED` | None | Signals client that backlog sync is complete |
+| `4` | `0x04` | `T_ERROR` | None | Emits error code string to client |
+| `5` | `0x05` | `T_COMPACT`| Triggers compaction | Requests server to compact log |
+| `6` | `0x06` | `T_STATE` | Persisted in memory | Room metadata state (read-only, TTL) |
+| `7` | `0x07` | `T_KILLED` | Purges room memory | Closes all connected WebSockets |
+| `8` | `0x08` | `T_GRANT` | None | Owner grants edit rights to peer |
+| `9` | `0x09` | `T_P2P` | Transient | WebRTC signaling frame routing |
+
+---
+
+### 2.5 Real-Time WebRTC Voice Mesh Protocol ([`voice.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/voice.ts))
 
 ```mermaid
-graph LR
-    Input["Room Code + Password"] --> PBKDF2["PBKDF2-SHA256 (600,000 rounds)"]
-    PBKDF2 -->|"Salt: 'textshare|CODE'"| Key["Encryption Key (AES-GCM 256)"]
-    PBKDF2 -->|"Salt: 'textshare-auth|CODE'"| Auth["Auth Token (32 bytes)"]
-    Key -->|"Client-Only Memory"| LocalCrypto["Encrypt / Decrypt Document"]
-    Auth -->|"Sent to Relay"| RelayAuth["Relay Storage: SHA-256(auth)"]
+sequenceDiagram
+    autonumber
+    participant PeerA as Peer A (Initiator)
+    participant Relay as Signaling Channel (Socket.io)
+    participant PeerB as Peer B (Polite Peer)
+
+    Note over PeerA,PeerB: Signaling Connection Open
+    PeerA->>Relay: emit("voice-signal", { target: "PeerB", signal: { type: "voice-offer", sdp } })
+    Relay->>PeerB: on("voice-signal", { sender: "PeerA", signal: { type: "voice-offer", sdp } })
+    PeerB->>PeerB: Evaluate collision: isPolite ? rollback : ignore
+    PeerB->>PeerB: pc.setRemoteDescription(offer)
+    PeerB->>PeerB: Flush queued ICE candidates
+    PeerB->>PeerB: const answer = await pc.createAnswer()
+    PeerB->>PeerB: pc.setLocalDescription(answer)
+    PeerB->>Relay: emit("voice-signal", { target: "PeerA", signal: { type: "voice-answer", sdp } })
+    Relay->>PeerA: on("voice-signal", { sender: "PeerB", signal: { type: "voice-answer", sdp } })
+    PeerA->>PeerA: pc.setRemoteDescription(answer)
+    PeerA->>PeerA: Flush queued ICE candidates
+
+    par ICE Candidate Exchange
+        PeerA->>Relay: emit("voice-signal", { target: "PeerB", signal: { type: "voice-candidate", candidate } })
+        Relay->>PeerB: on("voice-signal", { sender: "PeerA", signal: candidate })
+        PeerB->>PeerB: pc.addIceCandidate(candidate)
+    and
+        PeerB->>Relay: emit("voice-signal", { target: "PeerA", signal: { type: "voice-candidate", candidate } })
+        Relay->>PeerA: on("voice-signal", { sender: "PeerB", signal: candidate })
+        PeerA->>PeerA: pc.addIceCandidate(candidate)
+    end
+
+    Note over PeerA,PeerB: Direct P2P DTLS-SRTP Audio Flow Active
 ```
 
-- **Dual-Salt Derivation**:
-  1. $\text{Key} = \text{PBKDF2}(\text{Code} + \text{Password}, \text{salt}=\text{"textshare|"}+\text{Code}, 600000)$
-  2. $\text{Auth} = \text{PBKDF2}(\text{Code} + \text{Password}, \text{salt}=\text{"textshare-auth|"}+\text{Code}, 600000)$
-- **Relay Isolation**: The relay never receives $\text{Key}$. It only receives $\text{Auth}$, hashes it with SHA-256, and stores the hash. Even full compromise of the relay reveals zero document contents.
+#### Audio Frequency & Volume Loop Math
+Every $100\text{ms}$, `VoiceMesh.monitorAudioActivity()` analyzes the active microphone stream:
+1. `analyser.getByteFrequencyData(buffer)` fills a $128$-element frequency bin ($FFT=256$).
+2. Average volume power is calculated:
+   $$\bar{A} = \frac{1}{N} \sum_{i=0}^{N-1} \text{buffer}[i]$$
+3. Normalized volume level ($0\dots 100\%$):
+   $$L = \min\left(100, \text{round}\left(\frac{\bar{A}}{128} \times 100\right)\right)$$
+4. Voice Activity Detection: If $\bar{A} > 20$, `setSpeaking(true)` triggers green avatar pulse rings.
 
 ---
 
-## 3. Project Directory Structure
+### 2.6 Zero-Knowledge Cryptographic Derivation Engine
+
+```mermaid
+graph TD
+    UserSecret["User Input: Room Code + Password"] --> Normalize["TextEncoder UTF-8 Normalization"]
+    Normalize --> PBKDF2["WebCrypto SubtleCrypto PBKDF2-SHA256 (600,000 Iterations)"]
+    
+    subgraph KeyDerivationBranch ["Client-Side Encryption Branch (Strictly in Browser RAM)"]
+        Salt1["Salt A: 'textshare|' + RoomCode"]
+        PBKDF2 --> Salt1
+        Salt1 --> AESKey["AES-GCM 256-bit Key (SubtleCrypto.importKey)"]
+        AESKey --> Encryptor["Encrypt/Decrypt Document Text & Files"]
+    end
+
+    subgraph AuthDerivationBranch ["Relay Authentication Branch (Network Wire)"]
+        Salt2["Salt B: 'textshare-auth|' + RoomCode"]
+        PBKDF2 --> Salt2
+        Salt2 --> AuthToken["Auth Token: 32 Bytes Hex"]
+        AuthToken --> SendWire["Sent in WSS Query: ?a=AuthToken"]
+        SendWire --> RelayHash["Relay Storage: SHA-256(AuthToken)"]
+    end
+```
+
+- **Salt Separation Guarantee**: Because $\text{Salt}_{\text{enc}} \neq \text{Salt}_{\text{auth}}$, observing the authentication token $T_{\text{auth}}$ on the network or compromising the relay database provides **zero mathematical leverage** to derive $K_{\text{enc}}$ or decrypt the document.
+
+---
+
+## 3. Directory & File Organization Reference
 
 ```
 c:\Users\Dell\Desktop\textshare\
-├── functions/api/            # Cloudflare Pages Functions (Dynamic APIs)
-│   ├── crypto.ts             # Cryptographic derivation helper
-│   ├── generate.ts           # LLM UI Generator proxy
+├── functions/api/            # Cloudflare Pages Functions (Serverless APIs)
+│   ├── crypto.ts             # Cryptographic derivation benchmarking
+│   ├── generate.ts           # Fallback LLM UI generator
 │   ├── run.ts                # Code execution proxy to VPS sandbox
-│   └── status.ts             # Health check & system diagnostics
+│   └── status.ts             # Live health and latency diagnostic endpoint
 ├── mini-services/
-│   └── anonshare-sync/       # Standalone Socket.io sync server (port 3003)
-│       └── index.ts          # Presence, cursor, edit, chat & voice-signal relay
-├── public/                   # Static assets copied to dist/ during build
-│   ├── _headers              # Production CSP, caching & security headers
-│   ├── boot.js               # Legacy fast boot script
-│   ├── favicon.png           # 40KB application icon
+│   └── anonshare-sync/       # Standalone Socket.io Sync Server (Port 3003)
+│       └── index.ts          # Presence, cursor, edit, chat, voice signaling relay
+├── public/                   # Static assets directly served from root
+│   ├── _headers              # Production CSP, security, and cache directives
+│   ├── boot.js               # Fast boot script for legacy browsers
+│   ├── favicon.png           # 40 KB application icon
+│   ├── favicon.svg           # Scalable vector icon
 │   ├── icon-180.png          # iOS touch icon
-│   ├── og.png                # OpenGraph social preview banner
-│   ├── manifest.webmanifest  # PWA web manifest
+│   ├── logo.svg              # Primary brand logo
+│   ├── manifest.webmanifest  # PWA manifest definition
+│   ├── og.png                # Social OpenGraph card banner
 │   ├── robots.txt            # Search crawler directives
+│   ├── sitemap.xml           # Sitemap index
 │   └── sw.js                 # Network-first Service Worker
-├── relay/                    # VPS Bubblewrap Sandbox & Relay Server
-│   └── server.js             # High-performance WebSocket server
-├── src/
-│   ├── app/                  # Next.js App Router (layout, page, globals.css)
+├── relay/                    # Dedicated VPS Relay & Sandbox Engine
+│   └── server.js             # High-performance WebSocket binary server
+├── src/                      # Next.js Application Source
+│   ├── app/                  # App Router Layouts & Pages
+│   │   ├── globals.css       # Tailwind CSS 4 theme rules & keyframes
+│   │   ├── layout.tsx        # HTML Root layout & font definitions
+│   │   └── page.tsx          # Main entry page & global shortcut listeners
 │   ├── components/
 │   │   ├── editor/           # EditorStage, TabBar, TopBar, StatusBar, ChatSidebar
 │   │   ├── landing/          # Hero, Features, HowItWorks, FAQ, LandingFooter
 │   │   ├── palette/          # Modals & Drawers (VoicePanel, HistoryDrawer, FaqModal, etc.)
-│   │   └── ui/               # Radix / Tailwind UI primitives
+│   │   └── ui/               # Radix UI / Sonner Toast primitives
 │   └── lib/
-│       ├── store.ts          # Zustand master state store & actions
-│       ├── use-sync.ts       # Socket.io sync & voice lifecycle hook
-│       ├── voice.ts          # WebRTC VoiceMesh engine
+│       ├── db.ts             # Local database interfaces
+│       ├── detect.ts         # Language auto-detection regex engine
+│       ├── highlight.ts      # Syntax highlighting tokenizer
+│       ├── store.ts          # Zustand master state machine & actions
 │       ├── themes.ts         # Theme definitions & syntax tokens
-│       └── detect.ts         # Language auto-detection engine
-├── tests/                    # Vitest unit & integration test suite (56 tests)
-├── worker/                   # Cloudflare Worker relay (Durable Objects)
-├── next.config.ts            # Next.js static export configuration
+│       ├── use-sync.ts       # Socket.io sync & voice lifecycle hook
+│       ├── utils.ts          # Classname merger helpers
+│       └── voice.ts          # WebRTC VoiceMesh engine
+├── tests/                    # Vitest Unit & Integration Test Suites (56 Tests)
+├── worker/                   # Cloudflare Worker Relay Source (Durable Objects)
+├── next.config.ts            # Next.js static export build configuration
 ├── tsconfig.json             # Strict TypeScript compiler options
-├── package.json              # Dependencies & npm scripts
-├── PRD.md                    # Product Requirements Document
-├── Architecture.md           # Technical Architecture Document (this file)
-├── rules.md                  # Development & Agent Invariants
-├── design.md                 # UI / Design System Specifications
-├── tasks.md                  # Task Tracking & Completed Milestones
-└── memory.md                 # Project Memory & Incident Learnings
+├── package.json              # Dependencies, scripts, and engine versions
+├── PRD.md                    # Exhaustive Product Requirements Document
+├── Architecture.md           # This Technical Architecture Document
+├── rules.md                  # Inviolable Agent & Developer Rules
+├── design.md                 # UI / Design System Blueprint
+├── tasks.md                  # Completed Milestones & Engineering Roadmap
+└── memory.md                 # Institutional Incident Log & Memory
 ```

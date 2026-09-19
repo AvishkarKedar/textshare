@@ -1,87 +1,189 @@
-# anonshare — Development & Agent Rules
+# anonshare — Inviolable Engineering Rules & Agent Invariants
 
-> **Purpose:** Inviolable engineering rules, architectural invariants, and security constraints that all AI agents and human contributors **MUST ALWAYS FOLLOW WITHOUT EXCEPTION**.
+> **Audience:** AI Coding Agents, Core Maintainers, and Open-Source Contributors  
+> **Authority Level:** Absolute / Inviolable  
+> **Scope:** All code modifications, commits, pull requests, and Cloudflare deployments  
 
 ---
 
-## 1. Security & CSP Invariants
+## 1. Security & Content Security Policy (CSP) Invariants
 
-### 🚨 Rule 1: Never Break React Hydration in `public/_headers`
-- **Context**: `anonshare` is a Next.js 16 static export (`output: "export"` in `next.config.ts`). Next.js static exports embed inline `<script>` tags in `index.html` to execute the React hydration payload (`self.__next_f.push(...)`).
-- **Invariant**: The `Content-Security-Policy` header in [`public/_headers`](file:///c:/Users/Dell/Desktop/textshare/public/_headers) **MUST** include `'unsafe-inline'` for `script-src` and `style-src`.
-- **Prohibited Action**: **NEVER** remove `'unsafe-inline'` from `public/_headers` in an attempt to make CSP "stricter". Doing so will cause the browser to silently block React hydration $\rightarrow$ all event listeners fail to attach $\rightarrow$ every button, modal, and drawer on production dies with zero console errors.
-- **Golden Header Template**:
-  ```http
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; frame-src 'self' https: blob: data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
-  ```
+### 🚨 Rule 1: The CSP React Hydration Invariant (CRITICAL)
+- **Problem Statement**: `anonshare` is configured as a Next.js 16 static export (`output: "export"` in `next.config.ts`). Next.js static exports output inline `<script>` tags in `index.html` to inject the React hydration payload (`self.__next_f.push(...)`).
+- **Invariant**: The `Content-Security-Policy` header in [`public/_headers`](file:///c:/Users/Dell/Desktop/textshare/public/_headers) **MUST ALWAYS** include `'unsafe-inline'` inside `script-src` and `style-src`.
+- **Why this fails if modified**: If an agent removes `'unsafe-inline'` in an attempt to make the CSP "stricter", the browser will silently trigger a `securitypolicyviolation` on `index.html` inline scripts. External chunks load, but React never attaches to the DOM (`reactKeys: []` on all elements). **Every button, drawer, modal, and accordion on production becomes dead with ZERO console errors.**
+
+#### ❌ PROHIBITED (Breaks React Hydration):
+```http
+# BAD: Missing 'unsafe-inline' in script-src
+Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self';
+```
+
+#### ✅ MANDATORY (Hydration Works 100%):
+```http
+# GOOD: Permissive inline scripts required for Next.js static export
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; frame-src 'self' https: blob: data:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
+```
 
 ---
 
 ## 2. Integrity & Author Invariants
 
 ### 💎 Rule 2: Zero Fake Data / Zero Mock Placeholders
-- **Invariant**: Every indicator, volume meter, connection status, and test suite must be backed by real state.
-- **Prohibited Action**: **NEVER** use `Math.random()` or hardcoded simulated timers for:
-  - Microphone level bars (must read from `VoiceMesh` / `AnalyserNode` $0\dots 100\%$).
-  - Speaking avatar pulse animations (must reflect genuine Web Audio VAD).
-  - Online peer counters or fake room lists.
+- **Invariant**: Every indicator, volume meter, connection status, avatar ring, and test execution must be driven by genuine state.
+- **Prohibited Patterns**: Never write `Math.random()` or simulated timer counters for:
+  - Microphone level bars (must read actual $0\dots 100\%$ levels from Web Audio `AnalyserNode`).
+  - Speaking avatar pulse rings (must reflect real Web Audio VAD $> 20$ threshold).
+  - Online peer counters (must reflect real connected socket peers).
   - Test run durations or exit codes.
 
-### 👤 Rule 3: Preserve Real Author & Licensing Information
-- **Invariant**: The following author and licensing details must be maintained across all footers, legal modals, and metadata:
-  - **Author**: Avishkar Kedar
+#### ❌ PROHIBITED:
+```tsx
+// BAD: Random simulation in UI component
+<div style={{ width: `${v.pushToTalk ? 40 + Math.random() * 60 : 0}%` }} />
+const isSpeaking = p.id === "me" ? v.pushToTalk : Math.random() > 0.7;
+```
+
+#### ✅ MANDATORY:
+```tsx
+// GOOD: Real audio level and peer speaking state
+<div style={{ width: v.muted ? "0%" : `${Math.min(100, Math.max(0, v.level || 0))}%` }} />
+const isSpeaking = p.id === "me" ? v.speaking : Boolean(p.speaking);
+```
+
+---
+
+### 👤 Rule 3: Author Credential & Legal Invariant
+- **Invariant**: The following author credentials and licensing details must remain uncompromised across all legal notices, footers, and package metadata:
+  - **Author**: `Avishkar Kedar`
   - **Website**: `https://avishkark.in`
   - **Email**: `avishkarkedar+text@gmail.com`
-  - **License**: MIT License
-  - **Repository**: `https://github.com/AvishkarKedar/textshare`
-  - **Production URL**: `https://code.avishkark.in`
+  - **License**: `MIT License`
+  - **GitHub Repository**: `https://github.com/AvishkarKedar/textshare`
+  - **Production Endpoint**: `https://code.avishkark.in`
 
 ---
 
 ## 3. Architecture & Build Invariants
 
-### ⚡ Rule 4: Static Export & Cloudflare Pages Functions
-- **Context**: `next.config.ts` uses `output: "export"`, compiling all assets into `dist/`.
+### ⚡ Rule 4: Static Export & Cloudflare Pages Functions Routing
+- **Context**: `next.config.ts` specifies `output: "export"`.
 - **Invariant**:
-  - **NEVER** add server-side `POST` / `GET` route handlers inside `src/app/api/` (e.g. `src/app/api/run/route.ts`). Doing so causes `next build` to fail immediately with `"Export encountered errors"`.
-  - All dynamic API endpoints **MUST** reside inside `functions/api/*.ts` as Cloudflare Pages Functions (`/api/run`, `/api/crypto`, `/api/status`, `/api/generate`).
+  - **NEVER** create server route handlers in `src/app/api/` (e.g., `src/app/api/run/route.ts`). Doing so causes `next build` to fail immediately with `"Export encountered errors"`.
+  - All dynamic API logic **MUST** reside in `functions/api/*.ts` as Cloudflare Pages Functions.
 
-### 🛡️ Rule 5: Strict TypeScript Compilation (Zero Build Errors)
+#### ❌ PROHIBITED:
+```
+src/app/api/run/route.ts      <-- FAILS NEXT.JS STATIC EXPORT
+src/app/api/crypto/route.ts   <-- FAILS NEXT.JS STATIC EXPORT
+```
+
+#### ✅ MANDATORY:
+```
+functions/api/run.ts          <-- NATIVE CLOUDFLARE PAGES FUNCTION
+functions/api/crypto.ts       <-- NATIVE CLOUDFLARE PAGES FUNCTION
+```
+
+---
+
+### 🛡️ Rule 5: Strict TypeScript Compilation (Zero Error Tolerance)
 - **Invariant**: `typescript.ignoreBuildErrors` in [`next.config.ts`](file:///c:/Users/Dell/Desktop/textshare/next.config.ts) must **ALWAYS** remain omitted or set to `false`.
-- **Requirement**: Before any git commit or deployment, run:
-  1. `npx tsc --noEmit` $\rightarrow$ must exit with **0 errors**.
-  2. `npm test` $\rightarrow$ all **56 tests must pass**.
-  3. `npm run build` $\rightarrow$ must compile to `dist/` cleanly.
+- **Enforcement**: Before every commit, execute `npx tsc --noEmit`. The command must exit with code 0.
 
 ---
 
 ## 4. UI, Touch & Mobile Accessibility Invariants
 
 ### 📱 Rule 6: Touch-Friendly Button Visibility
-- **Context**: Mobile and touch screens have no mouse-hover state.
-- **Invariant**: Action buttons (delete, preview, copy, close, tab remove) must **NEVER** be styled with `opacity-0 group-hover:opacity-100` alone.
-- **Standard**: Always use `opacity-100 sm:opacity-0 sm:group-hover:opacity-100` so actions are permanently visible on touch devices and elegantly reveal on desktop hover.
-- **Touch Target**: Primary interactive elements must have a minimum hit target of `44x44px`.
+- **Context**: Touch and mobile devices do not possess a mouse-hover state.
+- **Invariant**: Primary action buttons (preview, download, delete, tab close) must **NEVER** be styled with `opacity-0 group-hover:opacity-100` alone.
+- **Requirement**: Always use `opacity-100 sm:opacity-0 sm:group-hover:opacity-100`.
 
-### 🔘 Rule 7: Close Controls on All Modals & Drawers
-- **Invariant**: Every drawer (Files, Voice, History, Bookmarks, Notifications, Browser) and modal (Faq, Status, Security, Crypto, Whiteboard, Tour) must feature:
-  - An explicit, high-contrast close button (`<X className="h-4 w-4" />`) in the header.
-  - Backdrop click dismissal (`onClick={() => toggle()}`).
-  - Keyboard Escape (`Esc`) hotkey dismissal.
+#### ❌ PROHIBITED:
+```tsx
+// BAD: Invisible on mobile touch screens
+<button className="opacity-0 group-hover:opacity-100" onClick={handleDelete}>
+  <Trash className="h-3 w-3" />
+</button>
+```
+
+#### ✅ MANDATORY:
+```tsx
+// GOOD: Always visible on mobile, hoverable on desktop
+<button className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer" onClick={handleDelete}>
+  <Trash className="h-3 w-3" />
+</button>
+```
+
+---
+
+### 🔘 Rule 7: Modal & Drawer Close Controls
+- **Invariant**: Every drawer and modal overlay must support three independent dismissal mechanisms:
+  1. An explicit close button (`<X className="h-4 w-4" />`) in the top-right header.
+  2. Backdrop click dismissal (`onClick={() => toggle()}`).
+  3. Keyboard Escape (`Esc`) keypress event handler.
+
+---
 
 ### 👂 Rule 8: WebRTC & Audio Autoplay Safety
 - **Invariant**:
-  - WebRTC microphone requests via `navigator.mediaDevices.getUserMedia` must always be wrapped in a `try...catch` block.
-  - If permissions are denied or unavailable (e.g., non-HTTPS or headless testing), show a polite toast message without throwing unhandled exceptions.
+  - `navigator.mediaDevices.getUserMedia` calls must always be wrapped in a `try...catch` block displaying user-friendly error toasts.
   - Remote `<audio>` elements must include autoplay unlock event listeners (`click`, `touchstart`, `keydown`) to seamlessly recover from strict browser autoplay policies.
 
 ---
 
-## 5. Summary Checklist Before Any Git Push
+## 5. State Management & Lifecycle Invariants
 
-- [ ] `public/_headers` contains `'unsafe-inline'` for `script-src` and `style-src`.
-- [ ] `npx tsc --noEmit` exits with 0 errors.
-- [ ] `npm test` passes 56/56 tests.
-- [ ] `npm run build` succeeds and updates `dist/`.
-- [ ] Deploy with `npx wrangler pages deploy dist --project-name textshare --branch main`.
-- [ ] Verify live at `https://code.avishkark.in`.
+### 🔄 Rule 9: Zustand Store Immutability
+- **Invariant**: Store mutations must produce fresh object references using immutable spread operators. Never mutate state in-place.
+
+#### ❌ PROHIBITED:
+```ts
+// BAD: Mutating state array directly
+set((s) => {
+  s.files.push(newFile);
+  return { files: s.files };
+});
+```
+
+#### ✅ MANDATORY:
+```ts
+// GOOD: Returning fresh array reference
+set((s) => ({ files: [...s.files, newFile] }));
+```
+
+---
+
+### 🧹 Rule 10: Event Listener Cleanup & Memory Safety
+- **Invariant**: Every `useEffect` attaching window listeners, WebSocket subscriptions, or audio intervals must return a cleanup function.
+
+---
+
+## 6. Cryptography & Data Format Invariants
+
+### 🔑 Rule 11: Cryptographic Salt & Constant Preservation
+- **Invariant**: The salt strings `textshare|` and `textshare-auth|` must **NEVER** be modified. They are cryptographic constants; altering them breaks decryption for all existing rooms.
+
+---
+
+### 📦 Rule 12: Client-Side Binary ZIP Generation
+- **Invariant**: When exporting project ZIPs via `new Blob([zip])`, cast the `Uint8Array` buffer to `zip as unknown as BlobPart` to satisfy strict TypeScript DOM typings.
+
+---
+
+## 7. Repository Hygiene Invariants
+
+### 🗄️ Rule 13: Git Tracking Cleanliness
+- **Invariant**: Never commit SQLite `.db` files, screenshot `.png` images, temporary logs, or tool output directories to git. Keep `.gitignore` updated.
+
+---
+
+## 8. Verification & Deployment Standard
+
+### 🚀 Pre-Commit & Deployment Checklist:
+1. `npx tsc --noEmit` $\longrightarrow$ **0 errors**.
+2. `npm test` $\longrightarrow$ **56/56 passing tests**.
+3. `npm run build` $\longrightarrow$ **Clean Turbopack export into `dist/`**.
+4. `git status` $\longrightarrow$ **Clean working tree with zero untracked binaries**.
+5. `npx wrangler pages deploy dist --project-name textshare --branch main` $\longrightarrow$ **Successful Cloudflare deploy**.
+6. `curl -I https://code.avishkark.in` $\longrightarrow$ **Verify `script-src` contains `'unsafe-inline'`**.
