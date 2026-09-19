@@ -43,6 +43,7 @@ const FAQS = [
 export function FAQ() {
   const [open, setOpen] = useState<number | null>(0);
   const toggleSecurity = useAnon((s) => s.toggleSecurity);
+  const toggleFaq = useAnon((s) => s.toggleFaq);
   return (
     <section id="faq" className="hairline-t scroll-mt-12">
       <div className="mx-auto max-w-7xl px-6 py-16">
@@ -58,17 +59,25 @@ export function FAQ() {
             </h2>
             <p className="anon-sans mt-4 text-sm leading-relaxed anon-mut">
               Including the ones most products dodge. See the full threat model
-              in our security write-up.
+              in our security write-up or search across all topics in the interactive modal.
             </p>
-            <button
-              onClick={() => {
-                toggleSecurity();
-                toast("Opening threat model", { description: "Full security write-up with honest limits." });
-              }}
-              className="anon-mono mt-4 inline-flex items-center gap-1 text-xs anon-accent hover:underline cursor-pointer"
-            >
-              Read security write-up →
-            </button>
+            <div className="mt-4 flex flex-col gap-2 items-start">
+              <button
+                onClick={() => toggleFaq()}
+                className="anon-mono inline-flex items-center gap-1.5 text-xs bg-[var(--anon-panel)] hairline px-3 py-1.5 hover:bg-[var(--anon-raise)] hover:text-[var(--anon-fg)] transition-colors cursor-pointer"
+              >
+                <span>🔍</span> Search & Category Filters (⌘⇧F) →
+              </button>
+              <button
+                onClick={() => {
+                  toggleSecurity();
+                  toast("Opening threat model", { description: "Full security write-up with honest limits." });
+                }}
+                className="anon-mono inline-flex items-center gap-1 text-xs anon-accent hover:underline cursor-pointer"
+              >
+                Read security write-up →
+              </button>
+            </div>
           </div>
           <div className="hairline">
             {FAQS.map((f, i) => {
