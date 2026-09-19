@@ -46,7 +46,7 @@ export function CommandPalette() {
   const items = useMemo<CmdItem[]>(() => {
     const close = () => s.togglePalette();
     return [
-      { id: "run", label: "Run code", kbd: "⌘↵", icon: Play, group: "editor", run: () => { close(); } },
+      { id: "run", label: "Run code", kbd: "⌘↵", icon: Play, group: "editor", run: () => { s.runCode(); close(); } },
       { id: "tests", label: "Run tests (parse test()/describe())", kbd: "⌘⇧T", icon: FlaskConical, group: "editor", run: () => { s.runTests(); close(); } },
       { id: "generative", label: "Generative UI builder", kbd: "⌘⇧G", icon: Sparkles, group: "tools", run: () => { s.toggleGenerative(); close(); } },
       { id: "chat", label: s.chatOpen ? "Close chat" : "Open chat", kbd: "⌘J", icon: MessageSquare, group: "view", run: () => { s.toggleChat(); close(); } },

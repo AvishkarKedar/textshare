@@ -17,6 +17,8 @@ export function Hero() {
   const enterRoom = useAnon((s) => s.enterRoom);
   const recentRooms = useAnon((s) => s.recentRooms);
   const toggleBookmarks = useAnon((s) => s.toggleBookmarks);
+  const toggleSecurity = useAnon((s) => s.toggleSecurity);
+  const toggleFaq = useAnon((s) => s.toggleFaq);
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
   const [booting, setBooting] = useState(false);
@@ -88,12 +90,13 @@ export function Hero() {
               <span className="anon-mono text-sm anon-fg">anonshare</span>
             </div>
             <div className="flex items-center gap-4">
-              <a
-                href="#faq"
-                className="anon-mono text-xs text-[#8c8c8c] hover:text-[#e7e7e7] hover:underline transition-colors"
+              <button
+                type="button"
+                onClick={() => toggleFaq()}
+                className="anon-mono text-xs text-[#8c8c8c] hover:text-[#e7e7e7] hover:underline transition-colors cursor-pointer"
               >
                 FAQ
-              </a>
+              </button>
               <button
                 type="button"
                 onClick={() => toggleSecurity()}
