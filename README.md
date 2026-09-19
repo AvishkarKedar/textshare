@@ -114,19 +114,20 @@ this does *not* protect against.
 
 ---
 
-## Tech stack
+### Tech stack
 
 | Layer | Technology |
 |---|---|
-| Editor | [CodeMirror 6](https://codemirror.net/) with per-language grammars |
-| Realtime data | [Yjs](https://docs.yjs.dev/) CRDT, `y-codemirror.next`, `y-indexeddb` |
-| Transport | Plain WebSockets to a [Cloudflare Worker](https://workers.cloudflare.com/) |
+| Framework | Next.js 16 (React 19, Turbopack static export to `dist/`) |
+| Styling & UI | Tailwind CSS 4, Lucide Icons, Radix UI primitives |
+| Realtime data | [Yjs](https://docs.yjs.dev/) CRDT, `y-indexeddb`, WebSockets |
+| Relay Transport | Plain WebSockets to a [Cloudflare Worker](https://workers.cloudflare.com/) / Relay VPS |
+| Functions API | Cloudflare Pages Functions (`functions/api/*`) for runner & crypto |
 | Room state | One [Durable Object](https://developers.cloudflare.com/durable-objects/) per room |
 | Crypto | Browser-native `SubtleCrypto` (AES-GCM 256, PBKDF2-SHA256, 600,000 rounds) |
-| Offline | A service worker (`public/sw.js`) plus IndexedDB |
-| Build | [Vite](https://vitejs.dev/) for the front end, `wrangler` for the Worker |
-| Tests | [Vitest](https://vitest.dev/) |
-| Hosting | Cloudflare Pages (app + admin) and Cloudflare Workers (relay) |
+| Offline | Service worker (`public/sw.js`) + IndexedDB persistence |
+| Tests | [Vitest](https://vitest.dev/) (56 tests) |
+| Hosting | Cloudflare Pages (`code.avishkark.in`) + Cloudflare Workers |
 
 ---
 
@@ -134,62 +135,45 @@ this does *not* protect against.
 
 ```
 .
-├── admin/                admin dashboard: room moderation, suspend/delete
-├── lib/                  shared utility functions
-├── public/               static assets served as-is (service worker, manifest, robots.txt, headers)
-├── tests/                Vitest unit tests
-├── worker/               the Cloudflare Worker relay
-│   └── src/              relay source (one Durable Object per room)
-├── index.html            the app shell
-├── app.js                editor, presence, rooms, crypto
-├── app.css               styling
-├── demo.js               the self-running homepage demo
-├── zip.js                client-side "export all files" zip writer
-├── privacy.html          privacy policy
-├── terms.html            terms of service
-├── security.html         security overview and threat model
-├── COMPLIANCE.md         data-handling and compliance notes
-├── WHITEPAPER.md         deeper technical write-up
-├── CONTRIBUTING.md       how to contribute
-├── CODE_OF_CONDUCT.md    community guidelines
-└── SECURITY.md           how to privately report a vulnerability
+├── functions/api/        Cloudflare Pages Functions (/api/run, /api/crypto, etc.)
+├── public/               static assets served as-is (sw.js, manifest, _headers, icons)
+├── src/                  Next.js App Router application
+│   ├── app/              layout, page, globals.css
+│   ├── components/       landing, editor, modals, drawers, panels
+│   └── lib/              store, yjs, crypto, presence, runner
+├── tests/                Vitest test suite
+├── worker/               Cloudflare Worker relay source (Durable Objects)
+├── relay/                Standalone Node.js / Bubblewrap relay server
+├── LICENSE               MIT License
+└── README.md
 ```
 
 ---
 
 ## Running it yourself
 
-The front end is static files. Serve the repository root with anything:
-
 ```bash
-python3 -m http.server 8000
-```
-
-Or use the Vite dev toolchain:
-
-```bash
+# Install dependencies
 npm install
-npm run build   # outputs to dist/
-npm test        # runs the Vitest suite
+
+# Start local Next.js dev server
+npm run dev
+
+# Run unit tests
+npm test
+
+# Build static production export (outputs to dist/)
+npm run build
 ```
 
-The relay needs a Cloudflare account (the free tier is plenty):
+### Cloudflare Pages Deployment
 
-```bash
-cd worker
-npm install
-npx wrangler deploy
-```
-
-Point the app at your own relay with `?relay=your-worker.workers.dev`, or via
-"use a different relay" in the footer. The choice is remembered.
-
-### Deployment layout
-
-| | |
+| Setting | Value |
 |---|---|
-| Pages project | root directory `/`, no build command, framework preset **None** |
-| Worker project | root directory `worker`, build `npm install`, deploy `npx wrangler deploy` |
+| Build command | `npm run build` |
+| Output directory | `dist` |
+| Node.js version | `20.x` or `22.x` |
+
 
 Keep the custom domain attached to **Pages only**. A Worker route outranks Pages
 on the same hostname, which will serve raw JSON where your site should be.

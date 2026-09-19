@@ -153,7 +153,7 @@ function ProtectRow({
   body,
   color,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   title: string;
   body: string;
   color: string;

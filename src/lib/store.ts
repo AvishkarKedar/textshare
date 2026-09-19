@@ -38,7 +38,7 @@ export interface EditorFile {
 export interface ShortcutDef {
   keys: string;
   label: string;
-  group: "global" | "editor" | "navigation";
+  group: "global" | "editor" | "navigation" | "tools";
 }
 
 export interface TerminalLine {
@@ -124,6 +124,7 @@ export interface CryptoResult {
   auth: { hex: string; bits: number; salt: string; sentToRelay: boolean; note: string };
   relayStored: { sha256OfAuth: string; note: string };
   differentSalts: boolean;
+  derivedAt?: number;
 }
 
 export interface SharedFile {
@@ -1041,7 +1042,7 @@ export const useAnon = create<AnonState>()(
           });
           const data = await res.json();
           const ts = Date.now();
-          const newLines = [];
+          const newLines: TerminalLine[] = [];
           if (data.stdout) {
             data.stdout.split("\n").forEach((l: string, i: number) => {
               newLines.push({ id: `o${ts}-${i}`, kind: "stdout" as const, text: l, ts });
@@ -1335,7 +1336,7 @@ export const useAnon = create<AnonState>()(
         // minimal client-side ZIP writer (no deps)
         const files = s.files;
         const zip = buildZip(files.map((f) => ({ name: f.name, content: f.content })));
-        const blob = new Blob([zip], { type: "application/zip" });
+        const blob = new Blob([zip as unknown as BlobPart], { type: "application/zip" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;

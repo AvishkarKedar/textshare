@@ -232,7 +232,7 @@ function KeyRow({
   copied,
 }: {
   title: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   color: string;
   hex: string;
   salt: string;
