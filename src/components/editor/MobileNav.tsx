@@ -52,9 +52,13 @@ export function MobileNav() {
             onClick={() => {
               const ta = document.querySelector("textarea");
               if (ta) {
+                ta.focus();
                 const start = ta.selectionStart;
                 const end = ta.selectionEnd;
                 ta.setRangeText(k === "Tab" ? "\t" : k, start, end, "end");
+                // React's onChange only fires on real input events — dispatch
+                // one so the edit reaches the store AND the encrypted sync.
+                ta.dispatchEvent(new Event("input", { bubbles: true }));
               }
             }}
             className="flex h-9 min-w-9 flex-none items-center justify-center px-2 hover:bg-[var(--anon-raise)]"

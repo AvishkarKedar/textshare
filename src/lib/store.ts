@@ -1165,6 +1165,9 @@ export const useAnon = create<AnonState>()(
             ttl: opts.ttl ?? s.ttl,
             hasPassword,
             isOwner,
+            // Desktop opens with the chat rail; mobile keeps the editor
+            // fullscreen (chat is a toggleable overlay there).
+            chatOpen: typeof window !== "undefined" ? window.innerWidth >= 768 : true,
             participants: [
               { id: "me", name: s.displayName || "You", color: s.color || "#4c8dff", isOwner, online: true, cursorLine: 1 },
             ],

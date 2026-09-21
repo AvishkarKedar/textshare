@@ -64,11 +64,12 @@ export function ChatSidebar() {
   if (!s.chatOpen) return null;
 
   return (
-    <aside className="flex h-full w-full flex-none flex-col border-l hairline-l bg-[var(--anon-panel)] sm:w-72 lg:w-80">
+    <aside className="fixed inset-0 z-40 flex h-full flex-col bg-[var(--anon-panel)] shadow-2xl shadow-black/50 md:static md:z-auto md:h-full md:w-72 md:flex-none md:border-l md:hairline-l md:shadow-none lg:w-80">
       {/* header */}
       <div className="flex h-9 items-center justify-between hairline-b px-3">
         <div className="anon-mono inline-flex items-center gap-1.5 text-xs">
           <Hash className="h-3 w-3 anon-mut" /> room chat
+          <span className="anon-dim md:hidden">· {s.participants.filter((p) => p.online).length} online</span>
         </div>
         <button
           onClick={() => s.toggleChat()}
