@@ -47,7 +47,13 @@ const COMPACT_EVERY = 150
 const SNAPSHOT_WINDOW = 45000
 const IP_PER_MIN = 600
 const CREATE_PER_MIN = 60
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '[REDACTED-LEAKED-SECRET]'
+const AUTH_PER_MIN = 8               // 8 failed-auth attempts per IP per minute
+const RUN_PER_MIN = 20               // 20 code executions per IP per minute
+// Admin password MUST be provided via the ADMIN_PASSWORD environment variable.
+// There is NO default: if unset, the /admin/* API is fully disabled (503).
+// Rotate any previously exposed value immediately — a leaked ADMIN_PASSWORD
+// allows room moderation (suspend/delete/lock) and config changes.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || ''
 const PORT = parseInt(process.env.PORT || '8787', 10)
 const HOST = process.env.HOST || '0.0.0.0'
 
@@ -419,13 +425,35 @@ async function runSandboxedProcess({ cmd, args = [], input = '', workspaceDir = 
   }
 
   // Bubblewrap + prlimit container arguments
+  //
+  // Memory-limit strategy (learned the hard way):
+  //   RLIMIT_AS (--as) counts EVERY mapped virtual byte, including PROT_NONE
+  //   reservations. Modern runtimes reserve gigabytes of address space they
+  //   never touch, so --as kills them at startup:
+  //     - V8 (node)  -> "Failed to reserve virtual memory for CodeRange"
+  //     - Go runtime -> "failed to reserve page summary memory"
+  //     - rustc/ld   -> "linking with cc failed"
+  //   RLIMIT_DATA (--data) only limits writable anonymous mappings, so the
+  //   giant reservations pass through while real committed memory stays
+  //   capped. VA-hungry runtimes get --data; tiny native binaries keep the
+  //   stricter --as.
   const isJvm = cmd === 'java' || cmd === 'javac'
+  const isNode = /node(\.exe)?$/i.test(cmd) || cmd === 'node' || cmd === process.execPath
+  const isGo = cmd === 'go'
+  const isRustc = cmd === 'rustc'
+  const vaHungry = isJvm || isNode || isGo || isRustc
+
   const maxMemBytes = isCompile ? 512 * 1024 * 1024 : 256 * 1024 * 1024
+  const dataCapBytes = isRustc || isCompile && isGo
+    ? 2 * 1024 * 1024 * 1024   // compiler/linker stages: 2 GB data cap
+    : isGo || isNode
+      ? 1536 * 1024 * 1024     // runtimes that build arenas: 1.5 GB data cap
+      : 768 * 1024 * 1024      // JVM: 768 MB data cap
   const maxNproc = isCompile || isJvm ? 64 : 32
   const maxCpuSec = isCompile ? 12 : 6
 
   const prlimitArgs = [
-    isJvm ? `--data=${512 * 1024 * 1024}` : `--as=${maxMemBytes}`,
+    vaHungry ? `--data=${dataCapBytes}` : `--as=${maxMemBytes}`,
     `--nproc=${maxNproc}`,
     `--fsize=10485760`,
     `--cpu=${maxCpuSec}`,
@@ -490,9 +518,12 @@ async function executeCodeInternal({ language, code, stdin = '' }) {
       const scriptPath = path.join(workspaceDir, 'script.js')
       await fs.promises.writeFile(scriptPath, code, 'utf8')
       const nodeExe = process.execPath || 'node'
+      // --max-old-space-size keeps V8's JS heap within sandbox budget even
+      // though RLIMIT_DATA allows the runtime's address-space reservations.
+      const nodeArgs = ['--max-old-space-size=256', HAS_BWRAP ? '/workspace/script.js' : scriptPath]
       const result = await runSandboxedProcess({
         cmd: nodeExe,
-        args: [HAS_BWRAP ? '/workspace/script.js' : scriptPath],
+        args: nodeArgs,
         input: stdin,
         workspaceDir,
         timeoutMs: 8000
@@ -668,41 +699,14 @@ async function executeCodeInternal({ language, code, stdin = '' }) {
       return runRes
     }
 
-    // 9. Fallback to public sandboxed Piston API
-    try {
-      const response = await fetch('https://emkc.org/api/v2/piston/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'User-Agent': 'AnonShare-Runner/5.0' },
-        body: JSON.stringify({
-          language: normLang === 'c++' ? 'cpp' : normLang,
-          version: '*',
-          files: [{ content: code }],
-          stdin,
-        }),
-        signal: AbortSignal.timeout(10000),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        const result = {
-          ok: (data.run?.code ?? 1) === 0,
-          stdout: data.run?.stdout || '',
-          stderr: data.run?.stderr || '',
-          exitCode: data.run?.code ?? 0,
-          signal: data.run?.signal || null,
-          executionTime: data.run?.duration || null,
-        }
-        RUNNER_CACHE.set(cacheKey, result)
-        setTimeout(() => RUNNER_CACHE.delete(cacheKey), 30000)
-        return result
-      }
-    } catch (err) {}
-
+    // 9. Language not supported natively — honest error (no silent fallback).
+    // The public emkc.org Piston API became whitelist-only in Feb 2026, so the
+    // old fallback is gone. Only the languages listed in GET /run are real.
     return {
       ok: false,
-      error: 'Execution service temporarily unavailable or language not supported',
+      error: 'language_not_supported',
       stdout: '',
-      stderr: `Runner could not execute language: ${normLang}`,
+      stderr: `Runner could not execute language "${normLang}". Supported: python, javascript, c, cpp, go, rust, bash, java.`,
       exitCode: 1,
     }
   } finally {
@@ -794,6 +798,9 @@ const server = http.createServer(async (req, res) => {
   /* ------------------------------------------------------- Admin routes */
   if (url.pathname.startsWith('/admin/')) {
     if (url.pathname === '/admin/login' && req.method === 'POST') {
+      if (!ADMIN_PASSWORD) {
+        return sendJson(res, { error: 'admin_disabled', detail: 'Set ADMIN_PASSWORD env var to enable the admin API' }, 503)
+      }
       if (!checkRate(ip, 'auth')) {
         return sendJson(res, { error: 'rate_limited', retryAfter: 60 }, 429)
       }
@@ -1356,5 +1363,6 @@ server.listen(PORT, HOST, () => {
   console.log(`[anonshare-relay] Code execution endpoint: http://${HOST}:${PORT}/run`)
   console.log(`[anonshare-relay] Sandbox isolation: ${HAS_BWRAP ? 'ACTIVE (Bubblewrap + prlimit)' : 'STANDARD'}`)
   console.log(`[anonshare-relay] Zero-knowledge E2EE mode: ACTIVE`)
+  console.log(`[anonshare-relay] Admin API: ${ADMIN_PASSWORD ? 'enabled' : 'DISABLED (no ADMIN_PASSWORD env var set)'}`)
 })
 
