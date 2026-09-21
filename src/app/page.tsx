@@ -23,11 +23,12 @@ import { StatusModal } from "@/components/palette/StatusModal";
 import { SecurityModal } from "@/components/palette/SecurityModal";
 import { PrivacyTermsModals } from "@/components/palette/PrivacyTermsModals";
 import { FaqModal } from "@/components/palette/FaqModal";
+import { RoomEntryDialog } from "@/components/palette/RoomEntryDialog";
 
 export default function Home() {
   const view = useAnon((s) => s.view);
   const store = useAnon();
-  // connect to the anonshare-sync mini-service when in a room
+  // mirrors presence (name/color) into the live relay session when in a room
   useSync();
 
   // global keyboard shortcuts
@@ -54,6 +55,7 @@ export default function Home() {
       }
       // esc — close any open overlay
       if (e.key === "Escape") {
+        if (store.entryMode && !store.booting) { store.closeEntry(); return; }
         if (store.tourOpen) { store.dismissTour(); return; }
         if (store.slashOpen) { store.setSlashOpen(false); return; }
         if (store.paletteOpen) { store.togglePalette(); return; }
@@ -187,6 +189,7 @@ export default function Home() {
       {view === "landing" ? <Landing /> : <AppShell />}
 
       {/* global overlays — mounted at root so they float above everything */}
+      <RoomEntryDialog />
       <CommandPalette />
       <ShortcutsOverlay />
       <InviteModal />

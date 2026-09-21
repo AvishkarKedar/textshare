@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { useAnon } from "@/lib/store";
 
 export function CtaBanner() {
-  const enterRoom = useAnon((s) => s.enterRoom);
+  const openEntryCreate = useAnon((s) => s.openEntryCreate);
   return (
     <section className="hairline-t">
       <div className="mx-auto max-w-7xl px-6 py-16">
@@ -26,7 +26,7 @@ export function CtaBanner() {
               </p>
             </div>
             <button
-              onClick={() => enterRoom({ isOwner: true, ttl: "1h" })}
+              onClick={() => openEntryCreate()}
               className="anon-mono inline-flex h-11 flex-none items-center justify-center gap-2 bg-[var(--anon-accent)] px-5 text-sm font-medium text-[var(--anon-accent-fg)] transition-transform hover:brightness-110 active:translate-y-px"
             >
               Create a room <ArrowRight className="h-4 w-4" />

@@ -3,8 +3,31 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { ThemeId } from "./themes";
+import type { RoomExistsInfo, RoomStateFrame, ConnState } from "./relay";
+import {
+  createRoom as relayCreateRoom,
+  joinRoom as relayJoinRoom,
+  roomInfo as relayRoomInfo,
+  relayHost,
+  storeOwnerToken,
+  loadOwnerToken,
+} from "./relay";
+import {
+  startSession,
+  endSession,
+  pushChat,
+  updateFileText,
+  addYFile,
+  removeYFile,
+  setGoal as sessionSetGoal,
+  joinVoice,
+  leaveVoice,
+  setLocalVoice,
+  getSession,
+} from "./session";
 
 export type View = "landing" | "editor";
+export type { RoomExistsInfo, RoomStateFrame, ConnState };
 
 export interface Participant {
   id: string;
@@ -277,6 +300,21 @@ export const TOUR_STEPS: TourStep[] = [
 interface AnonState {
   // view + room
   view: View;
+
+  // real-time sync status (from the relay client)
+  syncState: ConnState;
+  roomState: RoomStateFrame | null;
+  canEdit: boolean;
+
+  // room entry (create/join) dialog + boot flow
+  entryMode: null | "create" | "join";
+  entryCode: string;
+  entryInfo: RoomExistsInfo | null;
+  entryPassword: string;
+  entryTtl: "10m" | "1h" | "24h";
+  booting: boolean;
+  bootError: string;
+
   roomCode: string;
   roomTitle: string;
   roomEmoji: string;
@@ -473,6 +511,15 @@ interface AnonState {
 
   // actions
   setView: (v: View) => void;
+
+  // real room lifecycle
+  openEntryCreate: () => void;
+  openEntryJoin: (code: string) => Promise<void>;
+  closeEntry: () => void;
+  setEntryPassword: (p: string) => void;
+  setEntryTtl: (t: "10m" | "1h" | "24h") => void;
+  submitEntry: () => Promise<void>;
+
   enterRoom: (opts: {
     code?: string;
     title?: string;
@@ -482,6 +529,10 @@ interface AnonState {
     isOwner?: boolean;
   }) => void;
   exitRoom: () => void;
+
+  // voice
+  startVoice: () => Promise<void>;
+  endVoice: () => void;
 
   setDisplayName: (n: string) => void;
   setColor: (c: string) => void;
@@ -564,6 +615,23 @@ const INITIAL_FILES: EditorFile[] = [
 const INITIAL_PARTICIPANTS: Participant[] = [
   { id: "me", name: "You", color: "#4c8dff", isOwner: true, online: true, cursorLine: 1 },
 ];
+
+function sessionActive(): boolean {
+  return getSession() !== null;
+}
+
+function describeRoomError(res: { ok: false; reason: string; status?: number; detail?: string }): string {
+  switch (res.reason) {
+    case "network": return "Could not reach the relay. Check your connection and retry.";
+    case "busy": return "Too many requests from your network. Wait a minute and try again.";
+    case "collision": return "Could not reserve a free room code. Please try again.";
+    case "password": return "That password is not right for this room.";
+    case "gone": return "This room no longer exists.";
+    case "suspended": return "This room was suspended by its owner or the operator.";
+    case "relay": return `The relay refused this request (HTTP ${res.status}${res.detail ? ", " + res.detail : ""}).`;
+    default: return "Something went wrong setting up encryption. Reload and retry.";
+  }
+}
 
 function makeRoomCode(): string {
 
@@ -731,6 +799,19 @@ export const useAnon = create<AnonState>()(
   persist(
     (set, get) => ({
       view: "landing",
+
+      syncState: "dead" as ConnState,
+      roomState: null,
+      canEdit: true,
+
+      entryMode: null,
+      entryCode: "",
+      entryInfo: null,
+      entryPassword: "",
+      entryTtl: "1h",
+      booting: false,
+      bootError: "",
+
       roomCode: "",
       roomTitle: "Untitled session",
       roomEmoji: "✦",
@@ -850,6 +931,120 @@ export const useAnon = create<AnonState>()(
       unreadCount: 0,
 
       setView: (v) => set({ view: v }),
+      // ---------- real room lifecycle ----------
+      openEntryCreate: () =>
+        set({ entryMode: "create", entryCode: "", entryInfo: null, entryPassword: "", entryTtl: "1h", bootError: "" }),
+
+      openEntryJoin: async (code) => {
+        const c = code.trim().toUpperCase();
+        set({ entryMode: "join", entryCode: c, entryInfo: null, entryPassword: "", bootError: "", booting: true });
+        const info = await relayRoomInfo(relayHost(), c);
+        set({ booting: false });
+        if (!info) {
+          set({ entryMode: null, bootError: "" });
+          get().pushNotification({
+            kind: "warning",
+            title: "Relay unreachable",
+            body: "Could not check room " + c + ". Try again in a moment.",
+          });
+          return;
+        }
+        if (!info.exists) {
+          set({
+            entryMode: null,
+            bootError: `Room ${c} does not exist (or it expired). Rooms erase when everyone leaves.`,
+          });
+          return;
+        }
+        if (info.suspended) {
+          set({ entryMode: null, bootError: `Room ${c} is suspended by the server operator.` });
+          return;
+        }
+        set({ entryInfo: info });
+        // Passwordless rooms can be joined immediately.
+        if (!info.hasPassword) {
+          await get().submitEntry();
+        }
+      },
+
+      closeEntry: () =>
+        set({ entryMode: null, entryInfo: null, entryPassword: "", bootError: "", booting: false }),
+
+      setEntryPassword: (p) => set({ entryPassword: p }),
+      setEntryTtl: (t) => set({ entryTtl: t }),
+
+      submitEntry: async () => {
+        const s = get();
+        if (s.booting || !s.entryMode) return;
+        const mode = s.entryMode;
+        set({ booting: true, bootError: "" });
+
+        try {
+          if (mode === "create") {
+            const res = await relayCreateRoom(relayHost(), {
+              password: s.entryPassword,
+              ttl: s.entryTtl,
+            });
+            if (!res.ok) {
+              set({ booting: false, bootError: describeRoomError(res) });
+              return;
+            }
+            storeOwnerToken(res.code, res.owner);
+            startSession({
+              code: res.code,
+              host: res.host,
+              keys: res.keys,
+              owner: res.owner,
+              created: true,
+              hasPassword: !!s.entryPassword,
+              displayName: s.displayName,
+              color: s.color,
+            });
+            get().enterRoom({
+              code: res.code,
+              title: "Untitled session",
+              ttl: s.entryTtl,
+              hasPassword: !!s.entryPassword,
+              isOwner: true,
+            });
+            set({ entryMode: null, entryPassword: "", booting: false });
+            return;
+          }
+
+          // join
+          const code = s.entryCode.trim().toUpperCase();
+          if (!code) {
+            set({ booting: false, bootError: "Enter a room code." });
+            return;
+          }
+          const owner = loadOwnerToken(code);
+          const res = await relayJoinRoom(relayHost(), code, s.entryPassword, owner);
+          if (!res.ok) {
+            set({ booting: false, bootError: describeRoomError(res) });
+            return;
+          }
+          startSession({
+            code: res.code,
+            host: res.host,
+            keys: res.keys,
+            owner: owner || null,
+            created: false,
+            hasPassword: !!(s.entryInfo?.hasPassword),
+            displayName: s.displayName,
+            color: s.color,
+          });
+          get().enterRoom({
+            code: res.code,
+            title: `Room ${res.code}`,
+            hasPassword: !!(s.entryInfo?.hasPassword),
+            isOwner: !!owner,
+          });
+          set({ entryMode: null, entryPassword: "", booting: false });
+        } catch (e) {
+          set({ booting: false, bootError: e instanceof Error ? e.message : String(e) });
+        }
+      },
+
       enterRoom: (opts) =>
         set((s) => {
           const code = opts.code ?? makeRoomCode();
@@ -862,12 +1057,15 @@ export const useAnon = create<AnonState>()(
             (r) => r.code !== code && !["K7Q9M2", "XBP3RJ", "ZNF8HK"].includes(r.code)
           );
           const newRecent: RecentRoom = { code, title, emoji, visitedAt: Date.now(), hasPassword, isOwner };
+          try {
+            window.history.replaceState(null, "", `#${code}`);
+          } catch { /* ignore */ }
           return {
             view: "editor",
             roomCode: code,
             roomTitle: title,
             roomEmoji: emoji,
-            ttl: opts.ttl ?? "24h",
+            ttl: opts.ttl ?? s.ttl,
             hasPassword,
             isOwner,
             participants: [
@@ -878,7 +1076,8 @@ export const useAnon = create<AnonState>()(
             recentRooms: [newRecent, ...filteredRecents].slice(0, 12),
           };
         }),
-      exitRoom: () =>
+      exitRoom: () => {
+        endSession();
         set({
           view: "landing",
           roomCode: "",
@@ -917,7 +1116,13 @@ export const useAnon = create<AnonState>()(
           goalText: "",
           goalSetAt: null,
           findOpen: false,
-        }),
+          syncState: "dead",
+          roomState: null,
+          canEdit: true,
+          booting: false,
+          bootError: "",
+        });
+      },
 
       setDisplayName: (n) => set({ displayName: n }),
       setColor: (c) => set({ color: c }),
@@ -961,13 +1166,21 @@ export const useAnon = create<AnonState>()(
       setCryptoPassword: (p) => set({ cryptoPassword: p }),
       setSlashOpen: (b) => set({ slashOpen: b }),
 
-      addMessage: (m) =>
+      addMessage: (m) => {
+        // Local sends go through the E2EE Yjs doc; remote messages arrive
+        // via the session mirror. If no session is active (shouldn't happen
+        // in a room), keep a local-only fallback so the UI never dead-ends.
+        if (sessionActive()) {
+          pushChat(m.body, m.codeBlock ?? null);
+          return;
+        }
         set((s) => ({
           messages: [
             ...s.messages,
             { ...m, id: "m" + (s.messages.length + 1), ts: Date.now() },
           ],
-        })),
+        }));
+      },
       pinMessage: (id) =>
         set((s) => ({
           messages: s.messages.map((m) =>
@@ -996,22 +1209,38 @@ export const useAnon = create<AnonState>()(
         }),
 
       setActiveFile: (id) => set({ activeFileId: id }),
-      updateFileContent: (id, content) =>
+      updateFileContent: (id, content) => {
+        if (sessionActive()) {
+          updateFileText(id, content);
+          return;
+        }
         set((s) => ({
           files: s.files.map((f) => (f.id === id ? { ...f, content } : f)),
-        })),
-      addFile: (name, language) =>
+        }));
+      },
+      addFile: (name, language) => {
+        if (sessionActive()) {
+          const id = addYFile(name, language);
+          set({ activeFileId: id });
+          return;
+        }
         set((s) => ({
           files: [...s.files, { id: "f" + (s.files.length + 1), name, language, content: "" }],
           activeFileId: "f" + (s.files.length + 1),
-        })),
-      removeFile: (id) =>
+        }));
+      },
+      removeFile: (id) => {
+        if (sessionActive()) {
+          removeYFile(id);
+          return;
+        }
         set((s) => {
           if (s.files.length <= 1) return s;
           const nextFiles = s.files.filter((f) => f.id !== id);
           const nextActive = s.activeFileId === id ? nextFiles[0]?.id || "f1" : s.activeFileId;
           return { files: nextFiles, activeFileId: nextActive };
-        }),
+        });
+      },
 
       // ---------- terminal / runner ----------
       runCode: async () => {
@@ -1371,6 +1600,20 @@ export const useAnon = create<AnonState>()(
         set((s) => ({ sharedFiles: s.sharedFiles.filter((f) => f.id !== id) })),
 
       // ---------- voice chat ----------
+      startVoice: async () => {
+        try {
+          const mesh = joinVoice();
+          if (!mesh) return;
+          await mesh.start();
+          set((s) => ({ voice: { ...s.voice, connected: true } }));
+        } catch (err) {
+          set((s) => ({ voice: { ...s.voice, connected: false } }));
+          throw err;
+        }
+      },
+      endVoice: () => {
+        leaveVoice();
+      },
       toggleVoice: () => set((s) => ({ voiceOpen: !s.voiceOpen })),
       setVoiceConnected: (b) => set((s) => ({ voice: { ...s.voice, connected: b } })),
       setMuted: (b) => set((s) => ({ voice: { ...s.voice, muted: b } })),
@@ -1401,14 +1644,25 @@ export const useAnon = create<AnonState>()(
         })),
 
       // ---------- goal banner ----------
-      setGoal: (text) =>
+      setGoal: (text) => {
+        if (sessionActive()) {
+          sessionSetGoal(text);
+          return;
+        }
         set((s) => ({
           goalText: text.trim(),
           goalAuthor: s.displayName || "you",
           goalColor: s.color,
           goalSetAt: Date.now(),
-        })),
-      clearGoal: () => set({ goalText: "", goalAuthor: "", goalColor: "", goalSetAt: null }),
+        }));
+      },
+      clearGoal: () => {
+        if (sessionActive()) {
+          sessionSetGoal("");
+          return;
+        }
+        set({ goalText: "", goalAuthor: "", goalColor: "", goalSetAt: null });
+      },
 
       // ---------- custom keybindings ----------
       setCustomKey: (actionId, combo) =>

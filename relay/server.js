@@ -49,6 +49,9 @@ const IP_PER_MIN = 600
 const CREATE_PER_MIN = 60
 const AUTH_PER_MIN = 8               // 8 failed-auth attempts per IP per minute
 const RUN_PER_MIN = 20               // 20 code executions per IP per minute
+// Room-code shape (matches the Cloudflare Worker relay): 4-12 upper-case
+// alphanumeric characters; the client generates 6.
+const CODE_RE = /^[A-Z0-9]{4,12}$/
 // Admin password MUST be provided via the ADMIN_PASSWORD environment variable.
 // There is NO default: if unset, the /admin/* API is fully disabled (503).
 // Rotate any previously exposed value immediately — a leaked ADMIN_PASSWORD
@@ -177,6 +180,7 @@ class RoomState {
     this.lastActive = Date.now()
     this.expiryTimer = null
     this.fileChunks = new Map() // fileId -> Map(chunkIndex, Buffer)
+    this.aware = new Map()      // ws -> last sealed T_AWARE payload (ciphertext, replayed to late joiners)
   }
 
   broadcast(buf, except) {
@@ -1222,10 +1226,21 @@ wss.on('connection', (ws, req, room) => {
   room.sockets.add(ws)
   room.touch()
 
+  // Tell existing peers the peer count changed (the joiner already gets a
+  // state frame below, but everyone else's "peers" badge would go stale).
+  room.announceState()
+
   // 1. Replay log backlog
   try {
     for (const blob of room.log) {
       ws.send(frame(T_UPDATE, blob))
+    }
+    // 1b. Replay each peer's latest sealed awareness frame so late joiners
+    // see everyone's presence/cursors immediately (payloads stay encrypted).
+    for (const [peer, payload] of room.aware) {
+      if (peer !== ws && payload) {
+        try { ws.send(frame(T_AWARE, payload)) } catch (e) {}
+      }
     }
     // 2. Announce initial room state
     ws.send(room.stateFrame(ws._att))
@@ -1259,8 +1274,9 @@ wss.on('connection', (ws, req, room) => {
       const type = buf[0]
       const payload = buf.subarray(1)
 
-      // Awareness / Presence (rebroadcast only)
+      // Awareness / Presence (rebroadcast + cache for late joiners)
       if (type === T_AWARE) {
+        room.aware.set(ws, payload)
         return room.broadcast(frame(T_AWARE, payload), ws)
       }
 
@@ -1329,6 +1345,7 @@ wss.on('connection', (ws, req, room) => {
   const cleanup = () => {
     room.sockets.delete(ws)
     room.rate.delete(ws)
+    room.aware.delete(ws)
     if (room.sockets.size === 0) {
       room.scheduleExpiry()
     } else {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Shield, Timer, UserX, Loader2, Bookmark } from "lucide-react";
 import { useAnon } from "@/lib/store";
 import { motion } from "framer-motion";
@@ -14,8 +14,10 @@ function randomCode() {
 }
 
 export function Hero() {
-  const enterRoom = useAnon((s) => s.enterRoom);
+  const openEntryCreate = useAnon((s) => s.openEntryCreate);
+  const openEntryJoin = useAnon((s) => s.openEntryJoin);
   const recentRooms = useAnon((s) => s.recentRooms);
+  const bootError = useAnon((s) => s.bootError);
   const toggleBookmarks = useAnon((s) => s.toggleBookmarks);
   const toggleSecurity = useAnon((s) => s.toggleSecurity);
   const toggleFaq = useAnon((s) => s.toggleFaq);
@@ -23,16 +25,18 @@ export function Hero() {
   const [err, setErr] = useState("");
   const [booting, setBooting] = useState(false);
 
+  // Prefill from #CODE in the URL (share links / rejoin).
+  useEffect(() => {
+    const hash = window.location.hash.replace(/^#/, "").toUpperCase();
+    if (/^[A-Z0-9]{6}$/.test(hash)) setCode(hash);
+  }, []);
+
   function handleCreate() {
     setErr("");
-    setBooting(true);
-    setTimeout(() => {
-      enterRoom({ isOwner: true, ttl: "24h" });
-      setBooting(false);
-    }, 700);
+    openEntryCreate();
   }
 
-  function handleJoin(e: React.FormEvent) {
+  async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
     const c = code.trim().toUpperCase();
     if (!c) {
@@ -45,10 +49,8 @@ export function Hero() {
     }
     setErr("");
     setBooting(true);
-    setTimeout(() => {
-      enterRoom({ code: c, isOwner: false });
-      setBooting(false);
-    }, 700);
+    await openEntryJoin(c);
+    setBooting(false);
   }
 
   return (
@@ -167,6 +169,11 @@ export function Hero() {
                 {err}
               </p>
             )}
+            {!err && bootError && (
+              <p role="alert" className="anon-mono mt-2 anim-shake text-xs" style={{ color: "var(--anon-danger)" }}>
+                {bootError}
+              </p>
+            )}
             {/* recent rooms quick-rejoin */}
             {recentRooms.length > 0 && (
               <div className="mt-4">
@@ -180,7 +187,7 @@ export function Hero() {
                   {recentRooms.slice(0, 4).map((r) => (
                     <button
                       key={r.code}
-                      onClick={() => enterRoom({ code: r.code, title: r.title, emoji: r.emoji, isOwner: r.isOwner, hasPassword: r.hasPassword })}
+                      onClick={() => openEntryJoin(r.code)}
                       className="anon-mono hairline anon-raise px-2 py-1 text-[10px] anon-mut hover:bg-[var(--anon-panel)] hover:anon-fg transition-colors"
                       title={`${r.title} · rejoin ${r.code}`}
                     >

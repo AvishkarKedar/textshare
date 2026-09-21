@@ -26,9 +26,8 @@ export function BookmarksDrawer() {
     : s.recentRooms;
 
   function rejoin(code: string) {
-    s.enterRoom({ code, isOwner: false });
-    toast.success(`Rejoining ${code}`, { description: "Same room, fresh session." });
     s.toggleBookmarks();
+    void s.openEntryJoin(code);
   }
 
   return (

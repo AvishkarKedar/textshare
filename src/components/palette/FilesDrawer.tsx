@@ -16,21 +16,13 @@ import {
   Eye,
 } from "lucide-react";
 import { useAnon, type SharedFile } from "@/lib/store";
+import { uploadSharedFile, downloadSharedFile, deleteSharedFile, FILE_LIMITS, getSession } from "@/lib/session";
 import { toast } from "sonner";
 
 function isTextFile(type: string, name: string): boolean {
   if (type.startsWith("text/")) return true;
   if (/\.(txt|md|js|ts|tsx|jsx|py|c|cpp|rs|go|java|rb|php|sh|json|yaml|yml|toml|csv|html|css|xml|log)$/i.test(name)) return true;
   return false;
-}
-
-function decodeDataUrl(dataUrl: string): string {
-  try {
-    const base64 = dataUrl.split(",")[1] || "";
-    return atob(base64);
-  } catch {
-    return "(could not decode — binary file)";
-  }
 }
 
 function fileIcon(type: string, name: string) {
@@ -51,46 +43,93 @@ export function FilesDrawer() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [previewing, setPreviewing] = useState<SharedFile | null>(null);
+  const [previewText, setPreviewText] = useState<string>("");
+  const [previewIsImage, setPreviewIsImage] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   if (!s.filesOpen) return null;
 
-  function handleFiles(files: FileList | null) {
+  const inRoom = getSession() !== null;
+
+  async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
+    if (!inRoom) {
+      toast.error("Join a room first", { description: "Encrypted file sharing syncs through the room relay." });
+      return;
+    }
     setUploading(true);
-    const promises = Array.from(files).slice(0, 10).map((file) => {
-      return new Promise<SharedFile>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          resolve({
-            id: "sf" + Date.now() + Math.random().toString(36).slice(2, 6),
-            name: file.name,
-            size: file.size,
-            type: file.type || "application/octet-stream",
-            dataUrl: reader.result as string,
-            uploadedAt: Date.now(),
-            uploader: s.displayName || "you",
-            uploaderColor: s.color,
-          });
-        };
-        reader.readAsDataURL(file);
+    setProgress(0);
+    try {
+      for (const file of Array.from(files).slice(0, 10)) {
+        await uploadSharedFile(file, (p) => setProgress(p));
+      }
+      toast.success(`${files.length} file${files.length > 1 ? "s" : ""} encrypted & uploaded`, {
+        description: `AES-GCM-256 · ${FILE_LIMITS.CHUNK_SIZE / 1024}KB chunks · the relay stores ciphertext only`,
       });
-    });
-    Promise.all(promises).then((sharedFiles) => {
-      sharedFiles.forEach((f) => s.addSharedFile(f));
+    } catch (err) {
+      toast.error("Upload failed", { description: err instanceof Error ? err.message : String(err) });
+    } finally {
       setUploading(false);
-      toast.success(`${sharedFiles.length} file${sharedFiles.length > 1 ? "s" : ""} uploaded`, {
-        description: `${sharedFiles.reduce((a, f) => a + f.size, 0)} bytes · encrypted in browser`,
-      });
-    });
+      setProgress(0);
+    }
   }
 
-  function download(f: SharedFile) {
-    const a = document.createElement("a");
-    a.href = f.dataUrl;
-    a.download = f.name;
-    a.click();
-    toast.success(`Downloading ${f.name}`);
+  async function fetchBlob(f: SharedFile): Promise<Blob> {
+    if (f.dataUrl) {
+      const res = await fetch(f.dataUrl);
+      return res.blob();
+    }
+    setBusyId(f.id);
+    try {
+      return await downloadSharedFile(f.id);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function download(f: SharedFile) {
+    try {
+      const blob = await fetchBlob(f);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = f.name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      toast.success(`Decrypted · downloading ${f.name}`);
+    } catch (err) {
+      toast.error("Download failed", { description: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  async function openPreview(f: SharedFile) {
+    try {
+      const blob = await fetchBlob(f);
+      if (f.type.startsWith("image/")) {
+        const url = URL.createObjectURL(blob);
+        setPreviewing({ ...f, dataUrl: url });
+        setPreviewIsImage(true);
+        setPreviewText("");
+      } else {
+        const text = await blob.slice(0, 50_000).text();
+        setPreviewing(f);
+        setPreviewIsImage(false);
+        setPreviewText(text);
+      }
+    } catch (err) {
+      toast.error("Preview failed", { description: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  async function remove(f: SharedFile) {
+    try {
+      await deleteSharedFile(f.id);
+      toast.success("File removed for everyone");
+    } catch (err) {
+      toast.error("Remove failed", { description: err instanceof Error ? err.message : String(err) });
+    }
   }
 
   return (
@@ -139,14 +178,20 @@ export function FilesDrawer() {
             }`}
           >
             {uploading ? (
-              <><Loader2 className="h-6 w-6 animate-spin anon-accent" /><span className="anon-mono text-xs anon-mut">encrypting + uploading…</span></>
+              <>
+                <Loader2 className="h-6 w-6 animate-spin anon-accent" />
+                <span className="anon-mono text-xs anon-mut">encrypting + uploading… {progress}%</span>
+                <div className="h-1 w-40 hairline overflow-hidden bg-[var(--anon-raise)]">
+                  <div className="h-full bg-[var(--anon-accent)] transition-all" style={{ width: `${progress}%` }} />
+                </div>
+              </>
             ) : (
               <>
                 <Upload className={`h-6 w-6 ${dragging ? "anon-accent" : "anon-mut"}`} />
                 <span className="anon-mono text-xs anon-fg">
                   {dragging ? "drop to upload" : "drop files here or click to browse"}
                 </span>
-                <span className="anon-mono text-[10px] anon-dim">max 10 files · 5MB each · encrypted in browser</span>
+                <span className="anon-mono text-[10px] anon-dim">max 10 files · 25MB each · AES-GCM-256, zero-knowledge relay</span>
               </>
             )}
             <input
@@ -183,38 +228,41 @@ export function FilesDrawer() {
                         <span>{new Date(f.uploadedAt).toLocaleTimeString()}</span>
                       </div>
                     </div>
-                    <div className="flex flex-none items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                      {isTextFile(f.type, f.name) && (
-                        <button
-                          onClick={() => setPreviewing(f)}
-                          className="anon-mono inline-flex h-7 w-7 items-center justify-center hairline anon-mut hover:bg-[var(--anon-raise)] hover:anon-fg"
-                          title="Preview content"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </button>
+                    <div className="flex flex-none items-center gap-1">
+                      {busyId === f.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin anon-accent" />
+                      ) : (
+                        <>
+                          {(isTextFile(f.type, f.name) || f.type.startsWith("image/")) && (
+                            <button
+                              onClick={() => void openPreview(f)}
+                              className="anon-mono inline-flex h-7 w-7 items-center justify-center hairline anon-mut hover:bg-[var(--anon-raise)] hover:anon-fg"
+                              title="Decrypt + preview content"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => void download(f)}
+                            className="anon-mono inline-flex h-7 w-7 items-center justify-center hairline anon-mut hover:bg-[var(--anon-raise)] hover:anon-fg"
+                            title="Decrypt + download"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => void remove(f)}
+                            className="anon-mono inline-flex h-7 w-7 items-center justify-center hairline anon-mut hover:bg-[var(--anon-raise)]"
+                            style={{ color: "var(--anon-danger)" }}
+                            title="Remove for everyone"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </>
                       )}
-                      <button
-                        onClick={() => download(f)}
-                        className="anon-mono inline-flex h-7 w-7 items-center justify-center hairline anon-mut hover:bg-[var(--anon-raise)] hover:anon-fg"
-                        title="Download"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          s.removeSharedFile(f.id);
-                          toast.success("File removed");
-                        }}
-                        className="anon-mono inline-flex h-7 w-7 items-center justify-center hairline anon-mut hover:bg-[var(--anon-raise)]"
-                        style={{ color: "var(--anon-danger)" }}
-                        title="Remove"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
                     </div>
                   </div>
-                  {/* image preview */}
-                  {f.type.startsWith("image/") && (
+                  {/* image thumbnail (local cache after preview) */}
+                  {f.type.startsWith("image/") && f.dataUrl && (
                     <div className="mt-2 hairline">
                       <img src={f.dataUrl} alt={f.name} className="max-h-32 w-full object-cover" />
                     </div>
@@ -225,7 +273,7 @@ export function FilesDrawer() {
           </div>
 
           <div className="hairline-t px-3 py-1.5 anon-mono text-[10px] anon-dim flex items-center justify-between">
-            <span>encrypted client-side · chunks via relay</span>
+            <span>AES-GCM-256 in-browser · {FILE_LIMITS.CHUNK_SIZE / 1024}KB chunks · relay stores ciphertext only</span>
             <span>{s.sharedFiles.length} file{s.sharedFiles.length === 1 ? "" : "s"}</span>
           </div>
 
@@ -257,12 +305,22 @@ export function FilesDrawer() {
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                  <pre className="anon-mono anon-scroll flex-1 overflow-auto bg-[var(--anon-bg)] p-4 text-[11px] leading-snug anon-fg">
-                    {decodeDataUrl(previewing.dataUrl).slice(0, 50000)}
-                  </pre>
+                  {previewIsImage ? (
+                    <div className="flex flex-1 items-center justify-center overflow-auto bg-[var(--anon-bg)] p-4">
+                      {previewing.dataUrl ? (
+                        <img src={previewing.dataUrl} alt={previewing.name} className="max-h-[70vh] max-w-full object-contain" />
+                      ) : (
+                        <Loader2 className="h-6 w-6 animate-spin anon-accent" />
+                      )}
+                    </div>
+                  ) : (
+                    <pre className="anon-mono anon-scroll flex-1 overflow-auto bg-[var(--anon-bg)] p-4 text-[11px] leading-snug anon-fg">
+                      {previewText || "(decrypting…)"}
+                    </pre>
+                  )}
                   <div className="hairline-t px-3 py-1.5 anon-mono text-[10px] anon-dim flex items-center justify-between">
                     <span>{previewing.type || "text/plain"} · uploaded by {previewing.uploader}</span>
-                    <span>{decodeDataUrl(previewing.dataUrl).length} chars</span>
+                    <span>{previewText.length} chars</span>
                   </div>
                 </motion.div>
               </motion.div>

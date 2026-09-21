@@ -8,6 +8,7 @@ import { SlashCommandPopup } from "@/components/palette/SlashCommandPopup";
 import type { SlashCommand } from "@/lib/store";
 import { tokenizeLine, TOKEN_COLORS } from "@/lib/highlight";
 import { detectLanguage, langToExt } from "@/lib/detect";
+import { sendCursor } from "@/lib/session";
 import { toast } from "sonner";
 
 function highlightLine(line: string, language: string) {
@@ -183,12 +184,9 @@ export function EditorStage() {
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const val = e.target.value;
+    // updateFileContent routes through the E2EE Yjs doc when a session is
+    // live (encrypted delta → relay → peers); local-only otherwise.
     s.updateFileContent(file.id, val);
-    // broadcast edit to sync service
-    try {
-      const sock = (window as unknown as { __anonSocket?: { emit: (ev: string, data: unknown) => void } }).__anonSocket;
-      sock?.emit("edit", { fileId: file.id, content: val });
-    } catch { /* offline ok */ }
     // detect slash command: a "/" at start of a line or after whitespace
     const ta = e.target;
     const upto = ta.value.substring(0, ta.selectionStart);
@@ -210,11 +208,8 @@ export function EditorStage() {
     const upto = ta.value.substring(0, ta.selectionStart);
     const line = upto.split("\n").length;
     setCursorLine(line);
-    // broadcast cursor to sync service
-    try {
-      const sock = (window as unknown as { __anonSocket?: { emit: (ev: string, data: unknown) => void } }).__anonSocket;
-      sock?.emit("cursor", { line });
-    } catch { /* offline ok */ }
+    // broadcast cursor via encrypted awareness presence
+    sendCursor(line);
     // close slash popup on selection change if not actively typing a command
     const lineStart = upto.lastIndexOf("\n") + 1;
     const lineText = upto.substring(lineStart);

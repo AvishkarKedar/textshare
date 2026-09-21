@@ -19,25 +19,18 @@ export function ChatSidebar() {
 
   function send() {
     if (!draft.trim()) return;
-    if (replyParent) {
-      s.replyTo(replyParent, draft);
-      setReplyParent(null);
-    } else {
-      s.addMessage({
-        authorId: "me",
-        authorName: s.displayName || "you",
-        color: s.color,
-        body: draft,
-        pinned: false,
-        codeBlock: null,
-        threadParent: null,
-      });
-      // broadcast to sync service
-      try {
-        const sock = (window as unknown as { __anonSocket?: { emit: (ev: string, data: unknown) => void } }).__anonSocket;
-        sock?.emit("chat", { body: draft, codeBlock: null });
-      } catch { /* offline ok */ }
-    }
+    // addMessage pushes into the E2EE Yjs chat array when a session is
+    // live — peers receive it encrypted via the relay; local fallback keeps
+    // the UI usable otherwise.
+    s.addMessage({
+      authorId: "me",
+      authorName: s.displayName || "you",
+      color: s.color,
+      body: draft,
+      pinned: false,
+      codeBlock: null,
+      threadParent: null,
+    });
     setDraft("");
   }
 
@@ -59,11 +52,6 @@ export function ChatSidebar() {
         codeBlock: code,
         threadParent: null,
       });
-      // broadcast code block to sync service
-      try {
-        const sock = (window as unknown as { __anonSocket?: { emit: (ev: string, data: unknown) => void } }).__anonSocket;
-        sock?.emit("chat", { body: "shared a snippet", codeBlock: code });
-      } catch { /* offline ok */ }
       setDraft("");
       return;
     }
