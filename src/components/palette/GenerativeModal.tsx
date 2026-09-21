@@ -54,7 +54,7 @@ export function GenerativeModal() {
               <Wand2 className="h-4 w-4 anon-accent" /> Generative UI
             </h2>
             <span className="anon-mono text-[10px] anon-dim hidden sm:inline">
-              describe a UI → get themed HTML (template or LLM)
+              describe a UI → get themed HTML (template or AI)
             </span>
             <button onClick={() => s.toggleGenerative()} className="anon-mut hover:anon-fg">
               <X className="h-4 w-4" />
@@ -89,7 +89,7 @@ export function GenerativeModal() {
                 onClick={() => s.generateWithLLM()}
                 disabled={!s.generativePrompt.trim() || s.generating}
                 className="anon-mono inline-flex h-9 items-center gap-1.5 bg-[var(--anon-accent)] px-4 text-xs text-[var(--anon-accent-fg)] disabled:opacity-50 hover:brightness-110"
-                title="LLM generation — arbitrary prompts"
+                title="Generate on the server — real LLM when Workers AI is bound, template otherwise"
               >
                 {s.generating ? (
                   <><Loader2 className="h-3.5 w-3.5 animate-spin" /> generating…</>
@@ -122,14 +122,14 @@ export function GenerativeModal() {
                 <Sparkles className="h-8 w-8 anon-dim" />
                 <p className="anon-mono text-xs">no generations yet</p>
                 <p className="anon-mono text-[10px] anon-dim text-center max-w-sm">
-                  type a prompt above or pick a preset. <span className="anon-accent">template</span> = instant keyword match (login/dashboard/form/card/nav). <span className="anon-accent">generate</span> = real LLM via z-ai-web-dev-sdk.
+                  type a prompt above or pick a preset. <span className="anon-accent">template</span> = instant keyword match (login/dashboard/form/card/nav). <span className="anon-accent">generate</span> = real LLM via Cloudflare Workers AI (needs the AI binding; honestly falls back to a labeled template).
                 </p>
               </div>
             )}
             {s.generating && (
               <div className="flex h-full flex-col items-center justify-center gap-3">
                 <Loader2 className="h-8 w-8 animate-spin anon-accent" />
-                <p className="anon-mono text-xs anon-mut">LLM is writing your UI…</p>
+                <p className="anon-mono text-xs anon-mut">generating your UI…</p>
                 <p className="anon-mono text-[10px] anon-dim">typically 3-8 seconds</p>
               </div>
             )}
@@ -141,13 +141,13 @@ export function GenerativeModal() {
                   </span>
                   <span className="anon-mono truncate text-[11px] anon-fg">{gen.prompt}</span>
                   <span
-                    className={`anon-mono ml-auto text-[9px] px-1.5 py-0.5 ${gen.source === "llm" ? "" : ""}`}
+                    className="anon-mono ml-auto text-[9px] px-1.5 py-0.5"
                     style={{
-                      color: gen.source === "llm" ? "var(--anon-accent)" : "var(--anon-mut)",
+                      color: gen.source === "ai" ? "var(--anon-accent)" : "var(--anon-mut)",
                       border: "1px solid var(--anon-line)",
                     }}
                   >
-                    {gen.source === "llm" ? "LLM" : "template"}
+                    {gen.source === "ai" ? "AI" : "template"}{gen.model ? ` · ${gen.model}` : ""}
                   </span>
                   <span className="anon-mono text-[9px] anon-dim">
                     {new Date(gen.ts).toLocaleTimeString()}
@@ -193,7 +193,7 @@ export function GenerativeModal() {
           </div>
 
           <div className="hairline-t px-3 py-1.5 anon-mono text-[10px] anon-dim flex items-center justify-between">
-            <span>templates themed to match anonshare · LLM via z-ai-web-dev-sdk</span>
+            <span>templates themed to match anonshare · AI via Cloudflare Workers AI binding</span>
             <span>{s.generatedUis.length} generated</span>
           </div>
         </motion.div>

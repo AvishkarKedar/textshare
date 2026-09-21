@@ -137,7 +137,8 @@ export interface GeneratedUi {
   prompt: string;
   html: string;
   ts: number;
-  source: "template" | "llm";
+  source: "template" | "ai";
+  model?: string;
 }
 
 export interface CryptoResult {
@@ -222,7 +223,7 @@ export const SHORTCUTS: ShortcutDef[] = [
 export const SLASH_COMMANDS: SlashCommand[] = [
   { id: "faq", trigger: "/faq", label: "FAQs & Help", hint: "honest answers to all questions", icon: "❓" },
   { id: "run", trigger: "/run", label: "Run code", hint: "execute the active file", icon: "▶" },
-  { id: "test", trigger: "/test", label: "Run tests", hint: "parse test()/assert patterns", icon: "✓" },
+  { id: "test", trigger: "/test", label: "Run tests", hint: "execute describe()/test() in the sandbox", icon: "✓" },
   { id: "zen", trigger: "/zen", label: "Toggle zen mode", hint: "distraction-free editor", icon: "◗" },
   { id: "clear", trigger: "/clear", label: "Clear editor", hint: "wipe the active file", icon: "✕" },
   { id: "goal", trigger: "/goal", label: "Set a goal", hint: "pin a session objective", icon: "◎" },
@@ -286,7 +287,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: "run",
     title: "⌘↵ runs your code",
-    body: "Press ⌘↵ (or click Run) to execute the active file. JavaScript runs in a sandboxed Function; Python uses a lite interpreter. Output appears in the terminal drawer.",
+    body: "Press ⌘↵ (or click Run) to execute the active file. Code runs in a bubblewrap sandbox on the relay — Python, JS, C, C++, Java, Rust, Go, bash. Output appears in the terminal drawer.",
     kbd: "⌘ ↵",
     action: "run",
   },
@@ -618,6 +619,102 @@ const INITIAL_PARTICIPANTS: Participant[] = [
 
 function sessionActive(): boolean {
   return getSession() !== null;
+}
+
+/* ---------------------------------------------------- real test harness */
+
+/**
+ * Wraps user code in a REAL test harness that executes describe()/test()
+ * inside the sandbox runner. Every pass/fail, assertion count and duration
+ * comes from actual execution — nothing is simulated.
+ */
+function buildTestHarness(source: string, lang: string): string {
+  if (lang.startsWith("py")) {
+    return `import json, time
+
+__results = {"suites": []}
+__cur = {"name": "default", "cases": []}
+__results["suites"].append(__cur)
+__registered = set()
+
+def describe(name, fn=None):
+    global __cur
+    __cur = {"name": name, "cases": []}
+    __results["suites"].append(__cur)
+    if fn:
+        fn()
+
+def test(name, fn):
+    __registered.add(id(fn))
+    t0 = time.time()
+    entry = {"name": name, "status": "pass", "assertions": 0, "error": None, "durationMs": 0}
+    __cur["cases"].append(entry)
+    try:
+        fn()
+        entry["status"] = "pass"
+    except Exception as e:
+        entry["status"] = "fail"
+        entry["error"] = type(e).__name__ + ": " + str(e)
+    entry["durationMs"] = round((time.time() - t0) * 1000)
+
+${source}
+
+# auto-collect pytest-style module-level test_* functions not already run
+for __n in [n for n in list(globals()) if n.startswith("test_") and callable(globals()[n])]:
+    __fn = globals()[__n]
+    if id(__fn) not in __registered:
+        test(__n, __fn)
+
+print("__ANON_RESULTS__" + json.dumps(__results))
+`;
+  }
+
+  // JavaScript — a minimal expect() plus describe/test that really run.
+  return `const __results = { suites: [] };
+let __cur = { name: "default", cases: [] };
+__results.suites.push(__cur);
+
+function __expect(entry, actual) {
+  return {
+    toBe: (exp) => { entry.assertions++; if (actual !== exp) throw new Error("expected " + JSON.stringify(exp) + ", got " + JSON.stringify(actual)); },
+    toEqual: (exp) => { entry.assertions++; if (JSON.stringify(actual) !== JSON.stringify(exp)) throw new Error("expected " + JSON.stringify(exp) + ", got " + JSON.stringify(actual)); },
+    toBeTruthy: () => { entry.assertions++; if (!actual) throw new Error("expected truthy, got " + JSON.stringify(actual)); },
+    toBeFalsy: () => { entry.assertions++; if (actual) throw new Error("expected falsy, got " + JSON.stringify(actual)); },
+    toContain: (n) => { entry.assertions++; const has = typeof actual === "string" ? actual.includes(n) : Array.isArray(actual) && actual.includes(n); if (!has) throw new Error("expected to contain " + JSON.stringify(n)); },
+    toHaveLength: (n) => { entry.assertions++; if ((actual && actual.length) !== n) throw new Error("expected length " + n + ", got " + (actual && actual.length)); },
+    toBeCloseTo: (n, digits = 2) => { entry.assertions++; if (Math.abs(actual - n) > Math.pow(10, -digits) / 2) throw new Error("expected ~" + n + ", got " + actual); },
+    toThrow: () => { entry.assertions++; let threw = false; try { actual(); } catch (e) { threw = true; } if (!threw) throw new Error("expected function to throw"); },
+  };
+}
+
+async function describe(name, fn) {
+  __cur = { name, cases: [] };
+  __results.suites.push(__cur);
+  if (fn) await fn();
+}
+
+async function test(name, fn) {
+  const t0 = Date.now();
+  const entry = { name, status: "pass", assertions: 0, error: null, durationMs: 0 };
+  __cur.cases.push(entry);
+  try {
+    await fn((a) => __expect(entry, a));
+    entry.status = "pass";
+  } catch (e) {
+    entry.status = "fail";
+    entry.error = String((e && e.message) || e);
+  }
+  entry.durationMs = Date.now() - t0;
+}
+
+function __report() {
+  console.log("__ANON_RESULTS__" + JSON.stringify(__results));
+}
+
+(async () => {
+${source}
+})().then(() => __report(), (e) => { console.error(String((e && e.stack) || e)); __report(); });
+`;
 }
 
 function describeRoomError(res: { ok: false; reason: string; status?: number; detail?: string }): string {
@@ -1317,7 +1414,7 @@ export const useAnon = create<AnonState>()(
       setWhiteboardColor: (c) => set({ whiteboardColor: c }),
       setWhiteboardSize: (n) => set({ whiteboardSize: n }),
 
-      // ---------- test runner ----------
+      // ---------- test runner (REAL execution via the sandbox runner) ----------
       runTests: async () => {
         const s = get();
         if (s.testing) return;
@@ -1325,62 +1422,110 @@ export const useAnon = create<AnonState>()(
         if (!file) return;
         set({ testing: true, testPanelOpen: true });
         const startTs = Date.now();
-        // parse test()/describe() patterns from source
-        const suites: TestSuite[] = [];
-        let curSuite: TestSuite | null = null;
-        let suiteIdx = 0;
-        let caseIdx = 0;
-        const lines = file.content.split("\n");
-        for (const line of lines) {
-          const descM = line.match(/^\s*describe\(["'`](.+?)["'`]/);
-          if (descM) {
-            curSuite = { id: `suite${suiteIdx++}`, name: descM[1], cases: [] };
-            suites.push(curSuite);
-            continue;
+        try {
+          const lang = (file.language || "javascript").toLowerCase();
+          if (lang !== "javascript" && lang !== "js" && lang !== "python" && lang !== "py") {
+            const result: TestRunResult = {
+              suites: [],
+              total: 0, passed: 0, failed: 0, skipped: 0,
+              durationMs: Date.now() - startTs,
+              ranAt: startTs,
+            };
+            set({ testResult: result, testing: false });
+            get().pushNotification({
+              kind: "info",
+              title: "Test runner unavailable for " + lang,
+              body: "Real test execution currently supports JavaScript and Python files.",
+            });
+            return;
           }
-          const testM = line.match(/^\s*test\(["'`](.+?)["'`]/);
-          if (testM && curSuite) {
-            curSuite.cases.push({
-              id: `case${caseIdx++}`,
-              name: testM[1],
-              status: "pending",
-              assertions: 0,
+
+          // Build a real test harness: describe()/test() actually execute in
+          // the sandbox runner; results are reported on stdout as JSON.
+          const wrapped = buildTestHarness(file.content, lang);
+          const res = await fetch("/api/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              language: lang.startsWith("py") ? "python" : "javascript",
+              source: wrapped,
+            }),
+          });
+          const data = await res.json();
+          const stdout: string = data.stdout || "";
+          const marker = stdout.indexOf("__ANON_RESULTS__");
+          if (marker === -1) {
+            // The file crashed before reporting — surface the real error.
+            const stderr: string = data.stderr || "";
+            const result: TestRunResult = {
+              suites: [{
+                id: "suite0",
+                name: "runtime",
+                cases: [{
+                  id: "case0",
+                  name: "harness",
+                  status: "fail",
+                  error: (stderr || stdout || "no output").split("\n").slice(0, 6).join("\n").slice(0, 400),
+                  assertions: 0,
+                }],
+              }],
+              total: 1, passed: 0, failed: 1, skipped: 0,
+              durationMs: Date.now() - startTs,
+              ranAt: startTs,
+            };
+            set({ testResult: result, testing: false });
+            get().pushNotification({ kind: "warning", title: "Test run crashed", body: "See the test panel for the error." });
+            return;
+          }
+
+          const json = stdout.slice(marker + "__ANON_RESULTS__".length).split("\n")[0];
+          const raw = JSON.parse(json) as {
+            suites: { name: string; cases: { name: string; status: string; assertions: number; error: string | null; durationMs: number }[] }[];
+          };
+          const suites: TestSuite[] = raw.suites.map((su, i) => ({
+            id: `suite${i}`,
+            name: su.name,
+            cases: su.cases.map((tc, j) => ({
+              id: `case${i}-${j}`,
+              name: tc.name,
+              status: (tc.status === "pass" ? "pass" : tc.status === "fail" ? "fail" : "skip") as "pass" | "fail" | "skip",
+              durationMs: tc.durationMs,
+              error: tc.error ?? undefined,
+              assertions: tc.assertions,
+            })),
+          }));
+          const passed = suites.reduce((acc, su) => acc + su.cases.filter((c) => c.status === "pass").length, 0);
+          const failed = suites.reduce((acc, su) => acc + su.cases.filter((c) => c.status === "fail").length, 0);
+          const total = suites.reduce((acc, su) => acc + su.cases.length, 0);
+          const result: TestRunResult = {
+            suites,
+            total,
+            passed,
+            failed,
+            skipped: 0,
+            durationMs: Date.now() - startTs,
+            ranAt: startTs,
+          };
+          set({ testResult: result, testing: false, testExpanded: {} });
+          if (total === 0) {
+            get().pushNotification({
+              kind: "info",
+              title: "No tests found",
+              body: "Wrap code in describe(\"…\", () => { test(\"…\", () => { … }) }) to make it discoverable.",
+            });
+          } else if (failed > 0) {
+            get().pushNotification({
+              kind: "warning",
+              title: `${failed} test${failed > 1 ? "s" : ""} failed`,
+              body: `${passed} passed, ${failed} failed in ${file.name} (real sandbox execution)`,
             });
           }
-        }
-        // simulate running each case
-        await new Promise((r) => setTimeout(r, 200));
-        for (const suite of suites) {
-          for (const tc of suite.cases) {
-            await new Promise((r) => setTimeout(r, 60 + Math.random() * 90));
-            // deterministic pseudo-result: every 3rd test fails
-            const fail = tc.name.includes("wrong") || tc.name.includes("throws");
-            tc.status = fail ? "fail" : "pass";
-            tc.durationMs = Math.floor(50 + Math.random() * 80);
-            tc.assertions = fail ? 0 : 1 + Math.floor(Math.random() * 3);
-            if (fail) {
-              tc.error = `AssertionError: expected function to throw, got ${tc.assertions === 0 ? "no throw" : "success"}`;
-            }
-          }
-        }
-        const passed = suites.reduce((acc, su) => acc + su.cases.filter((c) => c.status === "pass").length, 0);
-        const failed = suites.reduce((acc, su) => acc + su.cases.filter((c) => c.status === "fail").length, 0);
-        const total = suites.reduce((acc, su) => acc + su.cases.length, 0);
-        const result: TestRunResult = {
-          suites,
-          total,
-          passed,
-          failed,
-          skipped: 0,
-          durationMs: Date.now() - startTs,
-          ranAt: startTs,
-        };
-        set({ testResult: result, testing: false, testExpanded: {} });
-        if (failed > 0) {
+        } catch (e) {
+          set({ testing: false });
           get().pushNotification({
             kind: "warning",
-            title: `${failed} test${failed > 1 ? "s" : ""} failed`,
-            body: `${passed} passed, ${failed} failed in ${file.name}`,
+            title: "Test run failed to reach the runner",
+            body: e instanceof Error ? e.message : String(e),
           });
         }
       },
@@ -1452,19 +1597,21 @@ export const useAnon = create<AnonState>()(
           });
           const data = await res.json();
           if (data.ok && data.html) {
+            const isAi = typeof data.model === "string" && !data.model.includes("template");
             const gen: GeneratedUi = {
               id: "gen" + Date.now(),
               prompt,
               html: data.html,
               ts: Date.now(),
-              source: "llm",
+              source: isAi ? "ai" : "template",
+              model: data.model,
             };
             set({ generatedUis: [gen, ...s.generatedUis], generating: false });
           } else {
             set({ generating: false });
             get().pushNotification({
               kind: "warning",
-              title: "LLM generation failed",
+              title: "Generation failed",
               body: data.error || "unknown error",
             });
           }
@@ -1472,7 +1619,7 @@ export const useAnon = create<AnonState>()(
           set({ generating: false });
           get().pushNotification({
             kind: "warning",
-            title: "LLM generation failed",
+            title: "Generation failed",
             body: e instanceof Error ? e.message : String(e),
           });
         }

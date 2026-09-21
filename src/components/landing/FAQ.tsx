@@ -20,7 +20,7 @@ const FAQS = [
   },
   {
     q: "Is the code-runner sandboxed?",
-    a: "On the operator's hosted relay, code runs inside a Bubblewrap-sealed Linux namespace with no network, 256 MB RAM cap, and tmpfs only. If you self-host the open-source Worker, the runner falls back to the public emkc.org Piston API — be aware of that before pasting secrets.",
+    a: "On the operator's hosted relay, code runs inside a Bubblewrap-sealed Linux namespace with no network, a real memory cap, and tmpfs only. Eight languages run natively (Python, JS, C, C++, Java, Rust, Go, bash) — no external code-execution service is involved. Don't paste secrets regardless.",
   },
   {
     q: "Can the owner lock or delete the room?",

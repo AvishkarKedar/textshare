@@ -18,11 +18,27 @@ interface StatusData {
   ok: boolean;
   service: string;
   version: string;
-  uptimeHuman: string;
-  relay: { url: string; status: string };
+  timestamp: string;
+  relay: {
+    host: string;
+    fallback: string;
+    status: string;
+    probed: boolean;
+    latencyMs: number;
+    runtime: string;
+    websocketPath: string;
+    uptime: number;
+    uptimeHuman: string;
+    activeRooms: number;
+    connectedPeers: number;
+    storedFileChunks: number;
+    sandbox: string;
+    memory: { rssMb?: number; heapUsedMb?: number } | null;
+    runnerConcurrency: { activeRuns?: number; queuedRuns?: number; maxConcurrent?: number } | null;
+  };
   crypto: { algorithm: string; iterations: number; cipher: string };
-  rooms: { maxConnections: number; ttlOptions: string[]; note: string };
-  runner: { languages: number; sandbox: string; maxRamMb: number };
+  rooms: { maxConnections: number; ttlOptions: string[]; activeNow: number };
+  runner: { languages: number; supported: string[]; sandbox: string; maxRamMb: number };
   limits: { ipPerMin: number; createPerMin: number; authAttemptsPerMin: number };
 }
 
@@ -69,8 +85,13 @@ export function StatusModal() {
               <Activity className="h-4 w-4 anon-accent" /> System status
             </h2>
             <div className="anon-mono inline-flex items-center gap-1.5 text-[10px]">
-              <span className="h-1.5 w-1.5 rounded-full anim-beat" style={{ background: "var(--anon-ok)" }} />
-              <span style={{ color: "var(--anon-ok)" }}>operational</span>
+              <span
+                className="h-1.5 w-1.5 rounded-full anim-beat"
+                style={{ background: data ? (data.relay.status === "operational" ? "var(--anon-ok)" : "var(--anon-danger)") : "var(--anon-warn)" }}
+              />
+              <span style={{ color: data ? (data.relay.status === "operational" ? "var(--anon-ok)" : "var(--anon-danger)") : "var(--anon-warn)" }}>
+                {data ? data.relay.status : "probing…"}
+              </span>
             </div>
             <button onClick={() => s.toggleStatus()} className="anon-mut hover:anon-fg">
               <X className="h-4 w-4" />
@@ -90,22 +111,53 @@ export function StatusModal() {
               <>
                 {/* service header */}
                 <div className="hairline bg-[var(--anon-bg)] p-4 flex items-center gap-3">
-                  <span className="inline-flex h-10 w-10 items-center justify-center bg-[var(--anon-ok)]">
+                  <span className="inline-flex h-10 w-10 items-center justify-center" style={{ background: data.relay.status === "operational" ? "var(--anon-ok)" : "var(--anon-danger)" }}>
                     <CheckCircle2 className="h-5 w-5 text-black" />
                   </span>
                   <div className="flex-1">
                     <div className="anon-sans text-base font-semibold anon-fg">{data.service}</div>
-                    <div className="anon-mono text-[11px] anon-dim">v{data.version} · up {data.uptimeHuman}</div>
+                    <div className="anon-mono text-[11px] anon-dim">
+                      v{data.version} · relay up {data.relay.uptimeHuman} · {data.relay.latencyMs}ms probe
+                    </div>
                   </div>
+                </div>
+
+                {/* live relay metrics */}
+                <div className="hairline bg-[var(--anon-bg)] p-4">
+                  <div className="anon-mono mb-2 text-[10px] uppercase tracking-wider anon-dim">live relay metrics (probed now)</div>
+                  <div className="grid grid-cols-4 gap-3">
+                    <div>
+                      <div className="anon-mono text-lg anon-fg">{data.relay.activeRooms}</div>
+                      <div className="anon-mono text-[10px] anon-dim">active rooms</div>
+                    </div>
+                    <div>
+                      <div className="anon-mono text-lg anon-fg">{data.relay.connectedPeers}</div>
+                      <div className="anon-mono text-[10px] anon-dim">peers online</div>
+                    </div>
+                    <div>
+                      <div className="anon-mono text-lg anon-fg">{data.relay.storedFileChunks}</div>
+                      <div className="anon-mono text-[10px] anon-dim">file chunks</div>
+                    </div>
+                    <div>
+                      <div className="anon-mono text-lg anon-fg">{data.relay.sandbox === "bwrap-hardened" || data.relay.sandbox === "bubblewrap-hardened" ? "yes" : "std"}</div>
+                      <div className="anon-mono text-[10px] anon-dim">sandbox</div>
+                    </div>
+                  </div>
+                  {data.relay.memory && (
+                    <div className="anon-mono mt-2 text-[10px] anon-dim">
+                      relay memory: {data.relay.memory.rssMb ?? "?"}MB rss · {data.relay.memory.heapUsedMb ?? "?"}MB heap
+                      {data.relay.runnerConcurrency ? ` · runs ${data.relay.runnerConcurrency.activeRuns ?? 0}/${data.relay.runnerConcurrency.maxConcurrent ?? "?"}` : ""}
+                    </div>
+                  )}
                 </div>
 
                 {/* grid of real config cards */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  <MetricCard icon={Server} label="relay" value={data.relay.url} sub={data.relay.status} color="var(--anon-accent)" />
+                  <MetricCard icon={Server} label="relay" value={data.relay.host} sub={`${data.relay.status} · ${data.relay.runtime}`} color={data.relay.status === "operational" ? "var(--anon-ok)" : "var(--anon-danger)"} />
                   <MetricCard icon={Shield} label="cipher" value={data.crypto.cipher} sub={`${(data.crypto.iterations / 1000).toFixed(0)}k PBKDF2 rounds`} color="var(--anon-ok)" />
                   <MetricCard icon={Activity} label="max peers" value={`${data.rooms.maxConnections}`} sub={`TTL: ${data.rooms.ttlOptions.join(" / ")}`} color="var(--anon-accent)" />
-                  <MetricCard icon={Zap} label="runner" value={`${data.runner.languages} langs`} sub={`${data.runner.maxRamMb}MB cap`} color="var(--anon-warn)" />
-                  <MetricCard icon={Globe} label="sync" value="socket.io" sub="port 3003 · websocket" color="var(--anon-accent)" />
+                  <MetricCard icon={Zap} label="runner" value={`${data.runner.languages} langs`} sub={`${data.runner.supported.slice(0, 4).join(", ")}…`} color="var(--anon-warn)" />
+                  <MetricCard icon={Globe} label="sync" value="websocket" sub="binary frames · AES-GCM sealed" color="var(--anon-accent)" />
                   <MetricCard icon={Shield} label="auth storage" value="SHA-256" sub="relay never sees raw auth" color="var(--anon-ok)" />
                 </div>
 
@@ -132,8 +184,9 @@ export function StatusModal() {
                 <div className="hairline bg-[var(--anon-bg)] p-3 flex items-start gap-2">
                   <Shield className="h-3.5 w-3.5 flex-none mt-0.5" style={{ color: "var(--anon-ok)" }} />
                   <p className="anon-mono text-[10px] leading-relaxed anon-mut">
-                    runner sandbox: <span className="anon-fg">{data.runner.sandbox}</span>. self-hosted relay runs a
-                    real bubblewrap namespace; the public worker falls back to emkc.org Piston.
+                    runner sandbox: <span className="anon-fg">{data.runner.sandbox}</span> — bubblewrap namespace
+                    (--unshare-all --unshare-net) with prlimit caps, executed only on the self-hosted relay.
+                    No external code-execution API is used.
                   </p>
                 </div>
               </>
