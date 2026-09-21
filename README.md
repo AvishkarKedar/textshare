@@ -9,8 +9,9 @@ characters, write together. Nothing is stored once everyone leaves.
 
 - No account, no email, no cookies, no analytics.
 - AES-GCM encryption in the browser. The relay only ever forwards sealed bytes.
-- Real-time multi-cursor editing with presence, chat, and syntax highlighting for 15 languages.
-- Works offline and re-syncs when you come back.
+- Real-time multi-cursor editing with presence, chat, and encrypted file sharing.
+- Sandboxed code runner: Python, JavaScript, C, C++, Java, Rust, Go, bash — executed on the self-hosted relay inside a bubblewrap namespace, never on a third-party API.
+- Reconnects and re-syncs automatically when the link drops.
 
 > The GitHub repository and the relay Worker are still named `textshare`.
 > Renaming a running Worker would break every invite link that has already been
@@ -61,9 +62,11 @@ Three independent pieces:
 
 | Piece | What it is | Where it runs |
 |---|---|---|
-| The app | Static HTML, CSS and one ES module | Cloudflare Pages, `code.avishkark.in` |
-| The relay | A Cloudflare Worker with one Durable Object per room | `textshare-sync.avishkarkedar.workers.dev` |
-| The document | A Yjs CRDT, encrypted client-side | Your browser, and IndexedDB |
+| The app | Next.js static export (this `src/` app) | Cloudflare Pages, `code.avishkark.in` |
+| The relay | Node.js binary-WebSocket relay (`relay/server.js`), ws + bubblewrap sandbox | Oracle VPS, `relay.avishkark.in` |
+| The fallback relay | Cloudflare Worker clone of the same protocol | `textshare-sync.avishkarkedar.workers.dev` |
+| The document | A Yjs CRDT, encrypted client-side | Your browser |
+| The functions | Pages Functions (`functions/api/*`): runner proxy, status probe, generative UI, crypto explainer | Cloudflare Pages |
 
 Editing is a CRDT, so there is no server-side merge and no lock contention. Two
 people typing on the same line converge without either losing a keystroke. The
@@ -153,12 +156,46 @@ this does *not* protect against.
 ## Running it yourself
 
 ```bash
-# Install dependencies
 npm install
+npm run relay        # starts the sync relay + code runner on :8787
+npm run dev           # Next.js app on :3000 (auto-targets localhost:8787)
+```
 
-# Start local Next.js dev server
-npm run dev
+The relay needs Node 18+. The code runner uses bubblewrap + prlimit when
+available (`/usr/bin/bwrap`, `/usr/bin/prlimit`); without them it runs without
+the namespace sandbox — only deploy it that way on machines you trust.
 
+**Required environment variables (relay):**
+
+| Variable | Purpose |
+|---|---|
+| `ADMIN_PASSWORD` | Enables `/admin/*` moderation API. **There is no default — if unset, the admin API is fully disabled (503).** Never commit it. |
+| `PORT` / `HOST` | Listen address (default `8787` / `0.0.0.0`). |
+| `CHUNK_STORAGE_DIR` | Where encrypted file chunks are spilled (default tmpdir). |
+
+**Optional (Pages project):** attach the `AI` binding (Cloudflare Pages →
+Settings → Bindings → Workers AI) to get real LLM output in the Generative UI
+(`@cf/meta/llama-3.1-8b-instruct`). Without it, the endpoint returns an
+honestly-labeled deterministic template.
+
+---
+
+## Deploying (operator checklist)
+
+After pulling changes:
+
+1. **Relay (VPS)** — `git pull && systemctl restart anonshare-relay` (or however
+   `relay/server.js` is supervised). The runner fixes (JS/Go/Rust sandbox
+   limits, admin hardening) only take effect after this.
+2. **App + functions (Cloudflare Pages)** — redeploy the Pages project (usually
+   automatic on push to `main`). Picks up the client, status API, test runner,
+   and file-sharing changes.
+3. **Rotate `ADMIN_PASSWORD`** if it was ever exposed (it was, historically, in
+   this repo's history — set a fresh strong value in the relay's environment).
+
+---
+
+```bash
 # Run unit tests
 npm test
 
@@ -182,8 +219,10 @@ on the same hostname, which will serve raw JSON where your site should be.
 
 ## Limits
 
-Per room: 30 connections, 120 messages/second, 256 KB per frame, 5 MB of log
-before compaction. Per IP: 120 room lookups per minute.
+Per room (VPS relay): 120 connections, 200 messages/second, 512 KB per frame,
+10 MB of log before compaction. Per IP: 600 requests/min, 60 room creates/min,
+8 auth attempts/min, 20 code runs/min. The Cloudflare Worker fallback uses
+tighter limits (60 connections, 5 MB log, 300 req/min).
 
 ---
 
