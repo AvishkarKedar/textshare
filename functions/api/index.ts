@@ -4,7 +4,7 @@ export async function onRequestGet(): Promise<Response> {
   return Response.json({
     ok: true,
     service: "anonshare-api",
-    version: "5.1.0",
+    version: "5.2.0",
     endpoints: [
       "/api/crypto",
       "/api/generate",

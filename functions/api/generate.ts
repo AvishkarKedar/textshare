@@ -8,9 +8,46 @@
 //     fallback (labeled as such in the UI — never presented as AI)
 
 interface GenBody {
-  prompt: string;
-  context?: string;
+  prompt?: unknown;
+  context?: unknown;
 }
+
+const MAX_GEN_PER_MIN = 10;
+const WINDOW_MS = 60_000;
+
+// Best-effort per-IP token bucket local to this Pages isolate (approximate
+// across Cloudflare's isolate fleet — still enough to blunt abuse).
+const buckets = new Map<string, { t: number; n: number }>();
+
+function rateLimit(ip: string, max: number): boolean {
+  const now = Date.now();
+  const b = buckets.get(ip);
+  if (!b || now - b.t > WINDOW_MS) {
+    if (buckets.size > 5000) buckets.clear();
+    buckets.set(ip, { t: now, n: 1 });
+    return true;
+  }
+  b.n += 1;
+  return b.n <= max;
+}
+
+function clientIp(request: Request): string {
+  return (
+    request.headers.get("CF-Connecting-IP") ||
+    request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ||
+    "anon"
+  );
+}
+
+// HTML-escape a string so user prompts can never break out of the generated
+// document's text nodes or attributes (XSS hardening).
+const esc = (s: string) =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 const SYSTEM_PROMPT = `You are a UI component generator. The user describes a component; you return ONE complete, standalone HTML document and NOTHING else — no markdown fences, no commentary, no explanation.
 
@@ -35,6 +72,14 @@ function extractHtml(raw: string): string | null {
 }
 
 export async function onRequestPost(context: { request: Request; env?: unknown }): Promise<Response> {
+  const ip = clientIp(context.request);
+  if (!rateLimit(ip, MAX_GEN_PER_MIN)) {
+    return Response.json(
+      { ok: false, error: "rate_limited", retryAfter: 30 },
+      { status: 429, headers: { "Retry-After": "30", "Cache-Control": "no-store" } },
+    );
+  }
+
   let body: GenBody;
   try {
     body = await context.request.json();
@@ -42,13 +87,15 @@ export async function onRequestPost(context: { request: Request; env?: unknown }
     return Response.json({ ok: false, error: "invalid JSON body" }, { status: 400 });
   }
 
-  const prompt = (body.prompt || "").trim();
+  const prompt = (typeof body.prompt === "string" ? body.prompt : "").trim();
   if (!prompt) {
     return Response.json({ ok: false, error: "prompt is required" }, { status: 400 });
   }
   if (prompt.length > 500) {
     return Response.json({ ok: false, error: "prompt too long (max 500 chars)" }, { status: 413 });
   }
+  const userContext =
+    typeof body.context === "string" ? body.context.slice(0, 800) : "";
 
   // 1. Real LLM via Workers AI binding (if configured)
   const ai = (context.env as { AI?: { run: (model: string, input: unknown) => Promise<{ response?: string } | string> } } | undefined)?.AI;
@@ -57,7 +104,7 @@ export async function onRequestPost(context: { request: Request; env?: unknown }
       const result = await ai.run("@cf/meta/llama-3.1-8b-instruct", {
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: prompt + (body.context ? `\n\nContext: ${body.context.slice(0, 800)}` : "") },
+          { role: "user", content: prompt + (userContext ? `\n\nContext: ${userContext}` : "") },
         ],
         max_tokens: 2048,
       });
@@ -77,13 +124,16 @@ export async function onRequestPost(context: { request: Request; env?: unknown }
     }
   }
 
-  // 2. Deterministic template fallback — labeled honestly, never as AI
+  // 2. Deterministic template fallback — labeled honestly, never as AI.
+  // The prompt is HTML-escaped before interpolation so it can never inject
+  // markup into the generated document.
+  const safePrompt = esc(prompt);
   const fallbackHtml = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${prompt}</title>
+  <title>${safePrompt}</title>
   <style>
     :root { --bg:#000000; --raise:#080808; --panel:#0b0b0b; --line:#1c1c1c; --fg:#e7e7e7; --mut:#6d6d6d; --accent:#4c8dff; --ok:#3ddc84; }
     * { box-sizing: border-box; margin:0; padding:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
@@ -99,7 +149,7 @@ export async function onRequestPost(context: { request: Request; env?: unknown }
 <body>
   <div class="card">
     <div class="tag">&gt; Template Component</div>
-    <div class="title">${prompt}</div>
+    <div class="title">${safePrompt}</div>
     <div class="desc">Generated from the deterministic template engine (no AI model is configured on this deployment). Add the Workers AI binding to enable real LLM generation.</div>
     <button class="btn" onclick="alert('Action triggered')">Execute Action &rarr;</button>
   </div>

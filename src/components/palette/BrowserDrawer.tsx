@@ -99,14 +99,15 @@ export function BrowserDrawer() {
             </div>
           </div>
 
-          {/* iframe (sandboxed) */}
+          {/* iframe (sandboxed — opaque origin: scripts/forms run, but the
+              frame can never reach our origin's storage or DOM) */}
           <div className="flex-1 bg-[var(--anon-bg)]">
             {s.browserUrl ? (
               <iframe
                 src={s.browserUrl}
                 title="anonshare-browser"
                 className="h-full w-full"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                sandbox="allow-scripts allow-forms allow-popups"
                 referrerPolicy="no-referrer"
                 onLoad={() => {}}
               />

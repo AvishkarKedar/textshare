@@ -16,7 +16,17 @@ import { X, Eye } from "lucide-react";
  * - [ ] / [x] checkboxes (read-only)
  * - paragraphs + line breaks
  * Enough for previewing README.md / notes. ~80 lines, no deps.
+ *
+ * Link URLs are scheme-filtered (http/https/mailto/relative only) and
+ * quote-encoded — so `javascript:` payloads and attribute breakouts in
+ * user-authored markdown can neither execute nor alter the anchor tag.
  */
+function safeHref(u: string): string {
+  const s = u.replace(/"/g, "%22").replace(/'/g, "%27").replace(/</g, "%3C").trim();
+  if (/^(https?:|mailto:|\/|#|\.\/)/i.test(s)) return s;
+  return "#";
+}
+
 function renderMarkdown(src: string): string {
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -25,7 +35,8 @@ function renderMarkdown(src: string): string {
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
       .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m: string, text: string, href: string) =>
+        `<a href="${safeHref(href)}" target="_blank" rel="noopener noreferrer">${text}</a>`);
 
   const lines = src.split("\n");
   const out: string[] = [];
