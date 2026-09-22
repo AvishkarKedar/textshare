@@ -640,30 +640,6 @@ export class Room {
         return
       }
 
-      if (type === T_P2P) {
-        try {
-          const targetLen = payload[0]
-          const targetCid = new TextDecoder().decode(payload.subarray(1, 1 + targetLen))
-          let delivered = false
-          for (const peer of this.sockets()) {
-            const pa = this.att(peer)
-            if (peer !== ws && (pa && pa.cid === targetCid)) {
-              peer.send(frame(T_P2P, payload.buffer))
-              delivered = true
-              break
-            }
-          }
-          if (!delivered) {
-            for (const peer of this.sockets()) {
-              if (peer !== ws) {
-                peer.send(frame(T_P2P, payload.buffer))
-              }
-            }
-          }
-        } catch (e) {}
-        return
-      }
-
       if (type === T_GRANT) {
         if (!a.own) return ws.send(errorFrame('not_owner'))
         const target = new TextDecoder().decode(payload)

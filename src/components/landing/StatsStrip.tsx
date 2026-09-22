@@ -6,7 +6,7 @@ const PRINCIPLES = [
   { icon: Shield, label: "end-to-end encrypted", sub: "AES-GCM 256 · PBKDF2 600k", color: "var(--anon-ok)" },
   { icon: Timer, label: "auto-erased", sub: "10m / 1h / 24h TTL", color: "var(--anon-warn)" },
   { icon: UserX, label: "no account", sub: "no email · no cookies", color: "var(--anon-accent)" },
-  { icon: Wifi, label: "real-time", sub: "websocket + WebRTC mesh", color: "var(--anon-danger)" },
+  { icon: Wifi, label: "real-time", sub: "websocket · e2ee sync", color: "var(--anon-danger)" },
 ];
 
 export function StatsStrip() {

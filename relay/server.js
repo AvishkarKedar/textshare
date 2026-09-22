@@ -6,7 +6,6 @@
  * 
  * Features:
  * - Full binary sync protocol (T_UPDATE, T_AWARE, T_SNAPSHOT, T_SYNCED, etc.)
- * - Native WebRTC P2P signaling routing (T_P2P_SIGNAL = 9)
  * - Ephemeral encrypted file chunk storage (up to 25MB–50MB)
  * - Remote compiler execution bridge (/run)
  * - In-memory / SQLite persistence with automatic TTL deletion
@@ -29,7 +28,6 @@ const T_COMPACT = 5   // request compaction
 const T_STATE = 6     // room state update
 const T_KILLED = 7    // room closed / deleted
 const T_GRANT = 8     // owner grant edit rights
-const T_P2P = 9       // WebRTC P2P signaling between clients
 
 /* -------------------------------------------------------------- limits */
 
@@ -1550,31 +1548,6 @@ wss.on('connection', (ws, req, room) => {
       if (type === T_AWARE) {
         room.aware.set(ws, payload)
         return room.broadcast(frame(T_AWARE, payload), ws)
-      }
-
-      // WebRTC P2P Signaling routing
-      if (type === T_P2P) {
-        // payload format: [targetCidLen(1 byte), targetCid, signalBytes...]
-        try {
-          const targetLen = payload[0]
-          const targetCid = payload.subarray(1, 1 + targetLen).toString('utf8')
-          let delivered = false
-          for (const peer of room.sockets) {
-            if (peer !== ws && peer._att?.cid === targetCid && peer.readyState === WebSocket.OPEN) {
-              peer.send(frame(T_P2P, payload))
-              delivered = true
-              break
-            }
-          }
-          if (!delivered) {
-            for (const peer of room.sockets) {
-              if (peer !== ws && peer.readyState === WebSocket.OPEN) {
-                peer.send(frame(T_P2P, payload))
-              }
-            }
-          }
-        } catch (e) {}
-        return
       }
 
       // Owner Grant Rights

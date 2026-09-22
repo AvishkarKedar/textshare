@@ -12,7 +12,6 @@
  *   T_STATE   6  room state (JSON text: peers, ttl, canEdit, suspended…)
  *   T_KILLED  7  room closed / deleted / suspended (text reason)
  *   T_GRANT   8  owner grants edit rights to a cid
- *   T_P2P     9  WebRTC signaling: [targetCidLen, targetCid, signalJSON]
  *
  * Room lifecycle (HTTP):
  *   create: POST /room/:code?create=1&excl=1&a=<auth>&o=<owner>&ttl=<ttl>&p=<0|1>
@@ -37,7 +36,6 @@ export const T_COMPACT = 5;
 export const T_STATE = 6;
 export const T_KILLED = 7;
 export const T_GRANT = 8;
-export const T_P2P = 9;
 
 export const PBKDF2_ROUNDS = 600_000;
 export const SALT_KEY = "textshare";
@@ -230,7 +228,6 @@ export interface RelayEvents {
   onConn?: (state: ConnState) => void;
   onRoom?: (frame: RoomStateFrame) => void;
   onKilled?: (reason: string) => void;
-  onP2p?: (signal: Record<string, unknown>) => void;
   onPeerCount?: (peers: number) => void;
   onError?: (reason: string) => void;
 }
@@ -359,18 +356,6 @@ export class RelayClient {
       // Relay re-announces state after a grant; nothing to do locally.
       return;
     }
-    if (type === T_P2P) {
-      try {
-        const targetLen = body[0];
-        const targetCid = TD.decode(body.subarray(1, 1 + targetLen));
-        if (targetCid === this.cid) {
-          const signal = JSON.parse(TD.decode(body.subarray(1 + targetLen)));
-          this.events.onP2p?.(signal);
-        }
-      } catch { /* ignore malformed */ }
-      return;
-    }
-
     if (type === T_UPDATE || type === T_AWARE) {
       let plain: Uint8Array;
       try {
@@ -385,7 +370,7 @@ export class RelayClient {
     }
   }
 
-  /** Send a sealed (encrypted) frame; T_P2P/T_STATE routing frames stay plain. */
+  /** Send a sealed (encrypted) frame; T_STATE routing frames stay plain. */
   async send(type: number, payload: Uint8Array): Promise<boolean> {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) return false;
@@ -410,17 +395,6 @@ export class RelayClient {
     }
   }
 
-  /** Send a WebRTC P2P signal to a specific peer cid (plain, routed by relay). */
-  sendP2p(targetCid: string, signal: Record<string, unknown>): void {
-    const target = TE.encode(targetCid);
-    if (target.length > 255) return;
-    const signalBytes = TE.encode(JSON.stringify(signal));
-    const payload = new Uint8Array(1 + target.length + signalBytes.length);
-    payload[0] = target.length;
-    payload.set(target, 1);
-    payload.set(signalBytes, 1 + target.length);
-    void this.send(T_P2P, payload);
-  }
 
   /** Owner-only: grant edit rights to a peer cid. */
   grantEdit(targetCid: string): void {

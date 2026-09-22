@@ -32,7 +32,7 @@ const FAQS = [
   },
   {
     q: "How many people can be in a room?",
-    a: "Up to 60 concurrent connections per room. Beyond that, new joins get a 429. WebRTC peer-to-peer mesh accelerates sync between active editors so the relay only carries signaling.",
+    a: "Up to 60 concurrent connections per room. Beyond that, new joins get a 429. All sync traffic is sealed end-to-end (AES-GCM) and flows through the low-latency websocket relay, so capacity depends on room connections, not peer-to-peer links.",
   },
   {
     q: "Is there an admin who can read my room?",

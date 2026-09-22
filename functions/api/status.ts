@@ -119,7 +119,7 @@ export async function onRequestGet(): Promise<Response> {
       sync: {
         service: "anonshare-sync",
         transport: "websocket (binary frames, AES-GCM sealed)",
-        features: ["presence", "cursors", "edits", "chat", "file chunks", "voice signaling"],
+        features: ["presence", "cursors", "edits", "chat", "file chunks", "typing indicators"],
       },
       limits: {
         ipPerMin: isVps ? 600 : 300,
