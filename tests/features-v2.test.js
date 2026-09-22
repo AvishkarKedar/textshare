@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { renderMarkdown, renderLatex } from '../lib/preview.js'
 import { computeCrc32, createZipArchive } from '../lib/file-sharing.js'
-import { VoiceMesh } from '../lib/voice.js'
 import { parseErrorPositions } from '../lib/runner.js'
 
 describe('Feature 6: LaTeX Math in Markdown Preview', () => {
@@ -51,38 +50,6 @@ describe('Feature 9: Pure Client-Side ZIP Archive Generator', () => {
     expect(buf[1]).toBe(0x4b)
     expect(buf[2]).toBe(0x03)
     expect(buf[3]).toBe(0x04)
-  })
-})
-
-describe('Feature 2: Voice Chat Deafen & Listener-First Reception', () => {
-  it('initializes with isDeafened as false and isActive as false', () => {
-    const signals = []
-    const vm = new VoiceMesh('client1', (cid, sig) => signals.push({ cid, sig }))
-    expect(vm.isDeafened).toBe(false)
-    expect(vm.isActive).toBe(false)
-  })
-
-  it('updates isDeafened state via setDeafened()', () => {
-    const vm = new VoiceMesh('client1', () => {})
-    vm.setDeafened(true)
-    expect(vm.isDeafened).toBe(true)
-    vm.setDeafened(false)
-    expect(vm.isDeafened).toBe(false)
-  })
-
-  it('correctly calculates polite peer arbitration', () => {
-    const vm = new VoiceMesh('client_a', () => {})
-    expect(vm.shouldInitiate('client_b')).toBe(true)
-    expect(vm.shouldInitiate('client_0')).toBe(false)
-  })
-
-  it('tracks speaking status via isPeerSpeaking()', () => {
-    const vm = new VoiceMesh('client1', () => {})
-    expect(vm.isPeerSpeaking('client2')).toBe(false)
-    vm.peers.set('client2', { isSpeaking: true })
-    expect(vm.isPeerSpeaking('client2')).toBe(true)
-    vm.peers.set('client2', { isSpeaking: false })
-    expect(vm.isPeerSpeaking('client2')).toBe(false)
   })
 })
 

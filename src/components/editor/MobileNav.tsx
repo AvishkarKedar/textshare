@@ -5,13 +5,16 @@ import { useAnon } from "@/lib/store";
 
 export function MobileNav() {
   const s = useAnon();
+  const canUndo = s.docHistory.length - s.undoDepth >= 2;
+  const canRedo = s.undoDepth > 0;
+
   return (
     <>
-      {/* floating action button — Run */}
+      {/* floating action button — Run (sits above the accessory keys bar) */}
       <button
         onClick={() => s.runCode()}
         disabled={s.running}
-        className="fixed bottom-16 right-4 z-30 inline-flex h-12 w-12 items-center justify-center bg-[var(--anon-accent)] text-[var(--anon-accent-fg)] shadow-lg shadow-black/40 transition-transform active:scale-95 disabled:opacity-60 md:hidden"
+        className="fixed bottom-[5.75rem] right-3 z-30 inline-flex h-12 w-12 items-center justify-center bg-[var(--anon-accent)] text-[var(--anon-accent-fg)] shadow-lg shadow-black/40 transition-transform active:scale-95 disabled:opacity-60 md:hidden"
         style={{ borderRadius: 0 }}
         title="Run code"
         aria-label="Run code"
@@ -26,20 +29,14 @@ export function MobileNav() {
         <NavBtn
           icon={Undo2}
           label="undo"
-          onClick={() => {
-            try {
-              document.execCommand("undo");
-            } catch {}
-          }}
+          onClick={() => s.undoEdit()}
+          disabled={!canUndo}
         />
         <NavBtn
           icon={Redo2}
           label="redo"
-          onClick={() => {
-            try {
-              document.execCommand("redo");
-            } catch {}
-          }}
+          onClick={() => s.redoEdit()}
+          disabled={!canRedo}
         />
         <NavBtn icon={MoreHorizontal} label="more" onClick={() => s.togglePalette()} />
       </nav>
@@ -76,18 +73,21 @@ function NavBtn({
   label,
   onClick,
   active,
+  disabled,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   onClick: () => void;
   active?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] anon-mono ${
+      disabled={disabled}
+      className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] anon-mono transition-opacity ${
         active ? "anon-accent bg-[var(--anon-panel)]" : "anon-mut"
-      }`}
+      } ${disabled ? "opacity-30" : ""}`}
     >
       <Icon className="h-4 w-4" />
       {label}

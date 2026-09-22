@@ -68,8 +68,8 @@ export const FAQ_DATA: FaqItem[] = [
   {
     id: "p2p",
     category: "general",
-    q: "How does real-time sync and voice communication work?",
-    a: "Collaborative edits sync in real-time over WebSockets with Conflict-free Replicated Data Types (CRDTs). Voice chat uses a direct WebRTC peer-to-peer mesh connection between collaborators so audio streams never touch central servers.",
+    q: "How does real-time sync work?",
+    a: "Collaborative edits sync in real-time over WebSockets with Conflict-free Replicated Data Types (CRDTs). Live typing indicators, presence, cursors and chat all ride the same encrypted channel — the relay only ever relays ciphertext.",
   },
 ];
 

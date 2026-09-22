@@ -1,13 +1,13 @@
 /**
- * Active room session — bridges the Yjs document + relay client + voice mesh
- * into the zustand UI store. Owns the real E2EE lifecycle:
+ * Active room session — bridges the Yjs document + relay client into the
+ * zustand UI store. Owns the real E2EE lifecycle:
  *
  *   files      → Y.Array  [{ id, name, language }]
  *   texts      → Y.Map    id → Y.Text
  *   chat       → Y.Array  [{ author, name, color, text, ts, codeBlock? }]
  *   shared     → Y.Array  encrypted file metadata (chunks live on the relay)
  *   meta       → Y.Map    { goal?, goalAuthor?, goalColor?, goalSetAt? }
- *   awareness  → { user: { name, color, own, cursorLine, voice? }, act }
+ *   awareness  → { user: { name, color, own, cursorLine, typing, typingAt, typingIn }, act }
  *
  * All document traffic is AES-GCM sealed with the room key; the relay only
  * ever relays/stores ciphertext.
@@ -15,7 +15,6 @@
 
 import * as Y from "yjs";
 import { RelayClient, relayHost, type RoomStateFrame, type ConnState } from "./relay";
-import { VoiceMesh, type VoiceSignal } from "./voice";
 import { useAnon } from "./store";
 import type { EditorFile, ChatMessage, Participant, SharedFile } from "./store";
 
@@ -63,7 +62,6 @@ let active: {
   info: SessionInfo;
   doc: Y.Doc;
   relay: RelayClient;
-  mesh: VoiceMesh | null;
   teardown: () => void;
 } | null = null;
 
@@ -207,11 +205,6 @@ export function startSession(args: StartSessionArgs): SessionInfo {
       useAnon.getState().exitRoom();
       import("sonner").then(({ toast }) => toast.error(message, { duration: 8000 }));
     },
-    onP2p: (signal) => {
-      const mesh = active?.mesh;
-      const voice = signal as unknown as VoiceSignal;
-      if (mesh) mesh.handleSignal(voice?.senderCid || "", voice);
-    },
     onError: (reason) => {
       if (reason === "read_only") {
         import("sonner").then(({ toast }) => toast("This room is read-only — the owner locked it"));
@@ -221,12 +214,15 @@ export function startSession(args: StartSessionArgs): SessionInfo {
     },
   });
 
-  // Awareness: presence, cursors, voice state.
+  // Awareness: presence, cursors, typing.
   relay.awareness.setLocalStateField("user", {
     name: args.displayName || "you",
     color: args.color,
     own: !!args.owner,
     cursorLine: 1,
+    typing: false,
+    typingAt: 0,
+    typingIn: "editor",
   });
   relay.awareness.setLocalStateField("act", Date.now());
 
@@ -243,6 +239,39 @@ export function startSession(args: StartSessionArgs): SessionInfo {
     const state = useAnon.getState();
     const activeId = list.some((f) => f.id === state.activeFileId) ? state.activeFileId : list[0]?.id || "f1";
     useAnon.setState({ files: mirrored, activeFileId: activeId });
+  };
+
+  /**
+   * Real history tracker: every text mutation (local OR remote) is offered to
+   * the store, which throttles + caps snapshots. Author attribution uses the
+   * awareness "act" timestamps — the remote peer active most recently when
+   * the change landed, else the local user.
+   */
+  const trackHistory = () => {
+    const now = Date.now();
+    let author = args.displayName || "you";
+    let color = args.color;
+    let authorId = "me";
+    for (const [clientId, st] of relay.awareness.getStates() as Map<number, Record<string, unknown>>) {
+      if (clientId === doc.clientID) continue;
+      const act = typeof st.act === "number" ? st.act : 0;
+      const u = (st.user || {}) as { name?: string; color?: string };
+      if (now - act < 6000 && u.name) {
+        author = u.name;
+        color = u.color || color;
+        authorId = String(clientId);
+      }
+    }
+    useAnon.getState().recordHistory({ author, color, authorId });
+  };
+
+  let historyDebounce: ReturnType<typeof setTimeout> | null = null;
+  const historyHandler = () => {
+    if (historyDebounce) return;
+    historyDebounce = setTimeout(() => {
+      historyDebounce = null;
+      trackHistory();
+    }, 700);
   };
 
   const mirrorChat = () => {
@@ -283,6 +312,7 @@ export function startSession(args: StartSessionArgs): SessionInfo {
 
   const mirrorParticipants = () => {
     const states = relay.awareness.getStates() as Map<number, Record<string, unknown>>;
+    const now = Date.now();
     const me = {
       id: "me",
       name: args.displayName || "You",
@@ -290,27 +320,31 @@ export function startSession(args: StartSessionArgs): SessionInfo {
       isOwner: !!args.owner,
       online: true,
       cursorLine: 1,
+      typing: false,
     };
     const others: Participant[] = [];
     for (const [clientId, state] of states) {
       if (clientId === doc.clientID) {
-        const u = state.user as { cursorLine?: number } | undefined;
+        const u = state.user as { cursorLine?: number; typing?: boolean } | undefined;
         me.cursorLine = u?.cursorLine ?? 1;
+        me.typing = !!u?.typing;
         continue;
       }
       const u = state.user as
-        | { name?: string; color?: string; own?: boolean; cursorLine?: number; voice?: { speaking?: boolean; muted?: boolean; deafened?: boolean } }
+        | { name?: string; color?: string; own?: boolean; cursorLine?: number; typing?: boolean; typingAt?: number; typingIn?: string }
         | undefined;
       if (!u) continue;
+      // Stale guard: peers that crashed without clearing their typing flag
+      // stop showing as "typing…" after 5 seconds of silence.
+      const freshTyping = !!u.typing && typeof u.typingAt === "number" && now - u.typingAt < 5000;
       others.push({
         id: String(clientId),
         name: u.name || "anon",
         color: u.color || "#6d6d6d",
         isOwner: !!u.own,
         cursorLine: u.cursorLine,
-        speaking: u.voice?.speaking,
-        muted: u.voice?.muted,
-        deafened: u.voice?.deafened,
+        typing: freshTyping,
+        typingIn: freshTyping ? u.typingIn || "editor" : undefined,
         online: true,
       });
     }
@@ -322,7 +356,10 @@ export function startSession(args: StartSessionArgs): SessionInfo {
   // inside the Y.Text values. observeDeep is required so local AND remote
   // text edits re-run the store mirror (otherwise controlled textareas bounce
   // back to stale content).
-  texts.observeDeep(() => mirrorFiles());
+  texts.observeDeep(() => {
+    mirrorFiles();
+    historyHandler();
+  });
   chat.observe(() => mirrorChat());
   shared.observe(() => mirrorShared());
   meta.observe(() => {
@@ -342,21 +379,12 @@ export function startSession(args: StartSessionArgs): SessionInfo {
     mirrorChat();
     mirrorShared();
     mirrorParticipants();
-    const mesh = active?.mesh;
-    if (mesh?.isActive) {
-      for (const [clientId] of relay.awareness.getStates()) {
-        if (clientId !== doc.clientID) mesh.callPeer(String(clientId));
-      }
-    }
   }, 400);
 
   const teardown = () => {
     clearTimeout(initialSyncTimeout);
+    if (historyDebounce) clearTimeout(historyDebounce);
     try { relay.awareness.off("update", mirrorParticipants); } catch { /* ignore */ }
-    if (active?.mesh) {
-      active.mesh.destroy();
-      active.mesh = null;
-    }
     relay.close();
     active = null;
     useAnon.setState({ syncState: "dead", roomState: null });
@@ -371,7 +399,7 @@ export function startSession(args: StartSessionArgs): SessionInfo {
     startedAt: Date.now(),
   };
 
-  active = { info, doc, relay, mesh: null, teardown };
+  active = { info, doc, relay, teardown };
   void store; // store referenced for initial state snapshot timing
   return info;
 }
@@ -407,12 +435,38 @@ export function sendCursor(line: number): void {
   active.relay.awareness.setLocalStateField("act", Date.now());
 }
 
-export function setLocalVoice(voice: { speaking?: boolean; muted?: boolean; deafened?: boolean }): void {
+/* ------------------------------------------------------ typing indicator */
+
+let typingTimer: ReturnType<typeof setTimeout> | null = null;
+let typingThrottle = 0;
+
+/**
+ * Broadcast "I am typing" to the room over the encrypted awareness channel.
+ * Auto-clears after 1.6 s of inactivity; refreshes at most every 300 ms so
+ * fast typers don't flood the relay.
+ */
+export function setTyping(where: "editor" | "chat"): void {
+  if (!active) return;
+  const now = Date.now();
+  if (now - typingThrottle < 300) {
+    // still reset the auto-clear window on every keystroke
+    if (typingTimer) clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => setTypingOff(), 1600);
+    return;
+  }
+  typingThrottle = now;
+  const user = (active.relay.awareness.getLocalState()?.user || {}) as Record<string, unknown>;
+  active.relay.awareness.setLocalStateField("user", { ...user, typing: true, typingAt: Date.now(), typingIn: where });
+  active.relay.awareness.setLocalStateField("act", Date.now());
+  if (typingTimer) clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => setTypingOff(), 1600);
+}
+
+function setTypingOff(): void {
+  if (typingTimer) { clearTimeout(typingTimer); typingTimer = null; }
   if (!active) return;
   const user = (active.relay.awareness.getLocalState()?.user || {}) as Record<string, unknown>;
-  const current = (user.voice || {}) as Record<string, unknown>;
-  active.relay.awareness.setLocalStateField("user", { ...user, voice: { ...current, ...voice } });
-  active.relay.awareness.setLocalStateField("act", Date.now());
+  active.relay.awareness.setLocalStateField("user", { ...user, typing: false, typingAt: Date.now() });
 }
 
 /** Update a file's content in the Yjs doc (minimal diff → CRDT merge). */
@@ -476,48 +530,6 @@ export function setGoal(text: string): void {
 
 export function grantEditTo(cid: string): void {
   active?.relay.grantEdit(cid);
-}
-
-/* ----------------------------------------------------------- voice mesh */
-
-export function getVoiceMesh(): VoiceMesh | null {
-  return active?.mesh ?? null;
-}
-
-export function joinVoice(): VoiceMesh | null {
-  if (!active) return null;
-  if (active.mesh) return active.mesh;
-  const relay = active.relay;
-  const mesh = new VoiceMesh(String(active.doc.clientID), (target, signal) => {
-    relay.sendP2p(target, signal as unknown as Record<string, unknown>);
-  });
-  mesh.onSpeaking = (cid, speaking) => {
-    if (cid === String(active!.doc.clientID) || cid === "me") {
-      useAnon.getState().setSpeaking(speaking);
-      setLocalVoice({ speaking });
-    } else {
-      useAnon.setState((s) => ({
-        participants: s.participants.map((p) => (p.id === cid ? { ...p, speaking } : p)),
-      }));
-    }
-  };
-  mesh.onLevel = (level) => {
-    useAnon.getState().setMicLevel(level);
-  };
-  active.mesh = mesh;
-  return mesh;
-}
-
-export function leaveVoice(): void {
-  if (active?.mesh) {
-    active.mesh.destroy();
-    active.mesh = null;
-    setLocalVoice({ speaking: false });
-  }
-  const s = useAnon.getState();
-  useAnon.setState({
-    voice: { ...s.voice, connected: false, speaking: false, level: 0 },
-  });
 }
 
 /* ------------------------------------------------- encrypted file upload */

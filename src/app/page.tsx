@@ -10,14 +10,12 @@ import { ShortcutsOverlay } from "@/components/palette/ShortcutsOverlay";
 import { InviteModal } from "@/components/palette/InviteModal";
 import { SettingsPanel } from "@/components/palette/SettingsPanel";
 import { HistoryDrawer } from "@/components/palette/HistoryDrawer";
-import { WhiteboardModal } from "@/components/palette/WhiteboardModal";
 import { NotificationsPanel } from "@/components/palette/NotificationsPanel";
 import { GenerativeModal } from "@/components/palette/GenerativeModal";
 import { BrowserDrawer } from "@/components/palette/BrowserDrawer";
 import { CryptoModal } from "@/components/palette/CryptoModal";
 import { OnboardingTour } from "@/components/palette/OnboardingTour";
 import { FilesDrawer } from "@/components/palette/FilesDrawer";
-import { VoicePanel } from "@/components/palette/VoicePanel";
 import { BookmarksDrawer } from "@/components/palette/BookmarksDrawer";
 import { StatusModal } from "@/components/palette/StatusModal";
 import { SecurityModal } from "@/components/palette/SecurityModal";
@@ -63,13 +61,11 @@ export default function Home() {
         if (store.inviteOpen) { store.toggleInvite(); return; }
         if (store.settingsOpen) { store.toggleSettings(); return; }
         if (store.historyOpen) { store.toggleHistory(); return; }
-        if (store.whiteboardOpen) { store.toggleWhiteboard(); return; }
         if (store.notificationsOpen) { store.toggleNotifications(); return; }
         if (store.generativeOpen) { store.toggleGenerative(); return; }
         if (store.testPanelOpen) { store.toggleTestPanel(); return; }
         if (store.browserOpen) { store.toggleBrowser(); return; }
         if (store.cryptoOpen) { store.toggleCrypto(); return; }
-        if (store.voiceOpen) { store.toggleVoice(); return; }
         if (store.filesOpen) { store.toggleFiles(); return; }
         if (store.bookmarksOpen) { store.toggleBookmarks(); return; }
         if (store.statusOpen) { store.toggleStatus(); return; }
@@ -104,9 +100,6 @@ export default function Home() {
       } else if (mod && e.shiftKey && e.key.toLowerCase() === "o") {
         e.preventDefault();
         store.startTour();
-      } else if (mod && e.shiftKey && e.key.toLowerCase() === "v") {
-        e.preventDefault();
-        store.toggleVoice();
       } else if (mod && e.shiftKey && e.key.toLowerCase() === "s") {
         e.preventDefault();
         store.toggleSyntaxHighlight();
@@ -143,9 +136,6 @@ export default function Home() {
       } else if (mod && e.key === "\\") {
         e.preventDefault();
         store.toggleTerminal();
-      } else if (mod && e.shiftKey && e.key.toLowerCase() === "w") {
-        e.preventDefault();
-        store.toggleWhiteboard();
       } else if (mod && e.key === "n") {
         e.preventDefault();
         store.toggleNotifications();
@@ -195,14 +185,12 @@ export default function Home() {
       <InviteModal />
       <SettingsPanel />
       <HistoryDrawer />
-      <WhiteboardModal />
       <NotificationsPanel />
       <GenerativeModal />
       <BrowserDrawer />
       <CryptoModal />
       <OnboardingTour />
       <FilesDrawer />
-      <VoicePanel />
       <BookmarksDrawer />
       <StatusModal />
       <SecurityModal />

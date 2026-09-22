@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useAnon } from "@/lib/store";
 import { initials } from "@/lib/themes";
-import { ArrowDown, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { SlashCommandPopup } from "@/components/palette/SlashCommandPopup";
 import type { SlashCommand } from "@/lib/store";
 import { tokenizeLine, TOKEN_COLORS } from "@/lib/highlight";
 import { detectLanguage, langToExt } from "@/lib/detect";
-import { sendCursor } from "@/lib/session";
+import { sendCursor, setTyping } from "@/lib/session";
 import { toast } from "sonner";
 
 function highlightLine(line: string, language: string) {
@@ -27,6 +27,19 @@ export function EditorStage() {
   const [cursorLine, setCursorLine] = useState(5);
   const [slashRect, setSlashRect] = useState<DOMRect | null>(null);
   const [slashQ, setSlashQ] = useState("");
+
+  // remote cursors mapped onto line numbers — shown as colored line numbers
+  // in the gutter plus a name tag ("who is where" at a glance).
+  const remoteCursors = s.participants.filter(
+    (p) => p.id !== "me" && p.online !== false && typeof p.cursorLine === "number",
+  );
+  const cursorByLine = new Map<number, typeof remoteCursors[number][]>();
+  for (const p of remoteCursors) {
+    const line = p.cursorLine as number;
+    const arr = cursorByLine.get(line) || [];
+    arr.push(p);
+    cursorByLine.set(line, arr);
+  }
 
   // derived: show placeholder only when file is empty
   const showPlaceholder = (file?.content || "").trim() === "";
@@ -97,9 +110,6 @@ export function EditorStage() {
       case "browser":
         s.toggleBrowser();
         break;
-      case "voice":
-        s.toggleVoice();
-        break;
       case "files":
         s.toggleFiles();
         break;
@@ -150,9 +160,6 @@ export function EditorStage() {
           }
         }
         break;
-      case "whiteboard":
-        s.toggleWhiteboard();
-        break;
       case "history":
         s.toggleHistory();
         break;
@@ -187,6 +194,8 @@ export function EditorStage() {
     // updateFileContent routes through the E2EE Yjs doc when a session is
     // live (encrypted delta → relay → peers); local-only otherwise.
     s.updateFileContent(file.id, val);
+    // broadcast "typing…" to the room over encrypted awareness
+    setTyping("editor");
     // detect slash command: a "/" at start of a line or after whitespace
     const ta = e.target;
     const upto = ta.value.substring(0, ta.selectionStart);
@@ -223,13 +232,39 @@ export function EditorStage() {
       {/* editor area */}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1">
-          {/* gutter */}
+          {/* gutter — remote cursors shown in the peer's color */}
           <div className="anon-mono w-12 flex-none select-none hairline-r bg-[var(--anon-raise)] px-2 py-3 text-right text-[11px] anon-dim anon-scroll overflow-y-auto">
-            {(file.content || "// start typing").split("\n").map((_, i) => (
-              <div key={i} className={`leading-[1.6] ${i + 1 === cursorLine ? "anon-fg" : ""}`}>
-                {i + 1}
-              </div>
-            ))}
+            {(file.content || "// start typing").split("\n").map((_, i) => {
+              const line = i + 1;
+              const here = cursorByLine.get(line);
+              const isMine = line === cursorLine;
+              return (
+                <div
+                  key={i}
+                  className="group/g relative flex items-center justify-end gap-0.5 leading-[1.6]"
+                >
+                  {here && here.length > 0 && (
+                    <span
+                      className="pointer-events-none absolute right-full z-10 mr-1 whitespace-nowrap px-1 text-[9px] font-semibold text-black opacity-0 transition-opacity group-hover/g:opacity-100"
+                      style={{ background: here[0].color }}
+                      title={here.map((p) => p.name).join(", ")}
+                    >
+                      {here[0].name}{here.length > 1 ? ` +${here.length - 1}` : ""}
+                    </span>
+                  )}
+                  <span
+                    className={isMine ? "anon-fg" : ""}
+                    style={
+                      here && here.length > 0 && !isMine
+                        ? { color: here[0].color, fontWeight: 700 }
+                        : undefined
+                    }
+                  >
+                    {line}
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
           {/* text editor */}
@@ -299,14 +334,6 @@ export function EditorStage() {
             )}
           </div>
         </div>
-
-        {/* "edits below" jump pill */}
-        <button
-          className="anon-mono absolute bottom-3 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1 hairline anon-panel px-2 py-1 text-[10px] anon-mut hover:anon-fg"
-          title="Jump to latest edit"
-        >
-          <ArrowDown className="h-3 w-3" /> edits below
-        </button>
       </div>
 
       {/* presence strip (right gutter) */}
@@ -332,20 +359,28 @@ export function EditorStage() {
 function PresenceStrip() {
   const s = useAnon();
   if (s.zenMode) return null;
+  const online = s.participants.filter((p) => p.online);
+  const typing = online.filter((p) => p.typing && p.id !== "me");
+  const syncLabel =
+    s.syncState === "synced" ? "live" :
+    s.syncState === "connected" ? "connected" :
+    s.syncState === "connecting" ? "connecting…" :
+    s.syncState === "retrying" ? "reconnecting…" :
+    s.roomCode ? "offline" : "—";
   return (
     <aside className="hidden w-44 flex-none hairline-l bg-[var(--anon-raise)] lg:flex lg:flex-col">
       <div className="anon-mono hairline-b px-3 py-2 text-[10px] uppercase tracking-wider anon-dim">
-        online · {s.participants.filter((p) => p.online).length}
+        online · {online.length}
       </div>
       <div className="flex-1 overflow-y-auto anon-scroll">
         {s.participants.map((p) => (
-          <button
+          <div
             key={p.id}
-            className="group flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[var(--anon-panel)]"
-            title={`Jump to ${p.name}'s cursor`}
+            className="group flex w-full items-center gap-2 px-3 py-2 text-left"
+            title={p.typing ? `${p.name} is typing…` : `Jump to ${p.name}'s cursor`}
           >
             <span
-              className="anon-mono relative inline-flex h-6 w-6 flex-none items-center justify-center text-[10px] font-semibold text-black"
+              className={`anon-mono relative inline-flex h-6 w-6 flex-none items-center justify-center text-[10px] font-semibold text-black ${p.typing ? "anim-pulse-ring" : ""}`}
               style={{ background: p.color }}
             >
               {initials(p.name)}
@@ -361,15 +396,32 @@ function PresenceStrip() {
                 {p.name}
                 {p.isOwner && <span className="ml-1 anon-warn">★</span>}
               </div>
-              <div className="anon-mono text-[10px] anon-dim">
-                {p.online ? `line ${p.cursorLine ?? "—"}` : "offline"}
+              <div className="anon-mono text-[10px]">
+                {p.typing ? (
+                  <span style={{ color: "var(--anon-ok)" }}>typing…</span>
+                ) : (
+                  <span className="anon-dim">
+                    {p.online ? `line ${p.cursorLine ?? "—"}` : "offline"}
+                  </span>
+                )}
               </div>
             </div>
-          </button>
+          </div>
         ))}
       </div>
+      {/* live typing ticker */}
+      {typing.length > 0 && (
+        <div className="anon-mono hairline-t px-3 py-2 text-[10px]" style={{ color: "var(--anon-ok)" }}>
+          {typing.length === 1
+            ? `${typing[0].name} is typing`
+            : typing.length === 2
+              ? `${typing[0].name} & ${typing[1].name} are typing`
+              : `${typing.length} people are typing`}
+          <span className="anim-beat"> …</span>
+        </div>
+      )}
       <div className="anon-mono hairline-t px-3 py-2 text-[10px] anon-dim">
-        voice: <span style={{ color: "var(--anon-ok)" }}>●</span> connected
+        sync: <span style={{ color: s.syncState === "synced" || s.syncState === "connected" ? "var(--anon-ok)" : "var(--anon-warn)" }}>●</span> {syncLabel}
       </div>
     </aside>
   );

@@ -12,11 +12,7 @@ import {
   History,
   Files,
   Globe,
-  PenTool,
   Sparkles,
-  Mic,
-  MicOff,
-  Volume2,
   Maximize2,
   Eye,
   Terminal as TerminalIcon,
@@ -27,7 +23,6 @@ import {
   Wand2,
   Shield,
   Download,
-  Radio,
   Bookmark,
   Activity,
   HelpCircle,
@@ -39,6 +34,7 @@ export function TopBar() {
   const s = useAnon();
   const [overflow, setOverflow] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
+  const typingPeers = s.participants.filter((p) => p.typing && p.id !== "me");
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent | TouchEvent) {
@@ -90,25 +86,30 @@ export function TopBar() {
         <Users className="h-3.5 w-3.5" /> Invite
       </button>
 
-      {/* avatar stack */}
+      {/* avatar stack — live typing shown as a pulsing dot */}
       <div className="hidden items-center -space-x-1.5 md:flex">
         {s.participants.slice(0, 4).map((p) => (
           <span
             key={p.id}
-            title={`${p.name}${p.isOwner ? " · owner" : ""}`}
-            className="anon-mono relative inline-flex h-6 w-6 items-center justify-center hairline text-[10px] font-semibold text-black"
+            title={`${p.name}${p.isOwner ? " · owner" : ""}${p.typing ? " · typing…" : ""}`}
+            className={`anon-mono relative inline-flex h-6 w-6 items-center justify-center hairline text-[10px] font-semibold text-black ${p.typing ? "anim-pulse-ring" : ""}`}
             style={{ background: p.color, zIndex: p.isOwner ? 5 : 1 }}
           >
             {initials(p.name)}
             {p.isOwner && (
               <span className="absolute -bottom-2 -right-1 text-[8px]">★</span>
             )}
-            {p.online && (
+            {p.typing ? (
+              <span
+                className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full anim-beat"
+                style={{ background: "var(--anon-ok)" }}
+              />
+            ) : p.online && p.id !== "me" ? (
               <span
                 className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full"
                 style={{ background: "var(--anon-ok)" }}
               />
-            )}
+            ) : null}
           </span>
         ))}
         {s.participants.length > 4 && (
@@ -149,25 +150,11 @@ export function TopBar() {
         >
           <MessageSquare className="h-3.5 w-3.5" />
           <span className="hidden lg:inline">Chat</span>
-        </button>
-
-        {/* voice indicator */}
-        <button
-          onClick={() => s.toggleVoice()}
-          className={`anon-mono relative inline-flex h-7 w-7 items-center justify-center hairline hover:bg-[var(--anon-panel)] ${
-            s.voiceOpen ? "bg-[var(--anon-panel)]" : ""
-          } ${s.voice.connected && s.voice.speaking ? "anim-pulse-ring" : ""}`}
-          title="Voice · ⌘⇧V"
-          aria-label="Toggle voice"
-        >
-          {s.voice.connected ? (
-            s.voice.muted ? <MicOff className="h-3.5 w-3.5" style={{ color: "var(--anon-danger)" }} /> :
-            <Mic className="h-3.5 w-3.5" style={{ color: s.voice.speaking ? "var(--anon-ok)" : "var(--anon-fg)" }} />
-          ) : (
-            <Mic className="h-3.5 w-3.5 anon-mut" />
-          )}
-          {s.voice.connected && (
-            <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full" style={{ background: "var(--anon-ok)" }} />
+          {typingPeers.length > 0 && (
+            <span
+              className="anon-mono hidden h-1.5 w-1.5 rounded-full anim-beat lg:inline-block"
+              style={{ background: "var(--anon-ok)" }}
+            />
           )}
         </button>
 
@@ -208,11 +195,9 @@ export function TopBar() {
               <OverflowItem icon={History} label="History (time machine)" k="⌘⇧H" onClick={() => { s.toggleHistory(); setOverflow(false); }} active={s.historyOpen} />
               <OverflowItem icon={FlaskConical} label="Test runner" k="⌘⇧T" onClick={() => { s.toggleTestPanel(); setOverflow(false); }} active={s.testPanelOpen} />
               <OverflowItem icon={Wand2} label="Generative UI" k="⌘⇧G" onClick={() => { s.toggleGenerative(); setOverflow(false); }} active={s.generativeOpen} />
-              <OverflowItem icon={Radio} label="Voice chat" k="⌘⇧V" onClick={() => { s.toggleVoice(); setOverflow(false); }} active={s.voiceOpen} />
               <OverflowItem icon={Globe} label="Browser" k="⌘⇧B" onClick={() => { s.toggleBrowser(); setOverflow(false); }} active={s.browserOpen} />
               <OverflowItem icon={Shield} label="Crypto explainer" k="⌘⇧K" onClick={() => { s.toggleCrypto(); setOverflow(false); }} active={s.cryptoOpen} />
               <OverflowItem icon={Sparkles} label="Restart onboarding tour" k="⌘⇧O" onClick={() => { s.startTour(); setOverflow(false); }} />
-              <OverflowItem icon={PenTool} label="Whiteboard" k="⌘⇧W" onClick={() => { s.toggleWhiteboard(); setOverflow(false); }} active={s.whiteboardOpen} />
               <OverflowItem icon={TerminalIcon} label="Terminal" k="⌘\\" onClick={() => { s.toggleTerminal(); setOverflow(false); }} active={s.terminalOpen} />
               <OverflowItem icon={Download} label="Export project ZIP" k="⌘⇧E" onClick={() => { s.exportProjectZip(); setOverflow(false); }} />
               <OverflowItem icon={Bookmark} label="Recent rooms" k="⌘⇧R" onClick={() => { s.toggleBookmarks(); setOverflow(false); }} active={s.bookmarksOpen} />

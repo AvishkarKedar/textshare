@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAnon, type ChatMessage } from "@/lib/store";
 import { initials } from "@/lib/themes";
 import { Pin, Reply, Send, Code2, X, Hash } from "lucide-react";
+import { setTyping } from "@/lib/session";
 
 export function ChatSidebar() {
   const s = useAnon();
@@ -16,6 +17,14 @@ export function ChatSidebar() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [s.messages.length]);
+
+  const typingPeers = s.participants.filter((p) => p.typing && p.id !== "me");
+
+  function onDraftChange(v: string) {
+    setDraft(v);
+    // broadcast "typing…" to the room over encrypted awareness
+    if (v.trim()) setTyping("chat");
+  }
 
   function send() {
     if (!draft.trim()) return;
@@ -97,6 +106,11 @@ export function ChatSidebar() {
 
       {/* messages */}
       <div ref={scrollRef} className="anon-scroll flex-1 overflow-y-auto p-3 space-y-3">
+        {s.messages.length === 0 && (
+          <div className="anon-mono py-6 text-center text-[11px] anon-dim">
+            no messages yet — say hi (end-to-end encrypted)
+          </div>
+        )}
         {topLevel.map((m) => (
           <MessageBubble
             key={m.id}
@@ -106,6 +120,29 @@ export function ChatSidebar() {
           />
         ))}
       </div>
+
+      {/* typing indicator */}
+      {typingPeers.length > 0 && (
+        <div className="anon-mono hairline-t flex items-center gap-1.5 px-3 py-1.5 text-[10px]" style={{ color: "var(--anon-ok)" }}>
+          <span className="inline-flex items-center -space-x-1">
+            {typingPeers.slice(0, 3).map((p) => (
+              <span
+                key={p.id}
+                className="inline-flex h-3.5 w-3.5 items-center justify-center text-[7px] font-semibold text-black"
+                style={{ background: p.color }}
+              >
+                {initials(p.name)}
+              </span>
+            ))}
+          </span>
+          {typingPeers.length === 1
+            ? `${typingPeers[0].name} is typing`
+            : typingPeers.length === 2
+              ? `${typingPeers[0].name} & ${typingPeers[1].name} are typing`
+              : "several people are typing"}
+          <span className="anim-beat">…</span>
+        </div>
+      )}
 
       {/* reply context */}
       {replyParent && (
@@ -125,7 +162,7 @@ export function ChatSidebar() {
         <div className="flex items-end gap-1.5">
           <textarea
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => onDraftChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();

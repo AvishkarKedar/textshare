@@ -20,9 +20,6 @@ import {
   addYFile,
   removeYFile,
   setGoal as sessionSetGoal,
-  joinVoice,
-  leaveVoice,
-  setLocalVoice,
   getSession,
 } from "./session";
 import { runJsTests } from "./test-runner";
@@ -36,9 +33,10 @@ export interface Participant {
   color: string;
   cursorLine?: number;
   isOwner?: boolean;
-  speaking?: boolean;
-  muted?: boolean;
-  deafened?: boolean;
+  /** live typing indicator (encrypted awareness) */
+  typing?: boolean;
+  /** where the peer is typing — "editor" or "chat" */
+  typingIn?: string;
   online?: boolean;
 }
 
@@ -91,14 +89,6 @@ export interface AppNotification {
   read: boolean;
 }
 
-export interface WhiteboardStroke {
-  id: string;
-  tool: "pen" | "highlighter" | "eraser";
-  color: string;
-  size: number;
-  points: { x: number; y: number }[];
-}
-
 export interface TestCase {
   id: string;
   name: string;
@@ -127,10 +117,24 @@ export interface TestRunResult {
 export interface NamedSnapshot {
   id: string;
   label: string;
-  timelineIdx: number;
+  /** id of the real history entry this snapshot bookmarks */
+  historyId: string;
   author: string;
   color: string;
   ts: number;
+}
+
+/** One real, locally recorded document state (used by history + undo). */
+export interface HistoryEntry {
+  id: string;
+  fileId: string;
+  fileName: string;
+  ts: number;
+  content: string;
+  author: string;
+  color: string;
+  authorId: string;
+  label?: string;
 }
 
 export interface GeneratedUi {
@@ -165,15 +169,6 @@ export interface SharedFile {
   uploaderColor: string;
 }
 
-export interface VoiceState {
-  connected: boolean;
-  muted: boolean;
-  deafened: boolean;
-  speaking: boolean;
-  pushToTalk: boolean;
-  level: number; // 0-100 mic level
-}
-
 export interface SyntaxToken {
   type: "keyword" | "string" | "comment" | "number" | "function" | "operator" | "plain";
   value: string;
@@ -199,7 +194,6 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: "⌘ ⇧ K", label: "Open crypto explainer", group: "tools" },
   { keys: "⌘ ↵", label: "Run code", group: "editor" },
   { keys: "⌘ \\", label: "Toggle terminal", group: "navigation" },
-  { keys: "⌘ ⇧ W", label: "Toggle whiteboard", group: "navigation" },
   { keys: "⌘ ⇧ E", label: "Export project as ZIP", group: "tools" },
   { keys: "⌘ N", label: "Toggle notifications", group: "navigation" },
   { keys: "/", label: "Slash commands in editor", group: "editor" },
@@ -209,7 +203,6 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: "⌘ F", label: "Find in file", group: "editor" },
   { keys: "⌘ ⌥ F", label: "Find and replace", group: "editor" },
   { keys: "⌘ ⇧ P", label: "Toggle markdown preview", group: "editor" },
-  { keys: "⌘ ⇧ V", label: "Toggle voice panel", group: "navigation" },
   { keys: "⌘ ⇧ S", label: "Toggle syntax highlighting", group: "editor" },
   { keys: "⌘ ⇧ R", label: "Open recent rooms (bookmarks)", group: "navigation" },
   { keys: "⌘ ⇧ Y", label: "Open system status", group: "tools" },
@@ -235,14 +228,12 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { id: "tour", trigger: "/tour", label: "Restart tour", hint: "guided onboarding walkthrough", icon: "✦" },
   { id: "crypto", trigger: "/crypto", label: "Crypto explainer", hint: "see the real PBKDF2 flow", icon: "🔑" },
   { id: "export", trigger: "/export", label: "Export project ZIP", hint: "download all files as .zip", icon: "📦" },
-  { id: "voice", trigger: "/voice", label: "Start voice", hint: "join the voice mesh", icon: "♪" },
   { id: "files", trigger: "/files", label: "Open files drawer", hint: "upload + share files", icon: "📁" },
   { id: "rooms", trigger: "/rooms", label: "Recent rooms", hint: "rejoin a past room", icon: "🔖" },
   { id: "status", trigger: "/status", label: "System status", hint: "relay metrics + health check", icon: "📊" },
   { id: "security", trigger: "/security", label: "Threat model", hint: "honest security write-up", icon: "🛡️" },
   { id: "find", trigger: "/find", label: "Find in file", hint: "search + replace (⌘F)", icon: "🔍" },
   { id: "syntax", trigger: "/syntax", label: "Toggle syntax highlight", hint: "color the editor", icon: "🎨" },
-  { id: "whiteboard", trigger: "/whiteboard", label: "Open whiteboard", hint: "collaborative canvas", icon: "✎" },
   { id: "history", trigger: "/history", label: "Time machine", hint: "travel through revisions", icon: "⌛" },
   { id: "shrug", trigger: "/shrug", label: "Shrug", hint: "send ¯\\_(ツ)_/¯ to chat", icon: "¯" },
   { id: "format", trigger: "/format", label: "Format code", hint: "prettify the active file", icon: "≡" },
@@ -274,7 +265,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: "slash",
     title: "Type / for slash commands",
-    body: "In the editor, type / to get a popup of commands: /run, /test, /clear, /whiteboard, /crypto, /export — instant actions without reaching for the mouse.",
+    body: "In the editor, type / to get a popup of commands: /run, /test, /clear, /history, /crypto, /export — instant actions without reaching for the mouse.",
     kbd: "/",
     action: "slash",
   },
@@ -343,7 +334,6 @@ interface AnonState {
   paletteOpen: boolean;
   shortcutsOpen: boolean;
   historyOpen: boolean;
-  whiteboardOpen: boolean;
   terminalOpen: boolean;
   slashOpen: boolean;
   notificationsOpen: boolean;
@@ -366,11 +356,9 @@ interface AnonState {
   running: boolean;
   stdin: string;
 
-  // whiteboard
-  whiteboardStrokes: WhiteboardStroke[];
-  whiteboardTool: "pen" | "highlighter" | "eraser";
-  whiteboardColor: string;
-  whiteboardSize: number;
+  // real document history (snapshots of what was actually in the editor)
+  docHistory: HistoryEntry[];
+  undoDepth: number; // how many steps back from the newest snapshot we are
 
   // test runner
   testResult: TestRunResult | null;
@@ -442,10 +430,6 @@ interface AnonState {
   bookmarksOpen: boolean;
   paletteRecents: string[]; // command IDs recently used
 
-  // voice chat
-  voice: VoiceState;
-  voiceOpen: boolean;
-
   // syntax highlighting
   syntaxHighlight: boolean;
 
@@ -472,18 +456,12 @@ interface AnonState {
   // shared files
   addSharedFile: (f: SharedFile) => void;
   removeSharedFile: (id: string) => void;
-  // voice
-  toggleVoice: () => void;
-  setVoiceConnected: (b: boolean) => void;
-  setMuted: (b: boolean) => void;
-  setDeafened: (b: boolean) => void;
-  toggleMute: () => void;
-  toggleDeafen: () => void;
-  setPushToTalk: (b: boolean) => void;
-  setSpeaking: (b: boolean) => void;
-  setMicLevel: (n: number) => void;
   // syntax
   toggleSyntaxHighlight: () => void;
+  // history
+  recordHistory: (meta: { author: string; color: string; authorId: string }) => void;
+  undoEdit: () => void;
+  redoEdit: () => void;
   // recent rooms
   addRecentRoom: (r: Omit<RecentRoom, "visitedAt">) => void;
   removeRecentRoom: (code: string) => void;
@@ -532,10 +510,6 @@ interface AnonState {
   }) => void;
   exitRoom: () => void;
 
-  // voice
-  startVoice: () => Promise<void>;
-  endVoice: () => void;
-
   setDisplayName: (n: string) => void;
   setColor: (c: string) => void;
   setTheme: (t: ThemeId) => void;
@@ -553,7 +527,6 @@ interface AnonState {
   togglePalette: () => void;
   toggleShortcuts: () => void;
   toggleHistory: () => void;
-  toggleWhiteboard: () => void;
   toggleTerminal: () => void;
   toggleNotifications: () => void;
   toggleTestPanel: () => void;
@@ -574,13 +547,6 @@ interface AnonState {
   clearTerminal: () => void;
   setTerminalTab: (t: "output" | "stdin") => void;
   setStdin: (s: string) => void;
-
-  // whiteboard
-  addStroke: (s: WhiteboardStroke) => void;
-  clearWhiteboard: () => void;
-  setWhiteboardTool: (t: "pen" | "highlighter" | "eraser") => void;
-  setWhiteboardColor: (c: string) => void;
-  setWhiteboardSize: (n: number) => void;
 
   // test runner
   runTests: () => Promise<void>;
@@ -933,7 +899,6 @@ export const useAnon = create<AnonState>()(
       paletteOpen: false,
       shortcutsOpen: false,
       historyOpen: false,
-      whiteboardOpen: false,
       terminalOpen: false,
       slashOpen: false,
       notificationsOpen: false,
@@ -953,10 +918,8 @@ export const useAnon = create<AnonState>()(
       running: false,
       stdin: "",
 
-      whiteboardStrokes: [],
-      whiteboardTool: "pen",
-      whiteboardColor: "#4c8dff",
-      whiteboardSize: 3,
+      docHistory: [],
+      undoDepth: 0,
 
       testResult: null,
       testing: false,
@@ -1006,16 +969,6 @@ export const useAnon = create<AnonState>()(
       recentRooms: [],
       bookmarksOpen: false,
       paletteRecents: [],
-
-      voice: {
-        connected: false,
-        muted: false,
-        deafened: false,
-        speaking: false,
-        pushToTalk: false,
-        level: 0,
-      },
-      voiceOpen: false,
 
       syntaxHighlight: true,
 
@@ -1174,6 +1127,8 @@ export const useAnon = create<AnonState>()(
             ],
             messages: [],
             snapshots: [],
+            docHistory: [],
+            undoDepth: 0,
             recentRooms: [newRecent, ...filteredRecents].slice(0, 12),
           };
         }),
@@ -1190,7 +1145,6 @@ export const useAnon = create<AnonState>()(
           paletteOpen: false,
           shortcutsOpen: false,
           historyOpen: false,
-          whiteboardOpen: false,
           terminalOpen: false,
           slashOpen: false,
           notificationsOpen: false,
@@ -1200,15 +1154,6 @@ export const useAnon = create<AnonState>()(
           cryptoOpen: false,
           mdPreviewOpen: false,
           tourOpen: false,
-          voiceOpen: false,
-          voice: {
-            connected: false,
-            muted: false,
-            deafened: false,
-            speaking: false,
-            pushToTalk: false,
-            level: 0,
-          },
           sharedFiles: [],
           bookmarksOpen: false,
           privacyOpen: false,
@@ -1217,6 +1162,8 @@ export const useAnon = create<AnonState>()(
           goalText: "",
           goalSetAt: null,
           findOpen: false,
+          docHistory: [],
+          undoDepth: 0,
           syncState: "dead",
           roomState: null,
           canEdit: true,
@@ -1248,7 +1195,6 @@ export const useAnon = create<AnonState>()(
       toggleShortcuts: () =>
         set((s) => ({ shortcutsOpen: !s.shortcutsOpen, paletteOpen: false })),
       toggleHistory: () => set((s) => ({ historyOpen: !s.historyOpen })),
-      toggleWhiteboard: () => set((s) => ({ whiteboardOpen: !s.whiteboardOpen })),
       toggleTerminal: () => set((s) => ({ terminalOpen: !s.terminalOpen })),
       toggleNotifications: () =>
         set((s) => ({
@@ -1410,13 +1356,65 @@ export const useAnon = create<AnonState>()(
       setTerminalTab: (t) => set({ terminalTab: t }),
       setStdin: (s2) => set({ stdin: s2 }),
 
-      // ---------- whiteboard ----------
-      addStroke: (stroke) =>
-        set((s) => ({ whiteboardStrokes: [...s.whiteboardStrokes, stroke] })),
-      clearWhiteboard: () => set({ whiteboardStrokes: [] }),
-      setWhiteboardTool: (t) => set({ whiteboardTool: t }),
-      setWhiteboardColor: (c) => set({ whiteboardColor: c }),
-      setWhiteboardSize: (n) => set({ whiteboardSize: n }),
+      // ---------- real document history ----------
+      /**
+       * Record a snapshot of the active file's real content. Called by the
+       * session whenever text changes (local or remote). Throttled: a new
+       * snapshot is kept only if ≥ 12 s passed OR the content changed by
+       * ≥ 200 chars since the last one. Capped at 60 entries per room.
+       */
+      recordHistory: (meta) => {
+        const s = get();
+        const file = s.files.find((f) => f.id === s.activeFileId) || s.files[0];
+        if (!file) return;
+        const last = s.docHistory[s.docHistory.length - 1];
+        if (last && last.fileId === file.id) {
+          if (last.content === file.content) return;
+          const changed = Math.abs(last.content.length - file.content.length) +
+            (last.content === file.content ? 0 : 1);
+          const timeOk = Date.now() - last.ts >= 12_000;
+          const sizeOk = changed >= 200 || file.content.length - last.content.length >= 200;
+          if (!timeOk && !sizeOk) return;
+        }
+        const entry: HistoryEntry = {
+          id: "h" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          fileId: file.id,
+          fileName: file.name,
+          ts: Date.now(),
+          content: file.content,
+          author: meta.author,
+          color: meta.color,
+          authorId: meta.authorId,
+        };
+        set((st) => ({
+          docHistory: [...st.docHistory, entry].slice(-60),
+          undoDepth: 0,
+        }));
+      },
+
+      /** Step back / forward through real recorded snapshots (undo/redo). */
+      undoEdit: () => {
+        const s = get();
+        const hist = s.docHistory;
+        if (hist.length < 2) return;
+        const nextDepth = Math.min(s.undoDepth + 1, hist.length - 1);
+        const target = hist[hist.length - 1 - nextDepth];
+        const file = s.files.find((f) => f.id === target.fileId);
+        if (!file) return;
+        s.updateFileContent(file.id, target.content);
+        set({ undoDepth: nextDepth });
+      },
+      redoEdit: () => {
+        const s = get();
+        if (s.undoDepth <= 0) return;
+        const nextDepth = s.undoDepth - 1;
+        const target = s.docHistory[s.docHistory.length - 1 - nextDepth];
+        if (!target) return;
+        const file = s.files.find((f) => f.id === target.fileId);
+        if (!file) return;
+        s.updateFileContent(file.id, target.content);
+        set({ undoDepth: nextDepth });
+      },
 
       // ---------- test runner (REAL execution: JS in-browser, Python via sandbox) ----------
       runTests: async () => {
@@ -1598,19 +1596,38 @@ export const useAnon = create<AnonState>()(
           testExpanded: { ...s.testExpanded, [suiteId]: !s.testExpanded[suiteId] },
         })),
 
-      // ---------- named snapshots ----------
+      // ---------- named snapshots (bookmark a REAL history entry) ----------
       addSnapshot: (label) => {
         const s = get();
         if (!label.trim()) return;
+        const file = s.files.find((f) => f.id === s.activeFileId) || s.files[0];
+        if (!file) return;
+        // Snapshot the file's current REAL content as a named history entry.
+        const entry: HistoryEntry = {
+          id: "h" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          fileId: file.id,
+          fileName: file.name,
+          ts: Date.now(),
+          content: file.content,
+          author: s.displayName || "you",
+          color: s.color,
+          authorId: "me",
+          label: label.trim(),
+        };
         const snap: NamedSnapshot = {
           id: "snap" + Date.now(),
           label: label.trim(),
-          timelineIdx: 0,
-          author: s.displayName || "you",
-          color: s.color,
-          ts: Date.now(),
+          historyId: entry.id,
+          author: entry.author,
+          color: entry.color,
+          ts: entry.ts,
         };
-        set({ snapshots: [snap, ...s.snapshots], newSnapLabel: "" });
+        set((st) => ({
+          snapshots: [snap, ...st.snapshots],
+          docHistory: [...st.docHistory, entry].slice(-60),
+          undoDepth: 0,
+          newSnapLabel: "",
+        }));
       },
       removeSnapshot: (id) =>
         set((s) => ({ snapshots: s.snapshots.filter((sn) => sn.id !== id) })),
@@ -1809,32 +1826,6 @@ export const useAnon = create<AnonState>()(
       addSharedFile: (f) => set((s) => ({ sharedFiles: [f, ...s.sharedFiles] })),
       removeSharedFile: (id) =>
         set((s) => ({ sharedFiles: s.sharedFiles.filter((f) => f.id !== id) })),
-
-      // ---------- voice chat ----------
-      startVoice: async () => {
-        try {
-          const mesh = joinVoice();
-          if (!mesh) return;
-          await mesh.start();
-          set((s) => ({ voice: { ...s.voice, connected: true } }));
-        } catch (err) {
-          set((s) => ({ voice: { ...s.voice, connected: false } }));
-          throw err;
-        }
-      },
-      endVoice: () => {
-        leaveVoice();
-      },
-      toggleVoice: () => set((s) => ({ voiceOpen: !s.voiceOpen })),
-      setVoiceConnected: (b) => set((s) => ({ voice: { ...s.voice, connected: b } })),
-      setMuted: (b) => set((s) => ({ voice: { ...s.voice, muted: b } })),
-      setDeafened: (b) => set((s) => ({ voice: { ...s.voice, deafened: b, muted: b ? true : s.voice.muted } })),
-      toggleMute: () => set((s) => ({ voice: { ...s.voice, muted: !s.voice.muted } })),
-      toggleDeafen: () =>
-        set((s) => ({ voice: { ...s.voice, deafened: !s.voice.deafened, muted: !s.voice.deafened ? true : s.voice.muted } })),
-      setPushToTalk: (b) => set((s) => ({ voice: { ...s.voice, pushToTalk: b, speaking: b } })),
-      setSpeaking: (b) => set((s) => ({ voice: { ...s.voice, speaking: b } })),
-      setMicLevel: (n) => set((s) => ({ voice: { ...s.voice, level: n } })),
 
       // ---------- syntax highlighting ----------
       toggleSyntaxHighlight: () => set((s) => ({ syntaxHighlight: !s.syntaxHighlight })),

@@ -50,7 +50,7 @@ export function LandingFooter() {
             <ul className="space-y-2 anon-sans text-sm anon-mut">
               <li><button onClick={() => toggleFaq()} className="hover:anon-fg text-left cursor-pointer">Frequently Asked Questions (FAQ)</button></li>
               <li><button onClick={() => toggleShortcuts()} className="hover:anon-fg text-left cursor-pointer">Keyboard shortcuts</button></li>
-              <li><button onClick={() => toast("Slash commands in editor", { description: "Type / in any line: /run /test /clear /whiteboard /crypto /faq /export …" })} className="hover:anon-fg text-left cursor-pointer">Slash commands</button></li>
+              <li><button onClick={() => toast("Slash commands in editor", { description: "Type / in any line: /run /test /clear /history /crypto /faq /export …" })} className="hover:anon-fg text-left cursor-pointer">Slash commands</button></li>
               <li><button onClick={() => toggleStatus()} className="hover:anon-fg text-left cursor-pointer">System status</button></li>
             </ul>
           </div>

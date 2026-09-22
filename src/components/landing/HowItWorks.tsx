@@ -14,7 +14,7 @@ const STEPS = [
   {
     n: "03",
     title: "Write together. Erase on the way out.",
-    body: "Cursors, chat, files, voice — all sync in real time. When the last person leaves, the room self-destructs after the TTL you chose (10 min / 1 h / 24 h).",
+    body: "Cursors, typing indicators, chat, files — all sync in real time. When the last person leaves, the room self-destructs after the TTL you chose (10 min / 1 h / 24 h).",
   },
 ];
 
