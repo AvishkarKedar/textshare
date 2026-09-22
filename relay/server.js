@@ -664,7 +664,17 @@ async function runSandboxedProcess({ cmd, args = [], input = '', workspaceDir = 
 }
 
 async function executeCodeInternal({ language, code, stdin = '' }) {
-  const normLang = (language || '').toLowerCase().trim()
+  let normLang = (language || '').toLowerCase().trim()
+  // C++ snippets pasted into a .c file are extremely common (web tutorials):
+  // gcc dies with "fatal error: iostream: No such file or directory".
+  // Route them to the g++ path instead of failing.
+  if (normLang === 'c' && (
+    /#\s*include\s*<(?:iostream|bits\/stdc\+\+\.h|string|vector|map|unordered_map|set|queue|stack|deque|list|array|memory|functional|algorithm|utility|random|regex|sstream|fstream|iomanip|chrono|thread|mutex|future|atomic|optional|variant|tuple|bitset)>/.test(code) ||
+    /\busing\s+namespace\s+std\b/.test(code) ||
+    /\bstd\s*::/.test(code)
+  )) {
+    normLang = 'cpp'
+  }
   const cacheKey = sha256(normLang + ':' + code + ':' + stdin)
   if (RUNNER_CACHE.has(cacheKey)) {
     return RUNNER_CACHE.get(cacheKey)

@@ -23,6 +23,19 @@ const LANGS = new Set([
 const MAX_RUNS_PER_MIN = 20;
 const WINDOW_MS = 60_000;
 
+/**
+ * C++ code pasted into a .c file is extremely common (tutorials, snippets).
+ * gcc then dies with `fatal error: iostream: No such file or directory`.
+ * Detection routes it to g++ (the C++ sandbox path) before proxying.
+ */
+const CPP_INCLUDE_RE =
+  /#\s*include\s*<(?:iostream|bits\/stdc\+\+\.h|string|vector|map|unordered_map|multimap|set|unordered_set|queue|priority_queue|stack|deque|list|array|forward_list|memory|functional|algorithm|utility|numeric|random|regex|sstream|fstream|iomanip|chrono|thread|mutex|future|atomic|optional|variant|tuple|bitset)>/;
+const CPP_HINT_RE = /(?:\busing\s+namespace\s+std\b|\bstd\s*::)/;
+
+function looksLikeCpp(source: string): boolean {
+  return CPP_INCLUDE_RE.test(source) || CPP_HINT_RE.test(source);
+}
+
 // Best-effort token bucket local to this Pages isolate. Cloudflare runs many
 // isolates in parallel, so the effective ceiling is approximate — the hard
 // limit is enforced on the relay itself. Sufficient to blunt single-source
@@ -83,8 +96,11 @@ export async function onRequestPost(context: { request: Request }): Promise<Resp
 
   const rawCode = body.source ?? body.code;
   const code = typeof rawCode === "string" ? rawCode : "";
-  const language = typeof body.language === "string" ? body.language.toLowerCase().trim() : "";
+  let language = typeof body.language === "string" ? body.language.toLowerCase().trim() : "";
   const stdin = typeof body.stdin === "string" ? body.stdin : "";
+
+  // A .c file containing C++ headers/namespaces compiles with g++, not gcc.
+  if (language === "c" && code && looksLikeCpp(code)) language = "cpp";
 
   if (!code) {
     return Response.json(
@@ -121,14 +137,31 @@ export async function onRequestPost(context: { request: Request }): Promise<Resp
 
   const start = Date.now();
   try {
-    const res = await fetch("https://relay.avishkark.in/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ language, code, stdin }),
-      signal: AbortSignal.timeout(20000),
-    });
+    const proxy = (lang: string) =>
+      fetch("https://relay.avishkark.in/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: lang, code, stdin }),
+        signal: AbortSignal.timeout(20000),
+      });
 
-    const data: any = await res.json().catch(() => null);
+    let res = await proxy(language);
+    let data: any = await res.json().catch(() => null);
+
+    // Safety net for C++ sources the pre-check above did not catch: a gcc
+    // "fatal error: <cpp-header>: No such file" on a .c run is retried once
+    // as C++ so web-copied snippets still execute.
+    if (
+      language === "c" &&
+      data &&
+      typeof data.stderr === "string" &&
+      /fatal error:\s*(iostream|bits\/stdc\+\+\.h|vector|string|map|memory)\b/i.test(data.stderr)
+    ) {
+      language = "cpp";
+      res = await proxy(language);
+      data = await res.json().catch(() => null);
+    }
+
     if (!data || typeof data !== "object") {
       return Response.json(
         {
