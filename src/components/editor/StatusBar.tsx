@@ -1,6 +1,6 @@
 "use client";
 
-import { Wifi, WifiOff, Lock, Eye, Radio, HelpCircle, ShieldCheck, Timer } from "lucide-react";
+import { Wifi, WifiOff, Lock, Eye, Radio, HelpCircle, ShieldCheck, Timer, CornerDownLeft } from "lucide-react";
 import { useAnon } from "@/lib/store";
 import type { ConnState } from "@/lib/relay";
 
@@ -32,6 +32,8 @@ export function StatusBar() {
   const online = s.participants.filter((p) => p.online).length;
   const conn = connInfo(s.syncState);
   const e2e = s.syncState === "connected" || s.syncState === "synced";
+  const activeFile = s.files.find((f) => f.id === s.activeFileId);
+  const stdinLines = s.stdin.trim() ? s.stdin.split("\n").length : 0;
 
   // Room TTL reported live by the relay in the room-state frame.
   const ttlMs = s.roomState?.ttl ?? null;
@@ -89,6 +91,21 @@ export function StatusBar() {
         <HelpCircle className="h-3 w-3" /> FAQ
       </button>
 
+      {/* stdin readiness — one glance tells you whether the next Run takes input */}
+      {stdinLines > 0 && (
+        <button
+          onClick={() => {
+            s.setStdinOpen(true);
+            if (!s.terminalOpen) s.toggleTerminal();
+          }}
+          className="inline-flex items-center gap-1 cursor-pointer transition-colors"
+          style={{ color: "var(--anon-accent)" }}
+          title={`${stdinLines} line${stdinLines === 1 ? "" : "s"} of program input ready — piped as stdin on Run`}
+        >
+          <CornerDownLeft className="h-3 w-3" /> in:{stdinLines}
+        </button>
+      )}
+
       {s.zenMode && (
         <button
           onClick={() => s.toggleZen()}
@@ -101,6 +118,11 @@ export function StatusBar() {
       )}
 
       <div className="ml-auto flex items-center gap-3">
+        {activeFile && (
+          <span className="hidden sm:inline anon-fg" title="Active file language">
+            {activeFile.language}
+          </span>
+        )}
         <span className="hidden sm:inline items-center gap-1">
           {s.roomCode || "------"}
           <span className="anon-dim"> · <Timer className="inline h-3 w-3 align-[-2px]" /> {ttlLabel} left</span>

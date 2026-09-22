@@ -345,6 +345,59 @@ html[data-theme] {
 .anon-scroll::-webkit-scrollbar-thumb { background: var(--anon-line2); border-radius: 0; }
 .anon-scroll::-webkit-scrollbar-thumb:hover { background: var(--anon-mut); }
 
+/* ---------- v5.3 mobile ergonomics & polish ---------- */
+/* Kill the 300ms double-tap-zoom delay + grey tap flashes on touch. */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+a,
+input,
+textarea,
+select,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+/* Branded text selection. */
+::selection {
+  background: var(--anon-accent);
+  color: var(--anon-accent-fg);
+}
+
+/*
+ * iOS Safari auto-zooms the page when a <textarea>/<input> with font-size
+ * < 16px receives focus. On coarse-pointer (touch) devices the editor + the
+ * stdin box therefore render at 16px; pointer devices keep the compact 13px.
+ * Both consume the same --anon-edfont token so overlay + textarea stay in
+ * perfect sync.
+ */
+@media (hover: none) and (pointer: coarse) {
+  :root,
+  html[data-theme] {
+    --anon-edfont: 16px;
+  }
+  /* iOS Safari auto-zooms on any focused input/textarea below 16px —
+     bump every text control to at least 16px on touch devices.
+     (.ed-font textareas size themselves via --anon-edfont and are exempt.) */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea:not(.ed-font),
+  select {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* Terminal resize handle. */
+.term-drag {
+  cursor: row-resize;
+  touch-action: none;
+}
+
+/* Notch / home-indicator safe areas (viewport-fit=cover). */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* focus-visible ring for all interactive elements */
 button:focus-visible,
 a:focus-visible,

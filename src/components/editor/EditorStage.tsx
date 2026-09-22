@@ -45,9 +45,23 @@ export function EditorStage() {
   const s = useAnon();
   const file = s.files.find((f) => f.id === s.activeFileId) || s.files[0] || { id: "f1", name: "main.js", language: "javascript", content: "" };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const gutterRef = useRef<HTMLDivElement>(null);
   const [cursorLine, setCursorLine] = useState(5);
   const [slashRect, setSlashRect] = useState<DOMRect | null>(null);
   const [slashQ, setSlashQ] = useState("");
+
+  // Coarse-pointer (touch) detection — the editor font must be ≥ 16px there
+  // or iOS Safari auto-zooms the page on every focus. Respects the user's
+  // fontSize setting from Settings (12–18px) on pointer devices.
+  const [coarsePointer, setCoarsePointer] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(hover: none) and (pointer: coarse)");
+    const update = () => setCoarsePointer(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  const editorFont = Math.max(s.fontSize, coarsePointer ? 16 : 0);
 
   // remote cursors mapped onto line numbers — shown as colored line numbers
   // in the gutter plus a name tag ("who is where" at a glance).
@@ -422,11 +436,18 @@ export function EditorStage() {
 
   return (
     <div className="relative flex min-h-0 flex-1 bg-[var(--anon-bg)]">
-      {/* editor area */}
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      {/* editor area — the font size token drives gutter, overlay and
+          textarea together so every line stays perfectly aligned */}
+      <div
+        className="relative flex min-h-0 flex-1 flex-col"
+        style={{ "--anon-edfont": `${editorFont}px` } as React.CSSProperties}
+      >
         <div className="flex min-h-0 flex-1">
           {/* gutter — remote cursors shown in the peer's color */}
-          <div className="anon-mono w-12 flex-none select-none hairline-r bg-[var(--anon-raise)] px-2 py-3 text-right text-[11px] anon-dim anon-scroll overflow-y-auto">
+          <div
+            ref={gutterRef}
+            className="anon-mono w-12 flex-none select-none hairline-r bg-[var(--anon-raise)] px-2 py-3 text-right text-[length:var(--anon-edfont)] anon-dim anon-scroll overflow-y-auto"
+          >
             {(file.content || "// start typing").split("\n").map((_, i) => {
               const line = i + 1;
               const here = cursorByLine.get(line);
@@ -466,7 +487,7 @@ export function EditorStage() {
             {s.syntaxHighlight && !showPlaceholder && (
               <div
                 aria-hidden
-                className="anon-mono pointer-events-none absolute inset-0 overflow-hidden p-3 text-[13px] leading-[1.6]"
+                className="anon-mono pointer-events-none absolute inset-0 overflow-hidden p-3 text-[length:var(--anon-edfont)] leading-[1.6]"
                 style={{ fontFamily: "var(--anon-mono)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}
               >
                 {file.content.split("\n").map((line, i) => (
@@ -485,6 +506,10 @@ export function EditorStage() {
               onKeyUp={handleSelect}
               onClick={handleSelect}
               onKeyDown={handleKeyDown}
+              onScroll={(e) => {
+                // keep line numbers glued to the code while scrolling
+                if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop;
+              }}
               onPaste={(e) => {
                 const pasted = e.clipboardData.getData("text");
                 if (pasted && pasted.length > 20) {
@@ -511,13 +536,13 @@ export function EditorStage() {
                 }
               }}
               spellCheck={false}
-              className={`anon-mono anon-scroll relative h-full w-full flex-1 resize-none bg-transparent p-3 text-[13px] leading-[1.6] outline-none ${s.syntaxHighlight ? "text-transparent caret-[var(--anon-fg)]" : "text-[var(--anon-fg)]"}`}
+              className={`anon-mono anon-scroll ed-font relative h-full w-full flex-1 resize-none bg-transparent p-3 text-[length:var(--anon-edfont)] leading-[1.6] outline-none ${s.syntaxHighlight ? "text-transparent caret-[var(--anon-fg)]" : "text-[var(--anon-fg)]"}`}
               style={{ fontFamily: "var(--anon-mono)" }}
             />
             {/* empty-state placeholder overlay */}
             {showPlaceholder && (
               <div className="pointer-events-none absolute inset-0 px-3 py-3">
-                <div className="anon-mono text-[13px] leading-[1.6] anon-dim">
+                <div className="anon-mono text-[length:var(--anon-edfont)] leading-[1.6] anon-dim">
                   <div>{"// You're live. Share "}{s.roomCode || "ABC123"}{" with someone."}</div>
                   <div>{"// Everything here is encrypted. Try typing "}<span className="anon-accent">/</span>{" for slash commands."}</div>
                   <div className="mt-2 inline-flex items-center gap-1 anon-mut">

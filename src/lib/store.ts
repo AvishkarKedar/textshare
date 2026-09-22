@@ -69,9 +69,11 @@ export interface ShortcutDef {
 
 export interface TerminalLine {
   id: string;
-  kind: "stdout" | "stderr" | "stdin" | "meta" | "error";
+  kind: "stdout" | "stderr" | "stdin" | "meta" | "error" | "hint";
   text: string;
   ts: number;
+  /** Exit code for the final [exit N] meta line — colors it ok/danger. */
+  exit?: number;
 }
 
 export interface SlashCommand {
@@ -356,7 +358,8 @@ interface AnonState {
 
   // terminal / runner
   terminalLines: TerminalLine[];
-  terminalTab: "output" | "stdin";
+  terminalHeight: number;
+  stdinOpen: boolean;
   running: boolean;
   stdin: string;
 
@@ -559,7 +562,8 @@ interface AnonState {
   // terminal
   runCode: () => Promise<void>;
   clearTerminal: () => void;
-  setTerminalTab: (t: "output" | "stdin") => void;
+  setTerminalHeight: (h: number) => void;
+  setStdinOpen: (v: boolean) => void;
   setStdin: (s: string) => void;
 
   // test runner
@@ -932,7 +936,8 @@ export const useAnon = create<AnonState>()(
       messages: [],
 
       terminalLines: [],
-      terminalTab: "output",
+      terminalHeight: 240,
+      stdinOpen: true,
       running: false,
       stdin: "",
 
@@ -1390,8 +1395,9 @@ export const useAnon = create<AnonState>()(
             ? "cpp"
             : file.language;
 
-        set({ running: true, terminalOpen: true, terminalTab: "output" });
+        set({ running: true, terminalOpen: true, stdinOpen: true });
         const startTs = Date.now();
+        const stdinLineCount = s.stdin.trim() ? s.stdin.split("\n").length : 0;
         set((st) => ({
           terminalLines: [
             ...st.terminalLines,
@@ -1401,6 +1407,16 @@ export const useAnon = create<AnonState>()(
               text: `$ run ${file.name} (${sendLang}) · ${new Date().toLocaleTimeString()}`,
               ts: startTs,
             },
+            ...(stdinLineCount > 0
+              ? [
+                  {
+                    id: "si" + startTs,
+                    kind: "stdin" as const,
+                    text: `· stdin · ${stdinLineCount} line${stdinLineCount === 1 ? "" : "s"} piped in`,
+                    ts: startTs,
+                  },
+                ]
+              : []),
           ],
         }));
 
@@ -1417,22 +1433,68 @@ export const useAnon = create<AnonState>()(
           const data = await res.json();
           const ts = Date.now();
           const newLines: TerminalLine[] = [];
-          if (data.stdout) {
-            data.stdout.split("\n").forEach((l: string, i: number) => {
+          const outText = typeof data.stdout === "string" ? data.stdout : "";
+          const errText = typeof data.stderr === "string" ? data.stderr : "";
+          const exitCode = typeof data.exitCode === "number" ? data.exitCode : data.ok ? 0 : 1;
+          if (outText) {
+            outText.split("\n").forEach((l: string, i: number) => {
               newLines.push({ id: `o${ts}-${i}`, kind: "stdout" as const, text: l, ts });
             });
           }
-          if (data.stderr) {
-            data.stderr.split("\n").forEach((l: string, i: number) => {
+          if (errText) {
+            errText.split("\n").forEach((l: string, i: number) => {
               newLines.push({ id: `e${ts}-${i}`, kind: "stderr" as const, text: l, ts });
             });
           }
           newLines.push({
             id: `m${ts}`,
             kind: "meta" as const,
-            text: `[exit ${data.exitCode}] · ${data.durationMs}ms`,
+            text: `[exit ${exitCode}] · ${data.durationMs}ms`,
             ts,
+            exit: exitCode,
           });
+
+          // Friendly follow-up hints for the failure modes users actually hit.
+          // These are appended AFTER the raw error so the real output stays
+          // first — they translate server-side problems into next actions.
+          const hints: string[] = [];
+          const missingModule = errText.match(
+            /ModuleNotFoundError:\s*No module named ['"]([^'"]+)['"]/,
+          );
+          if (missingModule) {
+            hints.push(
+              `python module "${missingModule[1]}" is not installed on the runner. Pre-bundled: numpy, pandas, sympy, matplotlib, requests, bs4, pillow — anything else needs the relay owner to add it.`,
+            );
+          }
+          if (
+            exitCode === 133 ||
+            /Failed to reserve virtual memory|Fatal process OOM/.test(errText)
+          ) {
+            hints.push(
+              "the sandbox hit a runner memory limit for this language — JavaScript/Go runs come back after the room owner redeploys the relay (one command, see relay/README.md).",
+            );
+          } else if (/failed to reserve page summary memory/.test(errText)) {
+            hints.push(
+              "the Go runtime hit a sandbox memory limit — works again after the room owner redeploys the relay (see relay/README.md).",
+            );
+          }
+          if (
+            hints.length === 0 &&
+            exitCode !== 0 &&
+            !outText.trim() &&
+            !s.stdin.trim() &&
+            ["python", "c", "cpp", "java", "javascript", "bash", "go", "rust"].includes(
+              String(sendLang).toLowerCase(),
+            )
+          ) {
+            hints.push(
+              "no output — if your program reads input (input(), scanf, cin, Scanner), type the values in the input box below and run again.",
+            );
+          }
+          hints.forEach((h, i) => {
+            newLines.push({ id: `h${ts}-${i}`, kind: "hint" as const, text: h, ts });
+          });
+
           set((st) => ({ terminalLines: [...st.terminalLines, ...newLines] }));
         } catch (e) {
           const ts = Date.now();
@@ -1447,7 +1509,8 @@ export const useAnon = create<AnonState>()(
         }
       },
       clearTerminal: () => set({ terminalLines: [] }),
-      setTerminalTab: (t) => set({ terminalTab: t }),
+      setTerminalHeight: (h) => set({ terminalHeight: h }),
+      setStdinOpen: (v) => set({ stdinOpen: v }),
       setStdin: (s2) => set({ stdin: s2 }),
 
       // ---------- real document history ----------

@@ -76,7 +76,7 @@ export async function onRequestGet(): Promise<Response> {
     {
       ok: true,
       service: "anonshare",
-      version: "5.2.0",
+      version: "5.3.0",
       environment: "production",
       timestamp: new Date().toISOString(),
       relay: {
@@ -111,6 +111,8 @@ export async function onRequestGet(): Promise<Response> {
       runner: {
         languages: 8,
         supported: ["python", "javascript", "c", "cpp", "java", "rust", "go", "bash"],
+        stdin: true,
+        pythonPackages: ["numpy", "pandas", "sympy", "matplotlib", "requests", "bs4", "pillow"],
         sandbox,
         maxRamMb: 256,
         timeoutMs: 8_000,

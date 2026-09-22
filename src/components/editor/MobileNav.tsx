@@ -14,16 +14,19 @@ export function MobileNav() {
       <button
         onClick={() => s.runCode()}
         disabled={s.running}
-        className="fixed bottom-[5.75rem] right-3 z-30 inline-flex h-12 w-12 items-center justify-center bg-[var(--anon-accent)] text-[var(--anon-accent-fg)] shadow-lg shadow-black/40 transition-transform active:scale-95 disabled:opacity-60 md:hidden"
-        style={{ borderRadius: 0 }}
+        className="fixed right-3 z-30 inline-flex h-12 w-12 items-center justify-center bg-[var(--anon-accent)] text-[var(--anon-accent-fg)] shadow-lg shadow-black/40 transition-transform active:scale-95 disabled:opacity-60 md:hidden"
+        style={{ bottom: "calc(5.75rem + env(safe-area-inset-bottom, 0px))" }}
         title="Run code"
         aria-label="Run code"
       >
         <Play className={`h-5 w-5 ${s.running ? "animate-spin" : ""}`} />
       </button>
 
-      {/* bottom nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex h-12 items-stretch hairline-t anon-raise md:hidden">
+      {/* bottom nav — respects the home-indicator safe area on iOS */}
+      <nav
+        className="safe-bottom fixed inset-x-0 bottom-0 z-20 flex items-stretch hairline-t anon-raise md:hidden"
+        aria-label="Mobile navigation"
+      >
         <NavBtn icon={FolderOpen} label="files" onClick={() => s.toggleFiles()} active={s.filesOpen} />
         <NavBtn icon={MessageSquare} label="chat" onClick={() => s.toggleChat()} active={s.chatOpen} />
         <NavBtn
@@ -41,8 +44,12 @@ export function MobileNav() {
         <NavBtn icon={MoreHorizontal} label="more" onClick={() => s.togglePalette()} />
       </nav>
 
-      {/* accessory keys bar (above bottom nav) */}
-      <div className="fixed inset-x-0 bottom-12 z-10 flex h-9 items-stretch hairline-t anon-panel anon-mono text-xs anon-mut md:hidden overflow-x-auto no-scrollbar">
+      {/* accessory keys bar (above bottom nav) — 40px keys for finger taps */}
+      <div
+        className="fixed inset-x-0 z-10 flex h-10 items-stretch hairline-t anon-panel anon-mono text-sm anon-mut md:hidden overflow-x-auto no-scrollbar"
+        style={{ bottom: "calc(3rem + env(safe-area-inset-bottom, 0px))" }}
+        aria-label="Code symbol keys"
+      >
         {["{", "}", "(", ")", "[", "]", ";", "=", '"', "'", "/", "Tab", "=>"].map((k) => (
           <button
             key={k}
@@ -58,7 +65,7 @@ export function MobileNav() {
                 ta.dispatchEvent(new Event("input", { bubbles: true }));
               }
             }}
-            className="flex h-9 min-w-9 flex-none items-center justify-center px-2 hover:bg-[var(--anon-raise)]"
+            className="flex h-10 min-w-10 flex-none items-center justify-center px-2 hover:bg-[var(--anon-raise)] active:bg-[var(--anon-raise)]"
           >
             {k}
           </button>
@@ -85,7 +92,7 @@ function NavBtn({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] anon-mono transition-opacity ${
+      className={`flex h-12 min-w-12 flex-1 flex-col items-center justify-center gap-0.5 text-[10px] anon-mono transition-opacity ${
         active ? "anon-accent bg-[var(--anon-panel)]" : "anon-mut"
       } ${disabled ? "opacity-30" : ""}`}
     >

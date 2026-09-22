@@ -123,6 +123,9 @@ export function SettingsPanel() {
                 onChange={(e) => s.setFontSize(Number(e.target.value))}
                 className="mt-2 w-full accent-[var(--anon-accent)]"
               />
+              <div className="anon-mono mt-1 text-[10px] anon-dim">
+                applies live to editor, gutter &amp; input box · touch devices use 16px minimum (prevents zoom-on-focus)
+              </div>
               <div className="anon-mono mt-3 flex items-center justify-between text-[10px] uppercase tracking-wider anon-dim">
                 colored chat names
                 <button

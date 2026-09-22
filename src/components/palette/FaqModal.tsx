@@ -48,6 +48,18 @@ export const FAQ_DATA: FaqItem[] = [
     a: "On the hosted Oracle VPS relay, code runs inside a Bubblewrap-hardened Linux namespace with no network access, a 256 MB RAM cap, 5-second timeout, and read-only root with tmpfs scratchpad. Languages supported include JavaScript, Python, C, C++, Java, Rust, Go, and Bash.",
   },
   {
+    id: "stdin",
+    category: "runner",
+    q: "How do I give my program input values?",
+    a: "Open the terminal (Run button or ⌘↵) — below the output there is an INPUT box. Type one value per line (e.g. 3, then 4) and press Run: everything in that box is piped to your program's stdin. Python's input() reads one line per call, C's scanf(\"%d %d\") accepts space- or newline-separated values, C++'s cin >> x reads one token per line, and Java's Scanner works the same way. The status bar shows an 'in: N' indicator whenever input is ready, and the terminal prints how many lines were piped on each run.",
+  },
+  {
+    id: "packages",
+    category: "runner",
+    q: "Which Python libraries are available on the runner?",
+    a: "The full Python 3 standard library (math, json, sqlite3, re, datetime, random, …) plus a pre-bundled popular set: numpy, pandas, sympy, matplotlib (Agg backend), requests, bs4 (BeautifulSoup) and pillow. The sandbox has no network access, so pip install cannot run at execution time — the bundle is installed at relay boot instead. The relay owner can extend the set with the PY_BOOTSTRAP_PACKAGES environment variable. C and C++ compile with gcc/g++ 13 (math, pthread, and the full standard library are linked); Java ships its standard library.",
+  },
+  {
     id: "owner",
     category: "rooms",
     q: "Can the room creator lock or delete the room?",

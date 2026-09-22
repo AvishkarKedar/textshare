@@ -73,8 +73,8 @@ export function Hero() {
           <button
             onClick={() => {
               import("sonner").then(({ toast }) => {
-                toast("What's new in v5.2", {
-                  description: "Live typing indicators · color-coded collaborators · real time-machine history · slash commands · smart notifications · crypto explainer · find-and-replace · recent rooms · markdown preview · syntax highlighting · 5 themes.",
+                toast("What's new in v5.3", {
+                  description: "Program input (stdin) panel with per-language hints · Python libraries on the runner (numpy, pandas…) · resizable terminal · mobile keyboard & notch fixes · scroll-reveal landing · typing indicators · real history.",
                   duration: 8000,
                 });
               });
@@ -82,7 +82,7 @@ export function Hero() {
             className="anon-mono group inline-flex w-fit items-center gap-2 hairline anon-raise px-2.5 py-1 text-[10px] anon-mut transition-colors hover:bg-[var(--anon-panel)]"
           >
             <span className="inline-flex h-1.5 w-1.5 rounded-full anim-beat" style={{ background: "var(--anon-ok)" }} />
-            <span className="anon-fg">v5.2</span> · typing indicators, color-coded peers, real history
+            <span className="anon-fg">v5.3</span> · program input, python libraries, mobile polish
             <span className="anon-accent transition-transform group-hover:translate-x-0.5">→</span>
           </button>
 

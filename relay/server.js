@@ -534,7 +534,7 @@ function enqueueExecution(task) {
   })
 }
 
-async function runLocalProcess(cmd, args, input = '', timeoutMs = 8000, cwd = undefined) {
+async function runLocalProcess(cmd, args, input = '', timeoutMs = 8000, cwd = undefined, env = undefined) {
   return new Promise(resolve => {
     const startTime = Date.now()
     let stdout = '', stderr = '', finished = false
@@ -544,6 +544,7 @@ async function runLocalProcess(cmd, args, input = '', timeoutMs = 8000, cwd = un
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
       cwd: cwd || undefined,
+      env: env ? { ...process.env, ...env } : undefined,
     })
 
     const timer = setTimeout(() => {
@@ -603,9 +604,9 @@ async function runLocalProcess(cmd, args, input = '', timeoutMs = 8000, cwd = un
   })
 }
 
-async function runSandboxedProcess({ cmd, args = [], input = '', workspaceDir = null, isCompile = false, timeoutMs = 8000 }) {
+async function runSandboxedProcess({ cmd, args = [], input = '', workspaceDir = null, isCompile = false, timeoutMs = 8000, env = undefined }) {
   if (!HAS_BWRAP) {
-    return runLocalProcess(cmd, args, input, timeoutMs, workspaceDir)
+    return runLocalProcess(cmd, args, input, timeoutMs, workspaceDir, env)
   }
 
   // Bubblewrap + prlimit container arguments
@@ -646,6 +647,7 @@ async function runSandboxedProcess({ cmd, args = [], input = '', workspaceDir = 
     '--ro-bind', '/lib', '/lib',
     '--ro-bind', '/bin', '/bin',
     '--ro-bind-try', '/etc', '/etc',
+    '--ro-bind-try', USER_SITE_DIR, USER_SITE_DIR, // pip --user bundle (numpy etc.)
     '--proc', '/proc',
     '--dev', '/dev',
     '--tmpfs', '/tmp',
@@ -661,6 +663,78 @@ async function runSandboxedProcess({ cmd, args = [], input = '', workspaceDir = 
   prlimitArgs.push(cmd, ...args)
 
   return runLocalProcess('/usr/bin/prlimit', prlimitArgs, input, timeoutMs, workspaceDir)
+}
+
+/* ---------------------------------------------------------- Python bundle */
+/*
+ * Popular-package bundle for the runner (numpy, pandas, …).
+ *
+ * The bwrap sandbox is network-isolated, so pip-at-run-time is impossible.
+ * Instead, at boot the relay installs a curated, owner-configurable bundle
+ * into the service user's ~/.local (pip --user). USER_SITE_DIR is
+ * read-only-bound into every sandbox, so python3 resolves those packages
+ * exactly like system ones — with zero network access inside the sandbox.
+ *
+ * Configure with PY_BOOTSTRAP_PACKAGES="numpy,pandas,requests" (pip names,
+ * comma-separated). Set it to an empty string to disable the bundle.
+ */
+const USER_SITE_DIR = (() => {
+  try {
+    const home = os.homedir()
+    return home && home !== '/' ? path.join(home, '.local') : '/home/ubuntu/.local'
+  } catch (e) {
+    return '/home/ubuntu/.local'
+  }
+})()
+
+const PY_BOOTSTRAP_PACKAGES = (process.env.PY_BOOTSTRAP_PACKAGES !== undefined
+  ? process.env.PY_BOOTSTRAP_PACKAGES
+  : 'numpy,pandas,sympy,matplotlib,requests,beautifulsoup4,pillow'
+).trim()
+const PY_BUNDLE = PY_BOOTSTRAP_PACKAGES
+  ? PY_BOOTSTRAP_PACKAGES.split(',').map((s) => s.trim()).filter(Boolean)
+  : []
+// pip name -> import name (for the already-installed probe)
+const PIP_TO_IMPORT = { beautifulsoup4: 'bs4', 'pillow': 'PIL' }
+
+async function ensurePythonBundle() {
+  if (!PY_BUNDLE.length) {
+    console.log('[relay] python bundle: disabled (PY_BOOTSTRAP_PACKAGES empty)')
+    return
+  }
+  try {
+    const importNames = JSON.stringify(PY_BUNDLE.map((p) => PIP_TO_IMPORT[p] || p))
+    const probe = await runLocalProcess(
+      'python3',
+      ['-c', `import importlib.util, json\nmissing = [m for m in ${importNames} if importlib.util.find_spec(m) is None]\nprint(json.dumps(missing))`],
+      '', 20000
+    )
+    let missing = []
+    try {
+      missing = JSON.parse((probe.stdout || '').trim())
+    } catch (e) {
+      missing = PY_BUNDLE.slice()
+    }
+    if (!Array.isArray(missing) || missing.length === 0) {
+      console.log('[relay] python bundle: all packages present')
+      return
+    }
+    const toInstall = PY_BUNDLE.filter((p) => missing.includes(PIP_TO_IMPORT[p] || p))
+    if (!toInstall.length) return
+    console.log('[relay] python bundle: installing', toInstall.join(', '), '(one-time, cached after)')
+    const install = await runLocalProcess(
+      'python3',
+      ['-m', 'pip', 'install', '--user', '--break-system-packages', '--no-input', '--disable-pip-version-check', ...toInstall],
+      '', 240000
+    )
+    if (install.exitCode === 0) {
+      console.log('[relay] python bundle: installed — numpy/pandas & friends are now runnable')
+    } else {
+      console.warn('[relay] python bundle: pip install failed (exit ' + install.exitCode + '): ' + (install.stderr || '').slice(0, 300))
+    }
+  } catch (e) {
+    console.warn('[relay] python bundle: bootstrap error (runner still serves stdlib):', e && e.message)
+  }
 }
 
 async function executeCodeInternal({ language, code, stdin = '' }) {
@@ -697,12 +771,21 @@ async function executeCodeInternal({ language, code, stdin = '' }) {
             ? 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python312\\python.exe'
             : 'python')
         : 'python3'
+      // MPLBACKEND=Agg: matplotlib renders headless (no DISPLAY in sandbox).
+      // HOME points at the service user so ~/.local user-site (the installed
+      // package bundle) resolves inside the sandbox via the ro-bind.
+      const pyEnv = {
+        MPLBACKEND: 'Agg',
+        PYTHONDONTWRITEBYTECODE: '1',
+        HOME: process.env.HOME || os.homedir(),
+      }
       const result = await runSandboxedProcess({
         cmd: pyExe,
         args: [HAS_BWRAP ? '/workspace/script.py' : scriptPath],
         input: stdin,
         workspaceDir,
-        timeoutMs: 8000
+        timeoutMs: 8000,
+        env: pyEnv,
       })
       RUNNER_CACHE.set(cacheKey, result)
       setTimeout(() => RUNNER_CACHE.delete(cacheKey), 15000)
@@ -863,7 +946,9 @@ async function executeCodeInternal({ language, code, stdin = '' }) {
 
     // 8. Native Java (javac + java)
     if (normLang === 'java') {
-      const classMatch = code.match(/public\s+class\s+([A-Za-z0-9_]+)/)
+      // Match ANY top-level class declaration, not just `public class` —
+      // snippets from tutorials frequently use a plain `class Main {}`.
+      const classMatch = code.match(/(?:public\s+|final\s+|abstract\s+)*class\s+([A-Za-z0-9_]+)/)
       const className = classMatch ? classMatch[1] : 'Main'
       const srcPath = path.join(workspaceDir, `${className}.java`)
       await fs.promises.writeFile(srcPath, code, 'utf8')
@@ -1651,5 +1736,9 @@ server.listen(PORT, HOST, () => {
   console.log(`[anonshare-relay] Sandbox isolation: ${HAS_BWRAP ? 'ACTIVE (Bubblewrap + prlimit)' : 'STANDARD'}`)
   console.log(`[anonshare-relay] Zero-knowledge E2EE mode: ACTIVE`)
   console.log(`[anonshare-relay] Admin API: ${ADMIN_PASSWORD ? 'enabled' : 'DISABLED (no ADMIN_PASSWORD env var set)'}`)
+  // One-time popular-package install (numpy/pandas/…) — non-blocking: the
+  // runner serves stdlib python while the bundle downloads, and the packages
+  // become importable as soon as pip finishes (no restart needed).
+  if (PY_BUNDLE.length) ensurePythonBundle()
 })
 

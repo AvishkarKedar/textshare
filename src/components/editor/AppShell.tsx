@@ -22,7 +22,7 @@ export function AppShell() {
       {s.goalText && <GoalBanner />}
       {s.findOpen && <FindBar />}
       <div className="flex min-h-0 flex-1">
-        <main className="flex min-h-0 flex-1 flex-col pb-12 md:pb-0">
+        <main className="flex min-h-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1">
             <EditorStage />
             {s.mdPreviewOpen && <MarkdownPreview />}
@@ -33,6 +33,13 @@ export function AppShell() {
         <ChatSidebar />
       </div>
       <StatusBar />
+      {/* spacer — reserves room for the fixed mobile nav + symbol-key bar
+          (and the iOS home indicator) so the StatusBar stays visible. */}
+      <div
+        aria-hidden
+        className="flex-none md:hidden"
+        style={{ height: "calc(88px + env(safe-area-inset-bottom, 0px))" }}
+      />
       <MobileNav />
     </div>
   );

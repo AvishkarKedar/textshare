@@ -13,8 +13,8 @@ const STEPS = [
   },
   {
     n: "03",
-    title: "Write together. Erase on the way out.",
-    body: "Cursors, typing indicators, chat, files — all sync in real time. When the last person leaves, the room self-destructs after the TTL you chose (10 min / 1 h / 24 h).",
+    title: "Write together. Run it. Erase on the way out.",
+    body: "Cursors, typing indicators, chat, files — all sync in real time. Run 8 languages with program input and popular Python libraries (numpy, pandas…). When the last person leaves, the room self-destructs after the TTL you chose (10 min / 1 h / 24 h).",
   },
 ];
 

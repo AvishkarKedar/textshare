@@ -213,7 +213,11 @@ export async function onRequestGet(): Promise<Response> {
       service: "anonshare-run",
       relay: "https://relay.avishkark.in/run",
       languages: ["python", "javascript", "c", "cpp", "java", "rust", "go", "bash"],
+      // Pre-bundled on the runner's sandbox (owner-configurable on the relay
+      // via PY_BOOTSTRAP_PACKAGES). Python stdlib is always included.
+      packages: ["numpy", "pandas", "sympy", "matplotlib", "requests", "bs4", "pillow"],
       sandbox: "bubblewrap-hardened",
+      stdin: "supported — one line per input() / scanf / cin read",
     },
     { headers: NO_STORE },
   );
