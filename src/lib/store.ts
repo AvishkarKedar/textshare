@@ -25,6 +25,7 @@ import {
   setLocalVoice,
   getSession,
 } from "./session";
+import { runJsTests } from "./test-runner";
 
 export type View = "landing" | "editor";
 export type { RoomExistsInfo, RoomStateFrame, ConnState };
@@ -1417,7 +1418,7 @@ export const useAnon = create<AnonState>()(
       setWhiteboardColor: (c) => set({ whiteboardColor: c }),
       setWhiteboardSize: (n) => set({ whiteboardSize: n }),
 
-      // ---------- test runner (REAL execution via the sandbox runner) ----------
+      // ---------- test runner (REAL execution: JS in-browser, Python via sandbox) ----------
       runTests: async () => {
         const s = get();
         if (s.testing) return;
@@ -1443,8 +1444,67 @@ export const useAnon = create<AnonState>()(
             return;
           }
 
-          // Build a real test harness: describe()/test() actually execute in
-          // the sandbox runner; results are reported on stdout as JSON.
+          // JavaScript: execute FOR REAL in this browser tab (src/lib/test-runner
+          // — describe/test/it/expect actually run; pass/fail, durations,
+          // assertion counts and console output are measured, not simulated).
+          // No server round-trip: tests keep working even when the sandbox
+          // runner is unreachable.
+          if (lang === "javascript" || lang === "js") {
+            const harness = await runJsTests(file.content);
+            const suites: TestSuite[] = harness.suites.map((su, i) => ({
+              id: `suite${i}`,
+              name: su.name,
+              cases: su.cases.map((tc, j) => ({
+                id: `case${i}-${j}`,
+                name: tc.name,
+                status: tc.status,
+                durationMs: tc.durationMs,
+                error: tc.error,
+                assertions: tc.assertions,
+              })),
+            }));
+            if (harness.rootError) {
+              suites.unshift({
+                id: "suite-root",
+                name: "runtime",
+                cases: [{
+                  id: "case-root",
+                  name: "loading the file",
+                  status: "fail" as const,
+                  error: harness.rootError,
+                  assertions: 0,
+                }],
+              });
+            }
+            const passed = suites.reduce((acc, su) => acc + su.cases.filter((c) => c.status === "pass").length, 0);
+            const failed = suites.reduce((acc, su) => acc + su.cases.filter((c) => c.status === "fail").length, 0);
+            const total = suites.reduce((acc, su) => acc + su.cases.length, 0);
+            const result: TestRunResult = {
+              suites,
+              total,
+              passed,
+              failed,
+              skipped: total - passed - failed,
+              durationMs: Date.now() - startTs,
+              ranAt: startTs,
+            };
+            set({ testResult: result, testing: false, testExpanded: {} });
+            if (total === 0) {
+              get().pushNotification({
+                kind: "info",
+                title: "No tests found",
+                body: "Wrap code in describe(\"…\", () => { test(\"…\", () => { … }) }) to make it discoverable.",
+              });
+            } else if (failed > 0) {
+              get().pushNotification({ kind: "warning", title: failed + " test" + (failed > 1 ? "s" : "") + " failed", body: "See the test panel for assertion errors." });
+            } else {
+              get().pushNotification({ kind: "info", title: "All " + total + " tests passed", body: "in " + result.durationMs + "ms · real in-browser execution" });
+            }
+            return;
+          }
+
+          // Python: build a real harness and execute it in the sandbox runner;
+          // results are reported on stdout as JSON.
           const wrapped = buildTestHarness(file.content, lang);
           const res = await fetch("/api/run", {
             method: "POST",
