@@ -28,7 +28,7 @@ const TIMELINE = [
 ];
 
 /** Simple LCS-based line diff. Returns array of {type, line} entries. */
-function diffLines(a: string, b: string): { type: "ctx" | "add" | "del"; text: string }[] {
+export function diffLines(a: string, b: string): { type: "ctx" | "add" | "del"; text: string }[] {
   const aLines = a.split("\n");
   const bLines = b.split("\n");
   // build LCS table
