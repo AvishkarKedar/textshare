@@ -57,16 +57,19 @@ export async function onRequestGet(): Promise<Response> {
   const primary = "relay.avishkark.in";
   const fallback = "textshare-sync.avishkarkedar.workers.dev";
 
+  // NOTE: the local result variable must NOT be named `probe` — a same-named
+  // let binding shadows the probe() function and throws a TDZ ReferenceError
+  // at runtime (compiles fine, crashes on Cloudflare with error 1101).
   let relayHost = primary;
-  let probe = await probe(relayHost);
-  if (!probe.health) {
+  let probeRes = await probe(relayHost);
+  if (!probeRes.health) {
     relayHost = fallback;
-    probe = await probe(relayHost);
+    probeRes = await probe(relayHost);
   }
 
-  const online = !!probe.health?.ok;
-  const stats = probe.stats;
-  const sandbox = probe.health?.sandbox || stats?.sandbox || "unknown";
+  const online = !!probeRes.health?.ok;
+  const stats = probeRes.stats;
+  const sandbox = probeRes.health?.sandbox || stats?.sandbox || "unknown";
   const isVps = relayHost === primary;
 
   return Response.json(
@@ -81,8 +84,8 @@ export async function onRequestGet(): Promise<Response> {
         fallback,
         status: online ? "operational" : "unreachable",
         probed: true,
-        latencyMs: probe.latencyMs,
-        runtime: probe.health?.runtime || "unknown",
+        latencyMs: probeRes.latencyMs,
+        runtime: probeRes.health?.runtime || "unknown",
         websocketPath: "/room/<CODE>",
         uptime: stats?.uptime ?? 0,
         uptimeHuman: stats?.uptime ? formatDuration(stats.uptime * 1000) : "unknown",
