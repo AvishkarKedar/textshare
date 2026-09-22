@@ -201,7 +201,9 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: "/", label: "Slash commands in editor", group: "editor" },
   { keys: "⌘ ⇧ T", label: "Toggle test runner", group: "navigation" },
   { keys: "⌘ ⇧ G", label: "Open generative UI", group: "tools" },
-  { keys: "⌘ /", label: "Toggle comment", group: "editor" },
+  { keys: "⌘ /", label: "Toggle line comment", group: "editor" },
+  { keys: "⌘ D", label: "Duplicate line", group: "editor" },
+  { keys: "Tab / ⇧ Tab", label: "Indent / outdent line or selection", group: "editor" },
   { keys: "⌘ F", label: "Find in file", group: "editor" },
   { keys: "⌘ ⌥ F", label: "Find and replace", group: "editor" },
   { keys: "⌘ ⇧ P", label: "Toggle markdown preview", group: "editor" },
@@ -418,6 +420,10 @@ interface AnonState {
   findRegex: boolean;
   findMatchIndex: number;
   findMatchCount: number;
+
+  // live caret position for the status bar (real ln/col/selection)
+  cursorPos: { line: number; col: number; sel: number };
+  setCursorPos: (p: { line: number; col: number; sel: number }) => void;
 
   // privacy + terms + faq modals
   privacyOpen: boolean;
@@ -970,6 +976,8 @@ export const useAnon = create<AnonState>()(
       findCaseSensitive: false,
       findRegex: false,
       findMatchIndex: 0,
+      cursorPos: { line: 1, col: 1, sel: 0 },
+      setCursorPos: (p) => set({ cursorPos: p }),
       findMatchCount: 0,
 
       privacyOpen: false,

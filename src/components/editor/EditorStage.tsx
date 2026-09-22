@@ -20,6 +20,27 @@ function highlightLine(line: string, language: string) {
   ));
 }
 
+/* ------------------------------------------- editor keyboard intelligence */
+
+const INDENT = "  ";
+const OPEN_PAIR: Record<string, string> = { "(": ")", "[": "]", "{": "}", '"': '"', "'": "'", "`": "`" };
+const CLOSE_CHARS = new Set([")", "]", "}", '"', "'", "`"]);
+
+/** Line-comment token per language; null = no line comments. */
+function commentToken(language: string): string | null {
+  switch ((language || "").toLowerCase()) {
+    case "python": case "ruby": case "bash": case "sh": case "yaml": case "yml": case "toml":
+      return "#";
+    case "javascript": case "typescript": case "java": case "go": case "rust":
+    case "c": case "cpp": case "c++": case "swift": case "kotlin": case "php": case "dart":
+      return "//";
+    case "sql": case "lua":
+      return "--";
+    default:
+      return null;
+  }
+}
+
 export function EditorStage() {
   const s = useAnon();
   const file = s.files.find((f) => f.id === s.activeFileId) || s.files[0] || { id: "f1", name: "main.js", language: "javascript", content: "" };
@@ -215,8 +236,11 @@ export function EditorStage() {
   function handleSelect(e: React.SyntheticEvent<HTMLTextAreaElement>) {
     const ta = e.currentTarget;
     const upto = ta.value.substring(0, ta.selectionStart);
-    const line = upto.split("\n").length;
+    const lines = upto.split("\n");
+    const line = lines.length;
+    const col = lines[lines.length - 1].length + 1;
     setCursorLine(line);
+    s.setCursorPos({ line, col, sel: Math.abs(ta.selectionEnd - ta.selectionStart) });
     // broadcast cursor via encrypted awareness presence
     sendCursor(line);
     // close slash popup on selection change if not actively typing a command
@@ -224,6 +248,175 @@ export function EditorStage() {
     const lineText = upto.substring(lineStart);
     if (!lineText.match(/(?:^|\s)\/\w*$/)) {
       setSlashRect(null);
+    }
+  }
+
+  /** Apply a programmatic edit through the store (E2EE Yjs sync when live)
+   *  and restore the caret/selection after React re-renders the new value. */
+  function applyEdit(next: string, selStart: number, selEnd: number) {
+    s.updateFileContent(file.id, next);
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.setSelectionRange(selStart, selEnd);
+      ta.focus();
+    });
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // while the slash-command popup is open its own window handler owns the keys
+    if (slashRect) return;
+    const mod = e.metaKey || e.ctrlKey;
+    const ta = e.currentTarget;
+    const v = ta.value;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+
+    /* --- ⌘/ toggle line comment --- */
+    if (mod && e.key === "/") {
+      e.preventDefault();
+      const tok = commentToken(file.language);
+      if (!tok) {
+        toast(`No line comments for ${file.language}`);
+        return;
+      }
+      const lineStart = v.lastIndexOf("\n", start - 1) + 1;
+      let lineEnd = v.indexOf("\n", end);
+      if (lineEnd === -1) lineEnd = v.length;
+      const lines = v.slice(lineStart, lineEnd).split("\n");
+      const nonEmpty = lines.filter((l) => l.trim());
+      const allCommented = nonEmpty.length > 0 && nonEmpty.every((l) => l.trimStart().startsWith(tok));
+      const lineStarts: number[] = [];
+      let acc = lineStart;
+      const newLines = lines.map((l) => {
+        lineStarts.push(acc);
+        acc += l.length + 1;
+        if (!l.trim()) return l;
+        if (allCommented) {
+          const m = l.match(new RegExp("^(\\s*)" + tok.replace(/[/#-]/g, "\\$&") + " ?"));
+          return m ? l.slice(m[0].length) : l;
+        }
+        const ind = l.match(/^\s*/)?.[0] ?? "";
+        return ind + tok + " " + l.slice(ind.length);
+      });
+      const deltas = lines.map((l, i) => newLines[i].length - l.length);
+      const mapPos = (pos: number) => {
+        let d = 0;
+        for (let i = 0; i < lineStarts.length; i++) {
+          if (pos <= lineStarts[i]) break;
+          d += deltas[i];
+        }
+        return Math.max(0, pos + d);
+      };
+      applyEdit(v.slice(0, lineStart) + newLines.join("\n") + v.slice(lineEnd), mapPos(start), mapPos(end));
+      return;
+    }
+
+    /* --- ⌘D duplicate line --- */
+    if (mod && (e.key === "d" || e.key === "D")) {
+      e.preventDefault();
+      const lineStart = v.lastIndexOf("\n", start - 1) + 1;
+      let lineEnd = v.indexOf("\n", end);
+      if (lineEnd === -1) lineEnd = v.length;
+      const block = v.slice(lineStart, lineEnd);
+      const caretOff = start - lineStart;
+      const selOff = end - lineStart;
+      applyEdit(v.slice(0, lineEnd) + "\n" + block + v.slice(lineEnd), lineEnd + 1 + caretOff, lineEnd + 1 + selOff);
+      return;
+    }
+
+    /* --- Tab / Shift+Tab: indent / outdent (never steal focus) --- */
+    if (e.key === "Tab" && !mod && !e.altKey) {
+      e.preventDefault();
+      if (start === end && !e.shiftKey) {
+        applyEdit(v.slice(0, start) + INDENT + v.slice(start), start + INDENT.length, start + INDENT.length);
+        return;
+      }
+      const lineStart = v.lastIndexOf("\n", start - 1) + 1;
+      let lineEnd = v.indexOf("\n", end);
+      if (lineEnd === -1) lineEnd = v.length;
+      const lines = v.slice(lineStart, lineEnd).split("\n");
+      if (e.shiftKey) {
+        const stripped = lines.map((l) =>
+          l.startsWith(INDENT) ? l.slice(INDENT.length) : l.startsWith("\t") ? l.slice(1) : l,
+        );
+        const removed = lines.reduce((n, l, i) => n + (l.length - stripped[i].length), 0);
+        const removedBefore = lines.reduce((n, l, i) => {
+          const ls = i === 0 ? start - lineStart : 0;
+          return n + (ls >= l.length ? l.length - stripped[i].length : 0);
+        }, 0);
+        applyEdit(
+          v.slice(0, lineStart) + stripped.join("\n") + v.slice(lineEnd),
+          Math.max(lineStart, start - removedBefore),
+          Math.max(lineStart, end - removed),
+        );
+      } else {
+        applyEdit(
+          v.slice(0, lineStart) + lines.map((l) => INDENT + l).join("\n") + v.slice(lineEnd),
+          start + INDENT.length,
+          end + INDENT.length * lines.length,
+        );
+      }
+      return;
+    }
+
+    /* --- Enter: auto-indent (preserve indentation, deepen after openers) --- */
+    if (e.key === "Enter" && !mod && !e.shiftKey && !e.altKey && !e.nativeEvent.isComposing) {
+      if (start !== end) return; // default Enter replaces the selection
+      const lineStart = v.lastIndexOf("\n", start - 1) + 1;
+      const indent = v.slice(lineStart, start).match(/^[ \t]*/)?.[0] ?? "";
+      const prev = v[start - 1] ?? "";
+      const next = v[start] ?? "";
+      const opener = prev === "{" || prev === "(" || prev === "[";
+      const closerAhead = next === "}" || next === ")" || next === "]";
+      if (opener) {
+        if (closerAhead) {
+          // caret between { and }: {
+          //                       |caret|
+          //                       }
+          const insert = "\n" + indent + INDENT + "\n" + indent;
+          applyEdit(v.slice(0, start) + insert + v.slice(start), start + 1 + indent.length + INDENT.length, start + 1 + indent.length + INDENT.length);
+        } else {
+          applyEdit(v.slice(0, start) + "\n" + indent + INDENT + v.slice(start), start + 1 + indent.length + INDENT.length, start + 1 + indent.length + INDENT.length);
+        }
+        e.preventDefault();
+        return;
+      }
+      if (indent) {
+        applyEdit(v.slice(0, start) + "\n" + indent + v.slice(start), start + 1 + indent.length, start + 1 + indent.length);
+        e.preventDefault();
+      }
+      return; // no indent to preserve → default Enter
+    }
+
+    /* --- auto-close pairs / skip over closers / wrap selection --- */
+    if (!mod && !e.altKey && !e.nativeEvent.isComposing && OPEN_PAIR[e.key] && start === end) {
+      const closer = OPEN_PAIR[e.key];
+      e.preventDefault();
+      applyEdit(v.slice(0, start) + e.key + closer + v.slice(start), start + 1, start + 1);
+      return;
+    }
+    if (!mod && !e.altKey && OPEN_PAIR[e.key] && start !== end) {
+      e.preventDefault();
+      const sel = v.slice(start, end);
+      applyEdit(v.slice(0, start) + e.key + sel + OPEN_PAIR[e.key] + v.slice(end), start + 1, end + 1);
+      return;
+    }
+    if (!mod && CLOSE_CHARS.has(e.key) && start === end && v[start] === e.key) {
+      e.preventDefault();
+      applyEdit(v, start + 1, start + 1); // just skip over the existing closer
+      return;
+    }
+
+    /* --- Backspace between an empty pair deletes both --- */
+    if (e.key === "Backspace" && !mod && !e.altKey && start === end && start > 0) {
+      const before = v[start - 1];
+      const after = v[start];
+      if (before && after && OPEN_PAIR[before] === after && before === after) {
+        // quotes only — brackets have distinct open/close chars
+        e.preventDefault();
+        applyEdit(v.slice(0, start - 1) + v.slice(start + 1), start - 1, start - 1);
+      }
     }
   }
 
@@ -291,6 +484,7 @@ export function EditorStage() {
               onSelect={handleSelect}
               onKeyUp={handleSelect}
               onClick={handleSelect}
+              onKeyDown={handleKeyDown}
               onPaste={(e) => {
                 const pasted = e.clipboardData.getData("text");
                 if (pasted && pasted.length > 20) {

@@ -107,7 +107,12 @@ export function StatusBar() {
         </span>
         <span className="hidden md:inline">utf-8</span>
         <span className="hidden md:inline">{s.keybindings}</span>
-        <span>ln 1, col 1</span>
+        <span title="Live caret position (updates as you move)">
+          ln {s.cursorPos.line}, col {s.cursorPos.col}
+          {s.cursorPos.sel > 0 && (
+            <span className="anon-accent"> · {s.cursorPos.sel} selected</span>
+          )}
+        </span>
       </div>
     </footer>
   );
