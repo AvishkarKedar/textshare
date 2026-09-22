@@ -91,6 +91,11 @@ const DEFAULT_TTL = TTLS['10m']
 const MAX_FRAME = 256 * 1024
 const MAX_LOG_BYTES = 5 * 1024 * 1024
 const MAX_CONNS = 60
+// File-chunk quotas (match the VPS relay + client: 25MB files, 64KB chunks,
+// 400 chunks max per file, 32 files max per room). Without these, a single
+// authenticated room member could fill Durable Object storage indefinitely.
+const MAX_FILE_CHUNKS = 400
+const MAX_FILES_PER_ROOM = 32
 const RATE_PER_SEC = 120
 const COMPACT_EVERY = 150
 const SNAPSHOT_WINDOW = 45000   // how long a compaction invitation stays valid
@@ -101,13 +106,52 @@ const AUTH_PER_MIN = 8          // stricter still: guards a locked room against 
 const CODE_RE = /^[A-Z0-9]{4,12}$/
 const CONFIGURABLE_KEYS = ['IP_PER_MIN', 'CREATE_PER_MIN', 'AUTH_PER_MIN', 'MAX_CONNS']
 
-/* -------------------------------------------------------------- helpers */
+/* ------------------------------------------------------------ helpers */
 
 const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-methods': 'GET,POST,PUT,DELETE,OPTIONS',
   'access-control-allow-headers': 'content-type,authorization,x-room-auth,range',
   'access-control-max-age': '86400',
+}
+
+// Browser origins allowed to call this API cross-origin. Configure via the
+// ALLOWED_ORIGINS wrangler var (comma separated; "*" re-enables the legacy
+// open policy; "*.suffix" patterns are supported). The default allowlist
+// matches the production Pages site, the admin dashboard, and local dev.
+// Non-browser clients (curl, servers) are unaffected by CORS.
+const DEFAULT_ALLOWED_ORIGINS =
+  'https://code.avishkark.in,https://admin.code.avishkark.in,http://localhost:3000,http://127.0.0.1:3000'
+
+function allowedOrigins(env) {
+  const raw = (env && env.ALLOWED_ORIGINS) || DEFAULT_ALLOWED_ORIGINS
+  return String(raw).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+}
+
+function corsHeadersFor(request, env) {
+  const out = { vary: 'Origin' }
+  const origin = request.headers.get('origin')
+  if (!origin) return out
+  const o = origin.toLowerCase()
+  const list = allowedOrigins(env)
+  if (
+    list.includes('*') ||
+    list.includes(o) ||
+    list.some((p) => p.startsWith('*.') && o.endsWith(p.slice(1)))
+  ) {
+    out['access-control-allow-origin'] = origin
+  }
+  return out
+}
+
+// Strip any inner wildcard CORS grant and re-apply the origin allowlist at
+// the edge so every response (including Durable Object passthroughs) is
+// consistent.
+function applyCors(request, env, res) {
+  const headers = new Headers(res.headers)
+  headers.delete('access-control-allow-origin')
+  for (const [k, v] of Object.entries(corsHeadersFor(request, env))) headers.set(k, v)
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers })
 }
 
 const json = (body, status) => new Response(JSON.stringify(body), {
@@ -319,7 +363,7 @@ export class Room {
     const codeMatch = url.pathname.match(/\/room\/([A-Za-z0-9]{4,12})/)
     const code = codeMatch ? codeMatch[1].toUpperCase() : ''
 
-    const fileMatch = url.pathname.match(/\/room\/[A-Za-z0-9]{4,12}\/files(?:\/([a-zA-Z0-9_-]+)\/chunk\/(\d+))?/)
+    const fileMatch = url.pathname.match(/\/room\/[A-Za-z0-9]{4,12}\/files(?:\/([a-zA-Z0-9_-]+)(?:\/chunk\/(\d+))?)?/)
     if (fileMatch) {
       if (request.method === 'OPTIONS') {
         return new Response(null, {
@@ -345,9 +389,35 @@ export class Room {
       if (request.method === 'PUT' && fileId && chunkIdx != null) {
         const body = await request.arrayBuffer()
         if (body.byteLength > 1024 * 1024) return json({ error: 'chunk_too_large' }, 413)
-        await st.put('cf:' + fileId + ':' + chunkIdx, body)
+        // Validate the chunk index shape before it touches storage keys.
+        const idx = Number(chunkIdx)
+        if (!Number.isInteger(idx) || idx < 0 || idx >= MAX_FILE_CHUNKS) {
+          return json({ error: 'chunk_index_out_of_range', max: MAX_FILE_CHUNKS }, 400)
+        }
+        const key = 'cf:' + fileId + ':' + String(idx)
+        const counterKey = 'cf:n:' + fileId
+        const isOverwrite = (await st.get(key)) !== null
+        let chunkCount = Number(await st.get(counterKey)) || 0
+        if (!isOverwrite) {
+          if (chunkCount >= MAX_FILE_CHUNKS) {
+            return json({ error: 'file_too_many_chunks', max: MAX_FILE_CHUNKS }, 413)
+          }
+          chunkCount += 1
+          // Track the room's file list so the per-room file cap is O(1).
+          if (chunkCount === 1) {
+            const regRaw = await st.get('cf:__files')
+            const fileIds = regRaw ? JSON.parse(regRaw) : []
+            if (fileIds.length >= MAX_FILES_PER_ROOM) {
+              return json({ error: 'too_many_files', max: MAX_FILES_PER_ROOM }, 413)
+            }
+            fileIds.push(fileId)
+            await st.put('cf:__files', JSON.stringify(fileIds))
+          }
+          await st.put(counterKey, String(chunkCount))
+        }
+        await st.put(key, body)
         await this.touch()
-        return json({ ok: true, fileId, chunkIndex: Number(chunkIdx) })
+        return json({ ok: true, fileId, chunkIndex: idx })
       }
 
       if (request.method === 'GET' && fileId && chunkIdx != null) {
@@ -366,6 +436,12 @@ export class Room {
       if (request.method === 'DELETE' && fileId) {
         const list = await st.list({ prefix: 'cf:' + fileId + ':' })
         for (const k of list.keys()) await st.delete(k)
+        await st.delete('cf:n:' + fileId)
+        const regRaw = await st.get('cf:__files')
+        if (regRaw) {
+          const fileIds = JSON.parse(regRaw).filter((id) => id !== fileId)
+          await st.put('cf:__files', JSON.stringify(fileIds))
+        }
         return json({ ok: true, deleted: fileId })
       }
 
@@ -800,55 +876,66 @@ export class Registry {
 
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url)
-
-    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
-
-    if (url.pathname === '/' || url.pathname === '/health') {
-      return json({ ok: true, service: 'anonshare-sync', version: 4, runtime: 'cloudflare-worker' })
-    }
-
-    /* ---------------------------------------------------- Code Execution */
-    if (url.pathname === '/run' && request.method === 'POST') {
-      try {
-        const payload = await request.json()
-        if (!payload.code || !payload.language) {
-          return json({ ok: false, error: 'bad_body', stderr: 'Missing language or code field' }, 400)
-        }
-        const normLang = String(payload.language).toLowerCase().trim()
-        const runLang = ['node', 'javascript', 'js'].includes(normLang) ? 'javascript' : (normLang === 'c++' ? 'cpp' : normLang)
-
-        const pistonRes = await fetch('https://emkc.org/api/v2/piston/execute', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'User-Agent': 'AnonShare-Worker-Runner/5.0' },
-          body: JSON.stringify({
-            language: runLang,
-            version: '*',
-            files: [{ content: payload.code }],
-            stdin: payload.stdin || '',
-          }),
-        })
-
-        if (pistonRes.ok) {
-          const data = await pistonRes.json()
-          return json({
-            ok: (data.run?.code ?? 1) === 0,
-            stdout: data.run?.stdout || '',
-            stderr: data.run?.stderr || '',
-            exitCode: data.run?.code ?? 0,
-            executionTime: data.run?.duration || null,
-          })
-        }
-        return json({ ok: false, stderr: 'Execution service temporarily unavailable', exitCode: 1 }, 502)
-      } catch (err) {
-        return json({ ok: false, stderr: 'Runner execution failed: ' + err.message, exitCode: 1 }, 500)
+    // CORS preflight — only allowlisted browser origins receive a grant.
+    if (request.method === 'OPTIONS') {
+      const grant = corsHeadersFor(request, env)
+      if (!grant['access-control-allow-origin']) {
+        return new Response(null, { status: 403, headers: { vary: 'Origin' } })
       }
+      return new Response(null, {
+        status: 204,
+        headers: {
+          ...grant,
+          'access-control-allow-methods': 'GET,POST,PUT,DELETE,OPTIONS',
+          'access-control-allow-headers': 'content-type,authorization,x-room-auth,range',
+          'access-control-max-age': '86400',
+        },
+      })
     }
+    const res = await routeRequest(request, env)
+    return applyCors(request, env, res)
+  },
+}
 
-    /* -------------------------------------------------------- admin API */
-    const adminSecret = env.ADMIN_PASSWORD || '[REDACTED-LEAKED-SECRET]'
-    if (url.pathname.startsWith('/admin/')) {
-      const ip = request.headers.get('CF-Connecting-IP') || 'anon'
+async function routeRequest(request, env) {
+  const url = new URL(request.url)
+
+  if (url.pathname === '/' || url.pathname === '/health') {
+    return json({ ok: true, service: 'anonshare-sync', version: 4, runtime: 'cloudflare-worker' })
+  }
+
+  /* ---------------------------------------------------- Code Execution */
+  // This fallback relay does NOT execute code. It used to proxy the public
+  // emkc.org Piston API, which became whitelist-only in Feb 2026 and has
+  // returned 403 for every request since — the endpoint was effectively
+  // dead. An honest error beats a silently broken proxy. Real execution
+  // happens on the primary VPS relay (relay.avishkark.in, bubblewrap
+  // sandbox), which is what /api/run on Pages uses.
+  if (url.pathname === '/run' && request.method === 'POST') {
+    return json({
+      ok: false,
+      error: 'runner_unavailable',
+      stdout: '',
+      stderr: 'Code execution is disabled on this fallback relay. Use the primary relay (relay.avishkark.in).',
+      exitCode: 503,
+    }, 503)
+  }
+
+  /* -------------------------------------------------------- admin API */
+  // ADMIN_PASSWORD must be set as a wrangler secret. There is NO default:
+  // unset means every /admin/* route returns 503 (fails closed, never open).
+  // A hardcoded fallback previously lived here and, because the repo is
+  // public, effectively published the admin key — that pattern must never
+  // return. Rotating the secret also invalidates all outstanding tokens.
+  const adminSecret = env.ADMIN_PASSWORD || ''
+  if (url.pathname.startsWith('/admin/')) {
+    if (!adminSecret) {
+      return json({
+        error: 'admin_disabled',
+        detail: 'Set the ADMIN_PASSWORD secret (npx wrangler secret put ADMIN_PASSWORD) to enable the admin API',
+      }, 503)
+    }
+    const ip = request.headers.get('CF-Connecting-IP') || 'anon'
 
       if (url.pathname === '/admin/login' && request.method === 'POST') {
         let body
@@ -951,5 +1038,4 @@ export default {
     }
 
     return env.ROOM.get(env.ROOM.idFromName(code)).fetch(request)
-  },
-}
+  }

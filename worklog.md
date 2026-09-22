@@ -154,7 +154,7 @@ ciphertext. Rooms are erased 10 min / 1 h / 24 h after everyone leaves.
 
 1. **🔴 HARDCODED ADMIN PASSWORD FALLBACK** — `worker/src/index.js:849`:
    ```js
-   const adminSecret = env.ADMIN_PASSWORD || '[REDACTED-LEAKED-SECRET]'
+   const adminSecret = env.ADMIN_PASSWORD || [REDACTED]
    ```
    The `wrangler.toml` comment claims "If this secret is unset, every /admin/* route returns 503 and the dashboard is fully disabled" — **but the actual code uses a hardcoded fallback password committed to the public repo.** Anyone reading GitHub can log in to the admin dashboard at `relay.avishkark.in` if the operator ever forgets to set the secret. This contradicts the security model documented in `security.html`. Should be: `if (!env.ADMIN_PASSWORD) return json({error:'admin_disabled'}, 503)`.
 
@@ -454,7 +454,7 @@ ciphertext. Rooms are erased 10 min / 1 h / 24 h after everyone leaves.
 
 ## Next actions (suggested follow-ups)
 
-1. **Patch the admin-password fallback** in `worker/src/index.js:849` to fail closed (return 503 if `ADMIN_PASSWORD` is unset) instead of falling back to the hardcoded `[REDACTED-LEAKED-SECRET]` that is publicly committed.
+1. **Patch the admin-password fallback** in `worker/src/index.js:849` to fail closed (return 503 if `ADMIN_PASSWORD` is unset) instead of falling back to the hardcoded admin password (redacted from history).
 2. **Correct the README / `security.html`** claims about the Bubblewrap sandbox — either ship the sandbox code in the repo, or relabel it as "a feature of the operator's private VPS relay, not the open-source Worker".
 3. **Sync the README's MAX_CONNS=30** with the code's actual `MAX_CONNS = 60` (or vice versa).
 4. Consider splitting the 4372-line `app.js` into per-feature modules (presence, chat, files, voice, whiteboard, history, palette, inactivity, generative-ui, etc.) and importing from `lib/` rather than keeping inline duplicates.
