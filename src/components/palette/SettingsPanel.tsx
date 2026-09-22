@@ -191,29 +191,31 @@ export function SettingsPanel() {
             {/* owner danger zone */}
             {s.isOwner && (
               <Section title="Owner · danger zone" icon={AlertTriangle} danger>
-                <button className="anon-mono flex w-full items-center gap-2 py-2 text-left text-xs hairline px-3 hover:bg-[var(--anon-raise)]">
-                  <Lock className="h-3.5 w-3.5" style={{ color: "var(--anon-warn)" }} /> Lock room (read-only)
-                </button>
-                <button className="anon-mono flex w-full items-center gap-2 py-2 text-left text-xs hairline px-3 hover:bg-[var(--anon-raise)]">
-                  <Ban className="h-3.5 w-3.5" style={{ color: "var(--anon-warn)" }} /> Suspend room
+                <button
+                  onClick={() => { void s.lockRoom(); }}
+                  className="anon-mono flex w-full items-center gap-2 py-2 text-left text-xs hairline px-3 hover:bg-[var(--anon-raise)] cursor-pointer"
+                >
+                  <Lock className="h-3.5 w-3.5" style={{ color: "var(--anon-warn)" }} /> {s.roomState?.locked ? "Unlock room (editable)" : "Lock room (read-only)"}
                 </button>
                 <button
-                  onClick={() => {
-                    const ttls: ("10m" | "1h" | "24h")[] = ["10m", "1h", "24h"];
-                    const nextTtl = ttls[(ttls.indexOf(s.ttl) + 1) % ttls.length];
-                    useAnon.setState({ ttl: nextTtl });
-                    toast.success(`Room TTL changed to ${nextTtl}`);
-                  }}
+                  onClick={() => { void s.suspendRoom(); }}
+                  className="anon-mono flex w-full items-center gap-2 py-2 text-left text-xs hairline px-3 hover:bg-[var(--anon-raise)] cursor-pointer"
+                >
+                  <Ban className="h-3.5 w-3.5" style={{ color: "var(--anon-warn)" }} /> {s.roomState?.suspended ? "Resume room (peers rejoin)" : "Suspend room"}
+                </button>
+                <button
+                  onClick={() => { void s.changeRoomTtl(); }}
                   className="anon-mono flex w-full items-center gap-2 py-2 text-left text-xs hairline px-3 hover:bg-[var(--anon-raise)] cursor-pointer"
                 >
                   <Timer className="h-3.5 w-3.5" style={{ color: "var(--anon-warn)" }} /> Change TTL (now: {s.ttl})
                 </button>
                 <button
                   onClick={() => {
-                    toast.error("Room deleted", { description: "All contents erased." });
-                    setTimeout(() => s.exitRoom(), 800);
+                    if (confirm("Delete this room for everyone? All files, chat and code are erased immediately and the room code stops working.")) {
+                      void s.deleteRoom();
+                    }
                   }}
-                  className="anon-mono flex w-full items-center gap-2 py-2 text-left text-xs hairline px-3 hover:bg-[var(--anon-raise)]"
+                  className="anon-mono flex w-full items-center gap-2 py-2 text-left text-xs hairline px-3 hover:bg-[var(--anon-raise)] cursor-pointer"
                   style={{ color: "var(--anon-danger)" }}
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Delete room now

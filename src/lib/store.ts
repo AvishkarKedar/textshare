@@ -11,6 +11,7 @@ import {
   relayHost,
   storeOwnerToken,
   loadOwnerToken,
+  clearOwnerToken,
 } from "./relay";
 import {
   startSession,
@@ -21,6 +22,7 @@ import {
   removeYFile,
   setGoal as sessionSetGoal,
   getSession,
+  adminRoom,
 } from "./session";
 import { runJsTests } from "./test-runner";
 
@@ -510,6 +512,12 @@ interface AnonState {
   }) => void;
   exitRoom: () => void;
 
+  /** Owner-only, real relay operations (POST /room/:code/admin). */
+  deleteRoom: () => Promise<boolean>;
+  lockRoom: () => Promise<boolean>;
+  suspendRoom: () => Promise<boolean>;
+  changeRoomTtl: () => Promise<boolean>;
+
   setDisplayName: (n: string) => void;
   setColor: (c: string) => void;
   setTheme: (t: ThemeId) => void;
@@ -589,6 +597,10 @@ function sessionActive(): boolean {
 }
 
 /* ---------------------------------------------------- real test harness */
+
+/** C++-only includes / namespace markers (used to route .c files to g++). */
+const CPP_SOURCE_RE =
+  /#\s*include\s*<(?:iostream|bits\/stdc\+\+\.h|string|vector|map|unordered_map|multimap|set|unordered_set|queue|priority_queue|stack|deque|list|array|forward_list|memory|functional|algorithm|utility|numeric|random|regex|sstream|fstream|iomanip|chrono|thread|mutex|future|atomic|optional|variant|tuple|bitset)>|(?:\busing\s+namespace\s+std\b|\bstd\s*::)/;
 
 /**
  * Wraps user code in a REAL test harness that executes describe()/test()
@@ -1172,6 +1184,72 @@ export const useAnon = create<AnonState>()(
         });
       },
 
+      /* ---- real owner room administration (relay POST /room/:code/admin) ---- */
+
+      deleteRoom: async () => {
+        const s = get();
+        if (!s.isOwner || !s.roomCode) return false;
+        const res = await adminRoom("delete");
+        if (!res.ok) {
+          import("sonner").then(({ toast }) =>
+            toast.error("Delete failed on the relay", {
+              description: res.error === "not_owner" ? "You are not this room's owner." : `relay said: ${res.error ?? "network error"}`,
+              duration: 6000,
+            }));
+          return false;
+        }
+        // Relay closes every socket (incl. ours) with T_KILLED "deleted" and
+        // purges the room + file chunks; also clear the local owner token so
+        // the code can never be re-administered from this browser, then leave.
+        clearOwnerToken(s.roomCode);
+        import("sonner").then(({ toast }) =>
+          toast.success("Room deleted", { description: "Contents erased for everyone; the code no longer works." }));
+        get().exitRoom();
+        return true;
+      },
+
+      lockRoom: async () => {
+        const s = get();
+        if (!s.isOwner) return false;
+        const lock = !s.roomState?.locked;
+        const res = await adminRoom("lock", lock);
+        if (res.ok) {
+          import("sonner").then(({ toast }) =>
+            toast.success(lock ? "Room locked" : "Room unlocked", {
+              description: lock ? "Collaborators can read but not edit." : "Collaborators can edit again.",
+            }));
+        }
+        return res.ok;
+      },
+
+      suspendRoom: async () => {
+        const s = get();
+        if (!s.isOwner) return false;
+        const suspend = !s.roomState?.suspended;
+        const res = await adminRoom("suspend", suspend);
+        if (res.ok) {
+          import("sonner").then(({ toast }) =>
+            toast.success(suspend ? "Room suspended" : "Room resumed", {
+              description: suspend ? "Everyone else was disconnected until you resume." : "Peers can rejoin now.",
+            }));
+        }
+        return res.ok;
+      },
+
+      changeRoomTtl: async () => {
+        const s = get();
+        if (!s.isOwner) return false;
+        const ttls: ("10m" | "1h" | "24h")[] = ["10m", "1h", "24h"];
+        const next = ttls[(ttls.indexOf(s.ttl) + 1) % ttls.length];
+        const res = await adminRoom("ttl", next);
+        if (res.ok) {
+          set({ ttl: next });
+          import("sonner").then(({ toast }) =>
+            toast.success(`Room TTL changed to ${next} (live on the relay)`));
+        }
+        return res.ok;
+      },
+
       setDisplayName: (n) => set({ displayName: n }),
       setColor: (c) => set({ color: c }),
       setTheme: (t) => set({ theme: t }),
@@ -1296,6 +1374,14 @@ export const useAnon = create<AnonState>()(
         const file = s.files.find((f) => f.id === s.activeFileId);
         if (!file) return;
 
+        // C++ snippets pasted into a .c file compile with g++ (the /api/run
+        // proxy and the relay runner apply the same routing — doing it here
+        // too keeps the terminal meta line honest about the actual language).
+        const sendLang =
+          file.language.toLowerCase() === "c" && CPP_SOURCE_RE.test(file.content)
+            ? "cpp"
+            : file.language;
+
         set({ running: true, terminalOpen: true, terminalTab: "output" });
         const startTs = Date.now();
         set((st) => ({
@@ -1304,7 +1390,7 @@ export const useAnon = create<AnonState>()(
             {
               id: "t" + startTs,
               kind: "meta",
-              text: `$ run ${file.name} (${file.language}) · ${new Date().toLocaleTimeString()}`,
+              text: `$ run ${file.name} (${sendLang}) · ${new Date().toLocaleTimeString()}`,
               ts: startTs,
             },
           ],
@@ -1315,7 +1401,7 @@ export const useAnon = create<AnonState>()(
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              language: file.language,
+              language: sendLang,
               source: file.content,
               stdin: s.stdin,
             }),

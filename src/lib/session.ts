@@ -73,6 +73,20 @@ export function sessionCode(): string | null {
   return active?.info.code ?? null;
 }
 
+/**
+ * Owner-only room administration routed to whichever relay the live
+ * socket is using (primary or fallback). Returns ok:false with an error
+ * code when there is no session, no owner token, or the relay refused.
+ */
+export async function adminRoom(
+  action: "delete" | "suspend" | "lock" | "ttl",
+  value?: unknown,
+): Promise<{ ok: boolean; status?: number; error?: string }> {
+  const s = active;
+  if (!s) return { ok: false, error: "no_session" };
+  return s.relay.adminRoom(action, value);
+}
+
 /* ----------------------------------------------------------- text diffing */
 
 /** Apply newContent onto a Y.Text with a minimal splice (CRDT-friendly). */

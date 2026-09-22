@@ -401,6 +401,32 @@ export class RelayClient {
     void this.send(T_GRANT, TE.encode(targetCid));
   }
 
+  /**
+   * Owner/admin room control over plain HTTP (both relays implement
+   * POST /room/:code/admin): delete kills every socket and purges the
+   * room + its file chunks; suspend/lock/ttl update room state live.
+   * The raw owner token (this.owner) hashes to the room's stored owner id.
+   */
+  async adminRoom(
+    action: "delete" | "suspend" | "lock" | "ttl",
+    value?: unknown,
+  ): Promise<{ ok: boolean; status?: number; error?: string }> {
+    if (!this.owner) return { ok: false, error: "not_owner" };
+    const res = await http(this.host, `/room/${this.code}/admin`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: this.owner, action, value }),
+    });
+    if (!res) return { ok: false, error: "network" };
+    if (res.ok) return { ok: true };
+    let error = `HTTP ${res.status}`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body && body.error) error = body.error;
+    } catch { /* ignore */ }
+    return { ok: false, status: res.status, error };
+  }
+
   private retry(): void {
     if (this.dead) return;
     this.setConn("retrying");
