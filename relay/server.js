@@ -52,6 +52,22 @@ const RUN_PER_MIN = 20               // 20 code executions per IP per minute
 // Room-code shape (matches the Cloudflare Worker relay): 4-12 upper-case
 // alphanumeric characters; the client generates 6.
 const CODE_RE = /^[A-Z0-9]{4,12}$/
+// Server-side language whitelist for /run — validated BEFORE the request is
+// queued or executed, so unsupported languages can never burn a runner slot.
+const RUN_LANGS = new Set([
+  'python', 'py', 'javascript', 'js', 'node', 'c', 'cpp', 'c++',
+  'go', 'golang', 'rust', 'rs', 'bash', 'sh', 'java',
+])
+// File-chunk upload quotas (mirror the Worker relay + client: 25MB files as
+// 64KB chunks, 32 files per room, 50MB total per room). Without these an
+// authenticated room member could fill the VPS disk indefinitely.
+const MAX_CHUNK_BYTES = 1024 * 1024
+const MAX_FILE_CHUNKS = 400
+const MAX_FILES_PER_ROOM = 32
+const MAX_ROOM_FILE_BYTES = 50 * 1024 * 1024
+// Max concurrent WebSocket connections per client IP (a room-hopping client
+// otherwise escapes the per-room MAX_CONNS cap by joining many rooms).
+const MAX_IP_CONNS = 24
 // Admin password MUST be provided via the ADMIN_PASSWORD environment variable.
 // There is NO default: if unset, the /admin/* API is fully disabled (503).
 // Rotate any previously exposed value immediately — a leaked ADMIN_PASSWORD
@@ -96,22 +112,86 @@ function frame(type, payload) {
 const textFrame = (type, s) => frame(type, Buffer.from(s, 'utf8'))
 const errorFrame = reason => textFrame(T_ERROR, reason)
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type,Authorization,x-room-auth,Range,*',
-  'Access-Control-Max-Age': '86400',
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
+/* --------------------------------------------------------------- CORS */
+
+// Browser origins allowed to call the HTTP API cross-origin (WebSocket
+// connections are not subject to CORS; this governs the JSON routes the
+// browser hits directly: room create/join preflight, file chunks, health).
+// Configure via the ALLOWED_ORIGINS env var (comma-separated). Supports
+// exact origins, "*.suffix" patterns, or an explicit "*" to restore the
+// legacy open policy. Default allowlist = production sites + local dev.
+// Non-browser clients (curl, server-to-server) are unaffected by CORS.
+const DEFAULT_ALLOWED_ORIGINS =
+  'https://code.avishkark.in,https://admin.code.avishkark.in,http://localhost:3000,http://127.0.0.1:3000'
+const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS || DEFAULT_ALLOWED_ORIGINS)
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+const CORS_OPEN = ALLOWED_ORIGINS.includes('*')
+
+function corsHeaders(req) {
+  const base = {
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type,Authorization,x-room-auth,Range',
+    'Access-Control-Max-Age': '86400',
+  }
+  if (CORS_OPEN) return { 'Access-Control-Allow-Origin': '*', ...base }
+  const origin = req.headers && req.headers.origin
+  if (origin) {
+    const o = String(origin).toLowerCase()
+    const granted = ALLOWED_ORIGINS.includes(o) ||
+      ALLOWED_ORIGINS.some(p => p.startsWith('*.') && o.endsWith(p.slice(1)))
+    if (granted) return { 'Access-Control-Allow-Origin': String(origin), Vary: 'Origin', ...base }
+  }
+  // Unknown/absent origin (non-browser or not allowlisted): no CORS grant —
+  // the browser blocks reading the response; the request itself still runs.
+  return { Vary: 'Origin' }
 }
 
-function sendJson(res, data, status = 200) {
-  res.writeHead(status, {
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
+}
+
+function sendJson(req, res, data, status = 200) {
+  const headers = {
     'Content-Type': 'application/json',
     'Cache-Control': 'no-store',
-    ...CORS_HEADERS,
-  })
+    ...SECURITY_HEADERS,
+    ...corsHeaders(req),
+  }
+  if (status === 429 && data && data.retryAfter) {
+    headers['Retry-After'] = String(Math.max(1, Math.round(data.retryAfter)))
+  }
+  res.writeHead(status, headers)
   res.end(JSON.stringify(data))
+}
+
+/* ------------------------------------------------- request body reading */
+
+// Reads a request body with a hard byte cap. Resolves null when the cap is
+// exceeded (socket destroyed) or the stream errors — callers map that to a
+// 413/400. Prevents the unbounded `body += chunk` memory-DoS pattern on
+// every JSON route.
+function readBody(req, maxBytes) {
+  return new Promise(resolve => {
+    const chunks = []
+    let size = 0
+    let settled = false
+    const finish = val => { if (!settled) { settled = true; resolve(val) } }
+    req.on('data', c => {
+      if (settled) return
+      size += c.length
+      if (size > maxBytes) {
+        finish(null)
+        try { req.destroy() } catch (e) {}
+        return
+      }
+      chunks.push(c)
+    })
+    req.on('end', () => finish(Buffer.concat(chunks)))
+    req.on('error', () => finish(null))
+  })
 }
 
 /* ------------------------------------------------------- rate limiter */
@@ -157,13 +237,105 @@ function verifyToken(token) {
 }
 
 function getClientIp(req) {
-  return (
-    req.headers['cf-connecting-ip'] ||
-    req.headers['x-forwarded-for']?.split(',')[0].trim() ||
-    req.socket.remoteAddress ||
-    'anon'
-  )
+  const peer = parseIp(req.socket.remoteAddress || '')
+  if (!peer) return 'unknown'
+  const trusted = TRUSTED_PROXY_CIDRS.some(c => ipInCidr(peer, c))
+  if (!trusted) {
+    // Direct connection (not via our nginx/Caddy): forwarded headers are
+    // client-supplied and untrustworthy — rate-limit by the socket address.
+    return req.socket.remoteAddress
+  }
+  // Peer IS our reverse proxy. X-Real-IP is what nginx set from its own TCP
+  // peer: a Cloudflare edge IP when CF fronts the domain, else the client.
+  const xReal = parseIp(String(req.headers['x-real-ip'] || ''))
+  if (xReal) {
+    if (CF_CIDRS.some(c => ipInCidr(xReal, c))) {
+      // Behind Cloudflare: only CF-Connecting-IP (set by CF, unreachable to
+      // the end client) knows the real visitor address.
+      const cf = String(req.headers['cf-connecting-ip'] || '').trim()
+      if (parseIp(cf)) return cf
+    }
+    return String(req.headers['x-real-ip']).trim()
+  }
+  // No X-Real-IP: use the LAST X-Forwarded-For entry — the one appended by
+  // our own proxy. The first entry is attacker-controllable in proxy chains.
+  const xff = req.headers['x-forwarded-for']
+  if (typeof xff === 'string' && xff.length) {
+    const last = xff.split(',').pop().trim()
+    if (parseIp(last)) return last
+  }
+  return 'unknown'
 }
+
+/* --------------------------------------------------------- IP parsing */
+
+// Minimal IPv4/IPv6 parser + CIDR matcher (BigInt-based). Used so client-IP
+// trust decisions and rate-limit buckets can never be poisoned by spoofed
+// headers from untrusted peers.
+function parseIp(s) {
+  if (typeof s !== 'string') return null
+  let str = s.trim().toLowerCase()
+  const pct = str.indexOf('%')
+  if (pct > 0) str = str.slice(0, pct) // strip zone id (fe80::1%eth0)
+  const v4m = str.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+  if (v4m) str = v4m[1]
+  if (str.includes('.')) {
+    const parts = str.split('.').map(Number)
+    if (parts.length !== 4 || parts.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return null
+    const bits = (BigInt(parts[0]) << 24n) | (BigInt(parts[1]) << 16n) | (BigInt(parts[2]) << 8n) | BigInt(parts[3])
+    return { bits, fam: 4 }
+  }
+  if (!str.includes(':')) return null
+  const halves = str.split('::')
+  if (halves.length > 2) return null
+  const groups = str => (str ? str.split(':').filter(Boolean) : [])
+  const left = groups(halves[0])
+  const right = halves.length === 2 ? groups(halves[1]) : []
+  const bad = g => !/^[0-9a-f]{1,4}$/.test(g)
+  if (left.some(bad) || right.some(bad)) return null
+  const missing = 8 - left.length - right.length
+  if (halves.length === 2 ? missing < 1 : missing !== 0) return null
+  const all = [...left, ...Array(halves.length === 2 ? missing : 0).fill('0'), ...right]
+  let bits = 0n
+  for (const g of all) bits = (bits << 16n) | BigInt('0x' + g)
+  return { bits, fam: 6 }
+}
+
+function parseCidr(cidr) {
+  const [addr, lenStr] = String(cidr).split('/')
+  const ip = parseIp(addr)
+  if (!ip) return null
+  const maxLen = ip.fam === 4 ? 32 : 128
+  const len = lenStr === undefined || lenStr === '' ? maxLen : parseInt(lenStr, 10)
+  if (!Number.isInteger(len) || len < 0 || len > maxLen) return null
+  const shift = BigInt(maxLen - len)
+  return { base: ip.bits >> shift, shift, fam: ip.fam }
+}
+
+function ipInCidr(ip, cidr) {
+  return !!ip && !!cidr && ip.fam === cidr.fam && (ip.bits >> cidr.shift) === cidr.base
+}
+
+// Reverse proxies whose forwarded headers we honor. Default trusts the
+// loopback + RFC1918 addresses our own nginx/Caddy proxy lives on (the
+// shipped relay/nginx.conf fronts 127.0.0.1:8787) — remote clients can
+// never connect from those addresses, so the trust cannot be abused off-host.
+// Set TRUSTED_PROXIES=off to ignore forwarded headers entirely.
+const TRUSTED_PROXY_CIDRS = process.env.TRUSTED_PROXIES === 'off'
+  ? []
+  : String(process.env.TRUSTED_PROXIES || '127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7')
+      .split(',').map(s => parseCidr(s.trim())).filter(Boolean)
+
+// Cloudflare edge ranges — used only to recognize when our trusted proxy's
+// own peer was Cloudflare (in which case CF-Connecting-IP is authoritative).
+const CF_CIDRS = [
+  '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+  '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+  '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+  '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+  '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
+  '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+].map(parseCidr).filter(Boolean)
 
 /* ------------------------------------------------------------- storage */
 
@@ -271,6 +443,16 @@ import path from 'node:path'
 
 const CHUNK_STORAGE_DIR = process.env.CHUNK_STORAGE_DIR || path.join(os.tmpdir(), 'anonshare-chunks')
 try { fs.mkdirSync(CHUNK_STORAGE_DIR, { recursive: true }) } catch (e) {}
+
+// Total encrypted bytes currently held for a room (bounded by the quotas
+// enforced on PUT: 32 files x 25MB max, capped at 50MB per room overall).
+function roomFileBytes(room) {
+  let total = 0
+  for (const map of room.fileChunks.values()) {
+    for (const b of map.values()) total += b.length
+  }
+  return total
+}
 
 function getChunkDir(code, fileId) {
   return path.join(CHUNK_STORAGE_DIR, String(code).toUpperCase(), String(fileId))
@@ -489,6 +671,8 @@ async function executeCodeInternal({ language, code, stdin = '' }) {
   if (RUNNER_CACHE.has(cacheKey)) {
     return RUNNER_CACHE.get(cacheKey)
   }
+  // Bound the cache so a flood of unique programs cannot grow it indefinitely.
+  if (RUNNER_CACHE.size >= 200) RUNNER_CACHE.clear()
 
   // Ephemeral isolated workspace per run
   const runId = 'anon_' + Date.now() + '_' + crypto.randomBytes(6).toString('hex')
@@ -724,19 +908,42 @@ async function executeCode(payload) {
 
 /* ---------------------------------------------------------- HTTP Server */
 
-const server = http.createServer(async (req, res) => {
-  const ip = getClientIp(req)
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
+// Top-level guard: any unhandled throw/rejection in a route becomes a
+// generic 500 with no internal detail — never a process crash (Node kills
+// the process on unhandled rejections by default).
+const server = http.createServer((req, res) => {
+  handleHttp(req, res).catch(err => {
+    console.error('[relay] request error:', err && err.message)
+    try {
+      if (!res.headersSent) sendJson(req, res, { error: 'internal' }, 500)
+      else res.destroy()
+    } catch (e) {}
+  })
+})
 
-  // Handle CORS Preflight
+async function handleHttp(req, res) {
+  const ip = getClientIp(req)
+  let url
+  try {
+    url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
+  } catch (e) {
+    return sendJson(req, res, { error: 'bad_url' }, 400)
+  }
+
+  // Handle CORS preflight — only allowlisted origins get a grant.
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, CORS_HEADERS)
+    const h = corsHeaders(req)
+    if (!h['Access-Control-Allow-Origin']) {
+      res.writeHead(403, { ...SECURITY_HEADERS, Vary: 'Origin' })
+      return res.end()
+    }
+    res.writeHead(204, { ...h, ...SECURITY_HEADERS })
     return res.end()
   }
 
   // Health check & metrics
   if (url.pathname === '/' || url.pathname === '/health') {
-    return sendJson(res, { ok: true, service: 'anonshare-sync', version: 4, runtime: 'vps-node', sandbox: HAS_BWRAP ? 'bwrap-hardened' : 'standard' })
+    return sendJson(req, res, { ok: true, service: 'anonshare-sync', version: 4, runtime: 'vps-node', sandbox: HAS_BWRAP ? 'bwrap-hardened' : 'standard' })
   }
 
   if (url.pathname === '/health/stats') {
@@ -747,7 +954,7 @@ const server = http.createServer(async (req, res) => {
       totalSockets += r.sockets.size
       for (const map of r.fileChunks.values()) totalChunks += map.size
     }
-    return sendJson(res, {
+    return sendJson(req, res, {
       ok: true,
       service: 'anonshare-sync',
       uptime: Math.round(process.uptime()),
@@ -770,7 +977,7 @@ const server = http.createServer(async (req, res) => {
   /* ---------------------------------------------------- Code Execution */
   if (url.pathname === '/run' && req.method === 'POST') {
     if (!checkRate(ip, 'run')) {
-      return sendJson(res, {
+      return sendJson(req, res, {
         ok: false,
         error: 'rate_limited',
         retryAfter: 30,
@@ -778,56 +985,75 @@ const server = http.createServer(async (req, res) => {
       }, 429)
     }
 
-    let body = ''
-    req.on('data', chunk => {
-      body += chunk
-      if (body.length > 256 * 1024) req.destroy() // max 256KB source
-    })
-    req.on('end', async () => {
-      try {
-        const payload = JSON.parse(body)
-        if (!payload.code || !payload.language) {
-          return sendJson(res, { ok: false, error: 'bad_body', stderr: 'Missing language or code field' }, 400)
-        }
-        const result = await executeCode(payload)
-        const status = result.exitCode === 429 ? 429 : 200
-        return sendJson(res, result, status)
-      } catch (e) {
-        return sendJson(res, { ok: false, error: 'bad_json', stderr: 'Malformed JSON payload' }, 400)
-      }
-    })
-    return
+    const body = await readBody(req, 256 * 1024)
+    if (!body) {
+      return sendJson(req, res, { ok: false, error: 'body_too_large', stderr: 'Payload exceeds the 256KB limit' }, 413)
+    }
+    let payload
+    try {
+      payload = JSON.parse(body.toString('utf8'))
+    } catch (e) {
+      return sendJson(req, res, { ok: false, error: 'bad_json', stderr: 'Malformed JSON payload' }, 400)
+    }
+
+    // Server-side input validation — types, sizes, and the language
+    // whitelist are all checked before anything is queued or executed.
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return sendJson(req, res, { ok: false, error: 'bad_body', stderr: 'Body must be a JSON object' }, 400)
+    }
+    if (typeof payload.code !== 'string' || !payload.code.trim()) {
+      return sendJson(req, res, { ok: false, error: 'bad_body', stderr: 'Missing or invalid code field' }, 400)
+    }
+    if (payload.code.length > 256 * 1024) {
+      return sendJson(req, res, { ok: false, error: 'body_too_large', stderr: 'Source exceeds the 256KB limit' }, 413)
+    }
+    if (typeof payload.language !== 'string' || !payload.language.trim()) {
+      return sendJson(req, res, { ok: false, error: 'bad_body', stderr: 'Missing or invalid language field' }, 400)
+    }
+    if (payload.stdin !== undefined && payload.stdin !== null &&
+        (typeof payload.stdin !== 'string' || payload.stdin.length > 64 * 1024)) {
+      return sendJson(req, res, { ok: false, error: 'bad_body', stderr: 'stdin must be a string of at most 64KB' }, 400)
+    }
+    const normLang = payload.language.toLowerCase().trim()
+    if (!RUN_LANGS.has(normLang)) {
+      return sendJson(req, res, {
+        ok: false,
+        error: 'language_not_supported',
+        stderr: `Runner could not execute language "${normLang}". Supported: python, javascript, c, cpp, go, rust, bash, java.`,
+      }, 400)
+    }
+
+    const result = await executeCode({ language: normLang, code: payload.code, stdin: payload.stdin || '' })
+    const status = result.exitCode === 429 ? 429 : 200
+    return sendJson(req, res, result, status)
   }
 
   /* ------------------------------------------------------- Admin routes */
   if (url.pathname.startsWith('/admin/')) {
     if (url.pathname === '/admin/login' && req.method === 'POST') {
       if (!ADMIN_PASSWORD) {
-        return sendJson(res, { error: 'admin_disabled', detail: 'Set ADMIN_PASSWORD env var to enable the admin API' }, 503)
+        return sendJson(req, res, { error: 'admin_disabled', detail: 'Set ADMIN_PASSWORD env var to enable the admin API' }, 503)
       }
       if (!checkRate(ip, 'auth')) {
-        return sendJson(res, { error: 'rate_limited', retryAfter: 60 }, 429)
+        return sendJson(req, res, { error: 'rate_limited', retryAfter: 60 }, 429)
       }
-      let body = ''
-      req.on('data', chunk => { body += chunk })
-      req.on('end', () => {
-        try {
-          const { password } = JSON.parse(body)
-          if (!constEq(String(password || ''), ADMIN_PASSWORD)) {
-            return sendJson(res, { error: 'bad_password' }, 403)
-          }
-          const exp = Date.now() + 12 * 60 * 60 * 1000
-          return sendJson(res, { token: signToken(exp), exp })
-        } catch (e) {
-          return sendJson(res, { error: 'bad_body' }, 400)
+      const body = await readBody(req, 4 * 1024)
+      if (!body) return sendJson(req, res, { error: 'body_too_large' }, 413)
+      try {
+        const { password } = JSON.parse(body.toString('utf8'))
+        if (!constEq(String(password || ''), ADMIN_PASSWORD)) {
+          return sendJson(req, res, { error: 'bad_password' }, 403)
         }
-      })
-      return
+        const exp = Date.now() + 12 * 60 * 60 * 1000
+        return sendJson(req, res, { token: signToken(exp), exp })
+      } catch (e) {
+        return sendJson(req, res, { error: 'bad_body' }, 400)
+      }
     }
 
     const authHeader = req.headers.authorization || ''
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-    if (!verifyToken(token)) return sendJson(res, { error: 'unauthorized' }, 401)
+    if (!verifyToken(token)) return sendJson(req, res, { error: 'unauthorized' }, 401)
 
     if (url.pathname === '/admin/rooms' && req.method === 'GET') {
       const list = []
@@ -843,7 +1069,7 @@ const server = http.createServer(async (req, res) => {
         })
       }
       list.sort((a, b) => b.created - a.created)
-      return sendJson(res, { rooms: list, total: list.length })
+      return sendJson(req, res, { rooms: list, total: list.length })
     }
 
     if (url.pathname === '/admin/metrics' && req.method === 'GET') {
@@ -851,7 +1077,7 @@ const server = http.createServer(async (req, res) => {
       const hourAgo = now - 60 * 60 * 1000
       const dayAgo = now - 24 * 60 * 60 * 1000
       const all = Array.from(rooms.values())
-      return sendJson(res, {
+      return sendJson(req, res, {
         totalActiveRooms: all.length,
         createdLastHour: all.filter(r => r.meta.c >= hourAgo).length,
         createdLastDay: all.filter(r => r.meta.c >= dayAgo).length,
@@ -864,7 +1090,7 @@ const server = http.createServer(async (req, res) => {
       const code = actionMatch[1].toUpperCase()
       const verb = actionMatch[2]
       const room = rooms.get(code)
-      if (!room) return sendJson(res, { error: 'no_room' }, 404)
+      if (!room) return sendJson(req, res, { error: 'no_room' }, 404)
 
       if (verb === 'delete') {
         for (const ws of room.sockets) {
@@ -872,7 +1098,7 @@ const server = http.createServer(async (req, res) => {
           try { ws.close(4001, 'admin_deleted') } catch (e) {}
         }
         rooms.delete(code)
-        return sendJson(res, { ok: true, deleted: true })
+        return sendJson(req, res, { ok: true, deleted: true })
       }
 
       if (verb === 'suspend' || verb === 'unsuspend') {
@@ -895,49 +1121,54 @@ const server = http.createServer(async (req, res) => {
       }
 
       room.announceState()
-      return sendJson(res, { ok: true, suspended: !!room.meta.s, locked: !!room.meta.r })
+      return sendJson(req, res, { ok: true, suspended: !!room.meta.s, locked: !!room.meta.r })
     }
 
     if (url.pathname === '/admin/config') {
       if (req.method === 'GET') {
         const defaults = { IP_PER_MIN, CREATE_PER_MIN, AUTH_PER_MIN, MAX_CONNS, RATE_PER_SEC }
-        return sendJson(res, { config: currentConfig, defaults })
+        return sendJson(req, res, { config: currentConfig, defaults })
       }
       if (req.method === 'POST') {
-        let body = ''
-        req.on('data', chunk => { body += chunk })
-        req.on('end', () => {
-          try {
-            const data = JSON.parse(body)
-            for (const k of ['IP_PER_MIN', 'CREATE_PER_MIN', 'AUTH_PER_MIN', 'MAX_CONNS']) {
-              if (typeof data[k] === 'number' && data[k] > 0) currentConfig[k] = Math.floor(data[k])
-            }
-            return sendJson(res, { ok: true, config: currentConfig })
-          } catch (e) {
-            return sendJson(res, { error: 'bad_body' }, 400)
+        const body = await readBody(req, 4 * 1024)
+        if (!body) return sendJson(req, res, { error: 'body_too_large' }, 413)
+        try {
+          const data = JSON.parse(body.toString('utf8'))
+          for (const k of ['IP_PER_MIN', 'CREATE_PER_MIN', 'AUTH_PER_MIN', 'MAX_CONNS']) {
+            if (typeof data[k] === 'number' && data[k] > 0) currentConfig[k] = Math.floor(data[k])
           }
-        })
-        return
+          return sendJson(req, res, { ok: true, config: currentConfig })
+        } catch (e) {
+          return sendJson(req, res, { error: 'bad_body' }, 400)
+        }
       }
     }
 
-    return sendJson(res, { error: 'not_found' }, 404)
+    return sendJson(req, res, { error: 'not_found' }, 404)
   }
 
   /* -------------------------------------------------------- Room routes */
-  const roomMatch = url.pathname.match(/^\/room\/([A-Za-z0-9]{4,12})(?:\/(exists|admin|files(?:\/([a-zA-Z0-9_-]+)\/chunk\/(\d+))?))?$/)
-  if (!roomMatch) return sendJson(res, { error: 'not_found' }, 404)
+  // NOTE: `files` optionally carries `/fileId` and then `/chunk/:idx` —
+  // `DELETE /room/:code/files/:fileId` (no chunk suffix) is the documented
+  // remove-for-everyone call the client actually makes, and it must route.
+  const roomMatch = url.pathname.match(/^\/room\/([A-Za-z0-9]{4,12})(?:\/(exists|admin|files(?:\/([a-zA-Z0-9_-]+)(?:\/chunk\/(\d+))?)?))?$/)
+  if (!roomMatch) return sendJson(req, res, { error: 'not_found' }, 404)
 
   const code = roomMatch[1].toUpperCase()
-  if (!CODE_RE.test(code)) return sendJson(res, { error: 'bad_code' }, 400)
+  if (!CODE_RE.test(code)) return sendJson(req, res, { error: 'bad_code' }, 400)
+
+  // General per-IP throttle covering every room subroute (exists, files,
+  // join preflight, create) — file uploads alone can be 400 requests.
+  if (!checkRate(ip, 'default')) {
+    return sendJson(req, res, { error: 'rate_limited', retryAfter: 30 }, 429)
+  }
 
   const subAction = roomMatch[2]
   let room = rooms.get(code)
 
   // /room/:code/exists
   if (subAction === 'exists') {
-    if (!checkRate(ip, 'default')) return sendJson(res, { error: 'rate_limited' }, 429)
-    return sendJson(res, {
+    return sendJson(req, res, {
       exists: !!room,
       peers: room ? room.sockets.size : 0,
       hasPassword: room ? !!room.meta.p : false,
@@ -949,22 +1180,30 @@ const server = http.createServer(async (req, res) => {
 
   // /room/:code/admin (Owner room administration)
   if (subAction === 'admin') {
-    if (req.method !== 'POST') return sendJson(res, { error: 'method' }, 405)
-    if (!room) return sendJson(res, { error: 'no_room' }, 404)
+    if (req.method !== 'POST') return sendJson(req, res, { error: 'method' }, 405)
+    if (!room) return sendJson(req, res, { error: 'no_room' }, 404)
 
-    let body = ''
-    req.on('data', c => { body += c })
-    req.on('end', async () => {
-      try {
-        const { token, action, value, masterKey } = JSON.parse(body)
-        const masterOk = !!ADMIN_PASSWORD && !!masterKey && constEq(masterKey, ADMIN_PASSWORD)
+    const body = await readBody(req, 8 * 1024)
+    if (!body) return sendJson(req, res, { error: 'body_too_large' }, 413)
+    try {
+      const { token, action, value, masterKey } = JSON.parse(body.toString('utf8'))
 
-        if (!masterOk) {
-          if (!room.meta.o) return sendJson(res, { error: 'no_owner' }, 409)
-          if (!constEq(sha256(token || ''), room.meta.o)) {
-            return sendJson(res, { error: 'not_owner' }, 403)
-          }
+      // A masterKey attempt is a guess at the operator password — count it
+      // against the strict auth budget so the shared secret cannot be
+      // brute-forced through this route (it was previously unlimited).
+      const hasMasterKey = masterKey !== undefined && masterKey !== null && masterKey !== ''
+      if (hasMasterKey && !checkRate(ip, 'auth')) {
+        return sendJson(req, res, { error: 'rate_limited', retryAfter: 60 }, 429)
+      }
+      const masterOk = !!ADMIN_PASSWORD && !!masterKey && constEq(masterKey, ADMIN_PASSWORD)
+
+      if (!masterOk) {
+        if (!room.meta.o) return sendJson(req, res, { error: 'no_owner' }, 409)
+        if (!constEq(sha256(token || ''), room.meta.o)) {
+          checkRate(ip, 'auth')
+          return sendJson(req, res, { error: 'not_owner' }, 403)
         }
+      }
 
         if (action === 'delete') {
           const reason = masterOk ? 'admin_deleted' : 'deleted'
@@ -974,7 +1213,7 @@ const server = http.createServer(async (req, res) => {
           }
           rooms.delete(code)
           deleteRoomChunksFromDisk(code)
-          return sendJson(res, { ok: true, deleted: true })
+          return sendJson(req, res, { ok: true, deleted: true })
         }
 
         if (action === 'suspend') {
@@ -996,16 +1235,14 @@ const server = http.createServer(async (req, res) => {
         } else if (action === 'ttl') {
           room.meta.ttl = TTLS[value] || DEFAULT_TTL
         } else {
-          return sendJson(res, { error: 'bad_action' }, 400)
+          return sendJson(req, res, { error: 'bad_action' }, 400)
         }
 
         room.announceState()
-        return sendJson(res, { ok: true, suspended: !!room.meta.s, locked: !!room.meta.r, ttl: room.meta.ttl })
-      } catch (e) {
-        return sendJson(res, { error: 'bad_body' }, 400)
-      }
-    })
-    return
+        return sendJson(req, res, { ok: true, suspended: !!room.meta.s, locked: !!room.meta.r, ttl: room.meta.ttl })
+    } catch (e) {
+      return sendJson(req, res, { error: 'bad_body' }, 400)
+    }
   }
 
   // /room/:code/files (Encrypted ephemeral file chunks)
@@ -1038,42 +1275,53 @@ const server = http.createServer(async (req, res) => {
         room = new RoomState(code, meta)
         rooms.set(code, room)
       } else {
-        return sendJson(res, { error: 'no_room' }, 404)
+        return sendJson(req, res, { error: 'no_room' }, 404)
       }
     }
 
     // Verify room auth
     const authHeader = getAuth()
     if (room.meta.a && (!authHeader || !constEq(sha256(authHeader), room.meta.a))) {
-      return sendJson(res, { error: 'unauthorized' }, 403)
+      return sendJson(req, res, { error: 'unauthorized' }, 403)
     }
 
-    // PUT chunk
+    // PUT chunk (encrypted client-side; the relay stores opaque bytes).
+    // Quotas: 1MB per chunk, 400 chunks per file, 32 files per room, 50MB
+    // per room — an authenticated member can no longer fill the VPS disk.
     if (req.method === 'PUT' && fileId && chunkIdx !== null) {
-      const chunks = []
-      let size = 0
-      req.on('data', chunk => {
-        chunks.push(chunk)
-        size += chunk.length
-        if (size > 1024 * 1024) req.destroy() // max 1MB per chunk
-      })
-      req.on('end', async () => {
-        const fullBuf = Buffer.concat(chunks)
-        let fileMap = room.fileChunks.get(fileId)
-        if (!fileMap) {
-          fileMap = new Map()
-          room.fileChunks.set(fileId, fileMap)
-        }
+      if (!Number.isInteger(chunkIdx) || chunkIdx < 0 || chunkIdx >= MAX_FILE_CHUNKS) {
+        return sendJson(req, res, { error: 'chunk_index_out_of_range', max: MAX_FILE_CHUNKS }, 400)
+      }
+      const fullBuf = await readBody(req, MAX_CHUNK_BYTES)
+      if (!fullBuf || fullBuf.length === 0) {
+        return sendJson(req, res, { error: 'chunk_too_large', stderr: 'Chunk exceeds the 1MB limit' }, 413)
+      }
+      const fileMap = room.fileChunks.get(fileId)
+      const overwrite = fileMap ? fileMap.has(chunkIdx) : false
+      if (!fileMap && room.fileChunks.size >= MAX_FILES_PER_ROOM) {
+        return sendJson(req, res, { error: 'too_many_files', max: MAX_FILES_PER_ROOM }, 413)
+      }
+      if (fileMap && !overwrite && fileMap.size >= MAX_FILE_CHUNKS) {
+        return sendJson(req, res, { error: 'file_too_many_chunks', max: MAX_FILE_CHUNKS }, 413)
+      }
+      if (!overwrite && roomFileBytes(room) + fullBuf.length > MAX_ROOM_FILE_BYTES) {
+        return sendJson(req, res, { error: 'room_file_quota', maxBytes: MAX_ROOM_FILE_BYTES }, 413)
+      }
+      if (!fileMap) {
+        room.fileChunks.set(fileId, new Map([[chunkIdx, fullBuf]]))
+      } else {
         fileMap.set(chunkIdx, fullBuf)
-        await saveChunkToDisk(code, fileId, chunkIdx, fullBuf)
-        room.touch()
-        return sendJson(res, { ok: true, fileId, chunkIndex: chunkIdx })
-      })
-      return
+      }
+      await saveChunkToDisk(code, fileId, chunkIdx, fullBuf)
+      room.touch()
+      return sendJson(req, res, { ok: true, fileId, chunkIndex: chunkIdx })
     }
 
     // GET chunk
     if (req.method === 'GET' && fileId && chunkIdx !== null) {
+      if (!Number.isInteger(chunkIdx) || chunkIdx < 0 || chunkIdx >= MAX_FILE_CHUNKS) {
+        return sendJson(req, res, { error: 'chunk_index_out_of_range', max: MAX_FILE_CHUNKS }, 400)
+      }
       let data = room.fileChunks.get(fileId)?.get(chunkIdx)
       if (!data) {
         data = await readChunkFromDisk(code, fileId, chunkIdx)
@@ -1086,12 +1334,13 @@ const server = http.createServer(async (req, res) => {
           fileMap.set(chunkIdx, data)
         }
       }
-      if (!data) return sendJson(res, { error: 'chunk_not_found' }, 404)
+      if (!data) return sendJson(req, res, { error: 'chunk_not_found' }, 404)
 
       res.writeHead(200, {
         'Content-Type': 'application/octet-stream',
         'Cache-Control': 'no-store',
-        ...CORS_HEADERS,
+        ...SECURITY_HEADERS,
+        ...corsHeaders(req),
       })
       return res.end(data)
     }
@@ -1100,17 +1349,17 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'DELETE' && fileId) {
       room.fileChunks.delete(fileId)
       await deleteFileFromDisk(code, fileId)
-      return sendJson(res, { ok: true, deleted: fileId })
+      return sendJson(req, res, { ok: true, deleted: fileId })
     }
 
-    return sendJson(res, { ok: true, files: Array.from(room.fileChunks.keys()) })
+    return sendJson(req, res, { ok: true, files: Array.from(room.fileChunks.keys()) })
   }
 
   // Preflight HTTP request for room join / creation
   const isCreate = url.searchParams.get('create') === '1'
   if (isCreate) {
-    if (!checkRate(ip, 'create')) return sendJson(res, { error: 'rate_limited' }, 429)
-    if (room && url.searchParams.get('excl') === '1') return sendJson(res, { error: 'taken' }, 409)
+    if (!checkRate(ip, 'create')) return sendJson(req, res, { error: 'rate_limited' }, 429)
+    if (room && url.searchParams.get('excl') === '1') return sendJson(req, res, { error: 'taken' }, 409)
 
     if (!room) {
       const rawAuth = url.searchParams.get('a')
@@ -1130,7 +1379,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   const currentRoom = rooms.get(code)
-  if (!currentRoom) return sendJson(res, { error: 'no_room' }, 404)
+  if (!currentRoom) return sendJson(req, res, { error: 'no_room' }, 404)
 
   // Authenticate joining client
   const rawOwner = url.searchParams.get('o')
@@ -1141,31 +1390,48 @@ const server = http.createServer(async (req, res) => {
     const ok = !!rawAuth && constEq(sha256(rawAuth), currentRoom.meta.a)
     if (!ok) {
       checkRate(ip, 'auth')
-      return sendJson(res, { error: 'bad_auth' }, 403)
+      return sendJson(req, res, { error: 'bad_auth' }, 403)
     }
   }
 
   if (currentRoom.meta.s && !isOwner) {
-    return sendJson(res, { error: 'suspended' }, 423)
+    return sendJson(req, res, { error: 'suspended' }, 423)
   }
 
   // Client sent regular HTTP GET -> return 426 Upgrade Required (proves token was accepted)
-  return sendJson(res, { ok: true, error: 'expected_websocket' }, 426)
-})
+  return sendJson(req, res, { ok: true, error: 'expected_websocket' }, 426)
+}
 
 /* ---------------------------------------------------- WebSocket Server */
 
 const wss = new WebSocketServer({ noServer: true })
 
-server.on('upgrade', (req, socket, head) => {
-  const ip = getClientIp(req)
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
-  const match = url.pathname.match(/^\/room\/([A-Za-z0-9]{4,12})$/)
+// Concurrent WS connections per client IP (set on upgrade, released on
+// close/error). Room-hopping clients can no longer dodge MAX_CONNS.
+const ipConns = new Map()
 
-  if (!match) {
-    socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
-    return socket.destroy()
-  }
+server.on('upgrade', (req, socket, head) => {
+  try {
+    const ip = getClientIp(req)
+    let url
+    try {
+      url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
+    } catch (e) {
+      socket.write('HTTP/1.1 400 Bad Request\r\n\r\n')
+      return socket.destroy()
+    }
+    const match = url.pathname.match(/^\/room\/([A-Za-z0-9]{4,12})$/)
+
+    if (!match) {
+      socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
+      return socket.destroy()
+    }
+
+    // Connection-level abuse guards BEFORE any room work happens.
+    if (!checkRate(ip, 'default') || (ipConns.get(ip) || 0) >= MAX_IP_CONNS) {
+      socket.write('HTTP/1.1 429 Too Many Requests\r\nRetry-After: 30\r\n\r\n')
+      return socket.destroy()
+    }
 
   const code = match[1].toUpperCase()
   let room = rooms.get(code)
@@ -1212,6 +1478,8 @@ server.on('upgrade', (req, socket, head) => {
   }
 
   wss.handleUpgrade(req, socket, head, ws => {
+    ws._ip = ip
+    ipConns.set(ip, (ipConns.get(ip) || 0) + 1)
     ws._att = {
       own: isOwner,
       edit: isOwner || !room.meta.r,
@@ -1220,6 +1488,10 @@ server.on('upgrade', (req, socket, head) => {
     }
     wss.emit('connection', ws, req, room)
   })
+  } catch (err) {
+    // Malformed upgrade request — never crash the process over it.
+    try { socket.destroy() } catch (e) {}
+  }
 })
 
 wss.on('connection', (ws, req, room) => {
@@ -1343,6 +1615,11 @@ wss.on('connection', (ws, req, room) => {
 
   // Socket cleanup
   const cleanup = () => {
+    if (ws._ip) {
+      const n = (ipConns.get(ws._ip) || 1) - 1
+      if (n <= 0) ipConns.delete(ws._ip)
+      else ipConns.set(ws._ip, n)
+    }
     room.sockets.delete(ws)
     room.rate.delete(ws)
     room.aware.delete(ws)
@@ -1373,6 +1650,16 @@ setInterval(() => {
     }
   }
 }, 60000)
+
+// Process-level safety net: a single bad request or frame must never take
+// the whole relay down (Node's default is to exit on unhandled rejections).
+// Details go to the server log only — clients always get generic errors.
+process.on('uncaughtException', err => {
+  console.error('[relay] uncaught exception:', err && err.message)
+})
+process.on('unhandledRejection', err => {
+  console.error('[relay] unhandled rejection:', err && (err.message || err))
+})
 
 server.listen(PORT, HOST, () => {
   console.log(`[anonshare-relay] Server listening on http://${HOST}:${PORT}`)

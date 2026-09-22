@@ -12,7 +12,17 @@ RestartSec=5
 Environment=NODE_ENV=production
 Environment=PORT=8787
 Environment=HOST=0.0.0.0
-Environment=ADMIN_PASSWORD=change-this-secret
+# ADMIN_PASSWORD: set a strong, randomly generated secret via a systemd
+# override (NEVER commit the real value here — this file is public):
+#   sudo systemctl edit anonshare-relay
+#   [Service]
+#   Environment=ADMIN_PASSWORD=<strong-random-secret>
+# Leaving it unset is safe: the /admin/* API stays fully disabled (503).
+# Environment=ADMIN_PASSWORD=
+
+# Optional: restrict browser origins that may call the HTTP API.
+# Defaults to the production sites + localhost if unset (see server.js).
+# Environment=ALLOWED_ORIGINS=https://code.avishkark.in,https://admin.code.avishkark.in
 
 # Security sandbox
 NoNewPrivileges=true

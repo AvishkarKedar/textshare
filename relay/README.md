@@ -3,6 +3,19 @@
 A high-performance, self-hosted WebSocket relay and compilation runner for AnonShare.
 Drop-in replacement for the Cloudflare Worker relay that eliminates Cloudflare limits, supports encrypted file chunking up to 25MB, and powers the multi-language code runner.
 
+## 🔐 Environment Variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ADMIN_PASSWORD` | *(unset)* | Admin API secret. **No default** — when unset, every `/admin/*` route returns 503 and the API is disabled (fails closed). Never commit the real value; set it via systemd override, `.env`, or Docker secrets. |
+| `ALLOWED_ORIGINS` | production sites + localhost | Comma-separated browser origins allowed cross-origin on the HTTP API. Supports exact origins, `*.suffix` patterns, or `*` to restore the legacy open policy. WebSocket connections are unaffected (CORS never applied to WS). |
+| `TRUSTED_PROXIES` | loopback + RFC1918 | CIDRs whose `X-Real-IP` / `X-Forwarded-For` / `CF-Connecting-IP` headers are honored for rate limiting. `off` disables header trust entirely (rate-limit by socket address). Client-supplied spoofed headers from untrusted addresses are always ignored. |
+| `PORT` | `8787` | Listen port. |
+| `HOST` | `0.0.0.0` | Bind address. |
+| `CHUNK_STORAGE_DIR` | `$TMPDIR/anonshare-chunks` | Where encrypted file chunks are persisted. |
+
+Abuse limits (per IP, per minute): 600 general requests, 60 room creates, 8 failed-auth attempts, 20 code runs, 24 concurrent WebSocket connections. File storage quotas: 1MB per chunk, 400 chunks per file, 32 files per room, 50MB per room.
+
 ## 🚀 Quick Start on VPS
 
 ### Option A: Docker Compose (Recommended)
@@ -13,9 +26,10 @@ Drop-in replacement for the Cloudflare Worker relay that eliminates Cloudflare l
    cd textshare/relay
    ```
 
-2. Set your admin password in `.env` (optional):
+2. Set your admin password in `.env` (optional — unset means the admin API stays disabled):
    ```bash
-   echo "ADMIN_PASSWORD=my-secure-admin-pass" > .env
+   echo "ADMIN_PASSWORD=$(openssl rand -base64 24)" > .env
+   chmod 600 .env
    ```
 
 3. Launch with Docker Compose:
@@ -51,8 +65,8 @@ pm2 startup
 
 ## ⚙️ Connecting AnonShare to Your VPS Relay
 
-In `app.js`, set:
-```javascript
-const DEFAULT_RELAY = 'relay.yourdomain.com'
+In `src/lib/relay.ts`, set:
+```typescript
+export const DEFAULT_RELAY = "relay.yourdomain.com"
 ```
 Or append `?relay=relay.yourdomain.com` in your browser URL.
