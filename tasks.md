@@ -2,7 +2,7 @@
 
 > **Engineering Status:** Master Baseline Active & Deployed  
 > **Production Target:** [https://code.avishkark.in](https://code.avishkark.in)  
-> **Automated Test Suite:** 56/56 Passing Tests (`vitest run`)  
+> **Automated Test Suite:** 62/62 Passing Tests (`vitest run`)  
 > **Compiler Diagnostics:** 0 TypeScript Errors (`npx tsc --noEmit`)  
 
 ---
@@ -96,7 +96,7 @@
 | Apple Safari (macOS)| Fully Verified    | DTLS-SRTP P2P     | Verified (__reactFiber$ present)|
 | Android Chrome      | Fully Verified    | Web Audio VAD     | Verified (Touch #mbar active)   |
 | iOS Safari (15+)    | Fully Verified    | Autoplay Handled  | Verified (Touch #mbar active)   |
-| Headless Puppeteer  | Fully Verified    | Fake Mic Streams  | Verified (56/56 tests passing)  |
+| Headless Puppeteer  | Fully Verified    | Fake Mic Streams  | Verified (62/62 tests passing)  |
 +---------------------+-------------------+-------------------+---------------------------------+
 ```
 
