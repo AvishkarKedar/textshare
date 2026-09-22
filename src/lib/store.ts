@@ -1659,12 +1659,13 @@ export const useAnon = create<AnonState>()(
             return;
           }
         } catch {}
-        // client-side WebCrypto fallback
+        // client-side WebCrypto fallback — same salts as the relay protocol
+        // (src/lib/relay.ts); demo-speed 100k iterations like /api/crypto.
         try {
           const enc = new TextEncoder();
           const input = `${code}:${s.cryptoPassword || ""}`;
-          const keySalt = `anonshare|${code}`;
-          const authSalt = `anonshare-auth|${code}`;
+          const keySalt = `textshare|${code}`;
+          const authSalt = `textshare-auth|${code}`;
           const ITERATIONS = 100_000;
           const start = Date.now();
           const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(input), { name: "PBKDF2" }, false, ["deriveBits"]);

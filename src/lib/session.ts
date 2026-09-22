@@ -603,10 +603,19 @@ export async function deleteSharedFile(fileId: string): Promise<void> {
   const { code, host } = active.info;
   const auth = active.relay.auth;
   const proto = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http:" : "https:";
-  await fetchWithRetry(`${proto}//${host}/room/${encodeURIComponent(code)}/files/${encodeURIComponent(fileId)}?a=${encodeURIComponent(auth)}`, {
-    method: "DELETE",
-    headers: { "x-room-auth": auth, Authorization: `Bearer ${auth}` },
-  }).catch(() => null);
+  const base = `${proto}//${host}/room/${encodeURIComponent(code)}/files/${encodeURIComponent(fileId)}`;
+  const headers = { "x-room-auth": auth, Authorization: `Bearer ${auth}` };
+  try {
+    // Current relay: DELETE /files/:fileId removes every chunk of the file.
+    await fetchWithRetry(`${base}?a=${encodeURIComponent(auth)}`, { method: "DELETE", headers });
+  } catch {
+    // Older relay generation: the chunk-less route 404s, but DELETE on any
+    // chunk index routes and removes the entire file there. Best-effort —
+    // the metadata removal below is what peers actually see.
+    try {
+      await fetchWithRetry(`${base}/chunk/0?a=${encodeURIComponent(auth)}`, { method: "DELETE", headers });
+    } catch { /* server-side bytes are purged at room expiry anyway */ }
+  }
   const shared = active.doc.getArray<YSharedMeta>("shared_files");
   const idx = shared.toArray().findIndex((f) => f.id === fileId);
   if (idx >= 0) shared.delete(idx, 1);

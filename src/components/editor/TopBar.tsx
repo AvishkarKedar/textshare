@@ -131,7 +131,7 @@ export function TopBar() {
 
         <button
           onClick={() => s.toggleTerminal()}
-          className={`anon-mono relative inline-flex h-7 items-center gap-1.5 px-2 text-xs hairline hover:bg-[var(--anon-panel)] ${
+          className={`anon-mono relative hidden h-7 items-center gap-1.5 px-2 text-xs hairline hover:bg-[var(--anon-panel)] sm:inline-flex ${
             s.terminalOpen ? "bg-[var(--anon-panel)]" : ""
           }`}
           title="Toggle terminal"

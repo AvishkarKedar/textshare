@@ -110,8 +110,8 @@ export function SecurityModal() {
               <pre className="anon-mono text-[10px] leading-relaxed anon-mut overflow-x-auto">
 {`input  = roomCode + ":" + password
 
-key    = PBKDF2(input, salt = "anonshare|CODE",        600_000) → AES-GCM 256   [never sent]
-auth   = PBKDF2(input, salt = "anonshare-auth|CODE",   600_000) → 32 bytes      [sent to relay]
+key    = PBKDF2(input, salt = "textshare|CODE",        600_000) → AES-GCM 256   [never sent]
+auth   = PBKDF2(input, salt = "textshare-auth|CODE",   600_000) → 32 bytes      [sent to relay]
 
 relay stores:  SHA-256(auth)
 relay compares:  constEq(stored, incoming)  on every request

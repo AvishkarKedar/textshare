@@ -86,10 +86,13 @@ export async function onRequestPost(context: { request: Request }): Promise<Resp
     return Response.json({ ok: false, error: "code is required" }, { status: 400 });
   }
 
+  // Same salt scheme as the production room-key derivation in src/lib/relay.ts
+  // (public knowledge — shipped in the client bundle). The demo runs 100k
+  // iterations for speed; production uses 600k.
   const ITERATIONS = 100_000;
   const input = `${code}:${password}`;
-  const keySalt = `anonshare|${code}`;
-  const authSalt = `anonshare-auth|${code}`;
+  const keySalt = `textshare|${code}`;
+  const authSalt = `textshare-auth|${code}`;
 
   const start = Date.now();
   try {
@@ -144,6 +147,6 @@ export async function onRequestGet(): Promise<Response> {
     service: "anonshare-crypto-demo",
     algorithm: "PBKDF2-SHA-256",
     iterations: 100_000,
-    note: "demonstrates the real anonshare key/auth derivation. production uses 600k iterations.",
+    note: "demonstrates the production room-key derivation (same salts, 100k demo iterations vs 600k in production).",
   });
 }

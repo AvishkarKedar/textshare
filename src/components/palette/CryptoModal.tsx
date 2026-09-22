@@ -202,8 +202,8 @@ export function CryptoModal() {
               <pre className="anon-mono text-[10px] leading-relaxed anon-mut overflow-x-auto">
 {`input = "${s.cryptoCode || "CODE"}" + ":" + "${"*".repeat(s.cryptoPassword.length)}"
 
-key  = PBKDF2(input, "anonshare|${s.cryptoCode}",       600k) → AES-GCM 256  [never sent]
-auth = PBKDF2(input, "anonshare-auth|${s.cryptoCode}", 600k) → 32 bytes     [sent]
+key  = PBKDF2(input, "textshare|${s.cryptoCode}",       600k) → AES-GCM 256  [never sent]
+auth = PBKDF2(input, "textshare-auth|${s.cryptoCode}", 600k) → 32 bytes     [sent]
 
 relay stores:  SHA-256(auth)  →  constEq(stored, incoming) on every request
 
