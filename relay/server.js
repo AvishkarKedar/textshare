@@ -634,13 +634,14 @@ async function runSandboxedProcess({ cmd, args = [], input = '', workspaceDir = 
     : isGo || isNode
       ? 1536 * 1024 * 1024     // runtimes that build arenas: 1.5 GB data cap
       : 768 * 1024 * 1024      // JVM: 768 MB data cap
-  const maxNproc = isCompile || isJvm ? 64 : 32
+  const maxNproc = isCompile || isJvm ? 512 : 256
   const maxCpuSec = isCompile ? 12 : 6
+  const maxFsizeBytes = isCompile || isRustc || isGo ? 100 * 1024 * 1024 : 20 * 1024 * 1024
 
   const prlimitArgs = [
     vaHungry ? `--data=${dataCapBytes}` : `--as=${maxMemBytes}`,
     `--nproc=${maxNproc}`,
-    `--fsize=10485760`,
+    `--fsize=${maxFsizeBytes}`,
     `--cpu=${maxCpuSec}`,
     'bwrap',
     '--ro-bind', '/usr', '/usr',
@@ -660,9 +661,24 @@ async function runSandboxedProcess({ cmd, args = [], input = '', workspaceDir = 
     prlimitArgs.push('--bind', workspaceDir, '/workspace', '--chdir', '/workspace')
   }
 
+  // Set essential environment variables inside the bubblewrap namespace
+  prlimitArgs.push(
+    '--setenv', 'HOME', '/tmp',
+    '--setenv', 'TMPDIR', '/tmp',
+    '--setenv', 'GOCACHE', '/tmp/gocache',
+    '--setenv', 'GOTMPDIR', '/tmp',
+    '--setenv', 'PATH', process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+  )
+
+  if (env && typeof env === 'object') {
+    for (const [k, v] of Object.entries(env)) {
+      prlimitArgs.push('--setenv', k, String(v))
+    }
+  }
+
   prlimitArgs.push(cmd, ...args)
 
-  return runLocalProcess('/usr/bin/prlimit', prlimitArgs, input, timeoutMs, workspaceDir)
+  return runLocalProcess('/usr/bin/prlimit', prlimitArgs, input, timeoutMs, workspaceDir, env)
 }
 
 /* ---------------------------------------------------------- Python bundle */

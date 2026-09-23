@@ -28,6 +28,7 @@ async function main() {
       const ok = (j.stdout || '').includes(expect)
       if (ok) pass++
       console.log(`${ok ? 'PASS' : 'FAIL'} | ${lang.padEnd(10)} ${String(Date.now() - t0).padStart(5)}ms exit=${j.exitCode} :: ${out.trim().split('\n')[0].slice(0, 90)}`)
+      if (!ok && j.stderr) console.log(`   --> STDERR: ${j.stderr}`)
     } catch (e) {
       console.log(`FAIL | ${lang.padEnd(10)} :: ${e.message.slice(0, 80)}`)
     }

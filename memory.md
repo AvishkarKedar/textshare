@@ -26,6 +26,9 @@
 | INC-2026-09D  | TypeScript Error        | typescript.ignoreBuildErrors was true,      | Fixed all component prop      |
 |               | Silencing               | hiding broken icon props and store types.   | types; enabled strict checks. |
 +---------------+-------------------------+---------------------------------------------+-------------------------------+
+| INC-2026-09E  | Bwrap Sandbox NPROC &   | RLIMIT_NPROC=32 blocked namespace clone     | Raised maxNproc to 512/256 &  |
+|               | FSIZE Compiler Limits   | (EAGAIN); fsize=10MB killed Go/Rust linkers.| maxFsize to 100MB; 8/8 pass.  |
++---------------+-------------------------+---------------------------------------------+-------------------------------+
 ```
 
 ---
@@ -109,6 +112,28 @@
 - Resolved all TypeScript interface errors across all files.
 - Removed `ignoreBuildErrors: true` from `next.config.ts`.
 - Added `npx tsc --noEmit` as a required pre-commit check.
+
+---
+
+### Incident INC-2026-09E: Bwrap Sandbox NPROC & FSIZE Compiler Resource Blockades
+
+#### 1. Symptoms & Initial Observations
+- Running `node scripts/relay-version-discriminator.mjs` or `scripts/runner-matrix.mjs` against the live VPS relay yielded:
+  - `bwrap: Creating new namespace failed: Resource temporarily unavailable` on Python, Node.js, Bash.
+  - Go compiler output: `compile: writing output: write $WORK/b009/_pkg_.a: file too large`.
+  - Rust linker output: `collect2: fatal error: ld terminated with signal 25 [File size limit exceeded]`.
+
+#### 2. Root Cause Analysis
+- **NPROC Accounting**: Linux kernel `RLIMIT_NPROC` applies to the *real UID* across the entire system. When the service runs under the `ubuntu` user (which already runs background systemd tasks and PM2), setting `--nproc=32` meant `clone()` failed immediately with `EAGAIN` because `ubuntu` already owned 38 system tasks.
+- **FSIZE Compiler Overhead**: `--fsize=10485760` (10 MB) was lower than intermediate objects produced during standard library linking:
+  - Go's `_pkg_.a` runtime is ~16–20 MB.
+  - Rust's `rustc`/`ld` static binary intermediate during `-O` compilation exceeds 15 MB before dead-code elimination (`--gc-sections`).
+
+#### 3. Permanent Fix & Invariant
+- **`maxNproc`**: Configured to `512` (compile/JVM stages) and `256` (runtime stages).
+- **`maxFsizeBytes`**: Configured to `100 MB` for compile/Go/Rust stages (`20 MB` for runtime scripts).
+- **Environment Isolation**: Added explicit `--setenv HOME /tmp --setenv TMPDIR /tmp --setenv GOCACHE /tmp/gocache --setenv GOTMPDIR /tmp` inside bubblewrap namespaces.
+- **Verification**: 8/8 languages (`python`, `javascript`, `bash`, `c`, `cpp`, `java`, `go`, `rust`) execute with 100% pass rate in production sandbox.
 
 ---
 

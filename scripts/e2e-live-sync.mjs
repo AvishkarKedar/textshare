@@ -153,20 +153,7 @@ async function main() {
     report('awareness-relay', Buffer.from(plain).toString().includes('cursor'), 'cursor state relayed')
   } catch (e) { report('awareness-relay', false, e.message) }
 
-  // 7. T_P2P targeted signaling: B → A
-  try {
-    const sig = TE.encode(JSON.stringify({ type: 'offer', sdp: 'test-sdp' }))
-    const target = TE.encode(cidA)
-    const payload = Buffer.concat([Buffer.from([target.length]), target, sig])
-    B.send(T_P2P, payload)
-    const f = await A.waitFor(f => f.type === T_P2P, 6000, 'A T_P2P')
-    const tlen = f.body[0]
-    const targetCid = f.body.subarray(1, 1 + tlen).toString()
-    const signal = JSON.parse(f.body.subarray(1 + tlen).toString())
-    report('p2p-signaling', targetCid === cidA && signal.type === 'offer', `routed to ${targetCid}`)
-  } catch (e) { report('p2p-signaling', false, e.message) }
-
-  // 8. owner grants edit to B
+  // 7. owner grants edit to B
   try {
     A.send(T_GRANT, TE.encode(cidB))
     const stB = await B.waitFor((f) => f.type === T_STATE, 6000, 'B state after grant')

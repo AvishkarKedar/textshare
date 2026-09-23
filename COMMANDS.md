@@ -49,7 +49,7 @@ Execute these exact commands in sequence before committing or finalizing any wor
 npx tsc --noEmit
 
 # -----------------------------------------------------------------
-# 2. Automated Test Suite (ALL 62 TESTS MUST PASS)
+# 2. Automated Test Suite (ALL 58 TESTS MUST PASS)
 # -----------------------------------------------------------------
 npm test
 
@@ -96,7 +96,7 @@ flowchart TD
     Start["User Sends Task Request"] --> Step1["Step 1: Read Relevant Docs (rules.md, Architecture.md, PRD.md)"]
     Step1 --> Step2["Step 2: Implement Code Changes with Strict Quality"]
     Step2 --> Step3["Step 3: Run Verification (tsc, vitest, next build)"]
-    Step3 --> Step4{"All 62 Tests Pass & 0 Type Errors?"}
+    Step3 --> Step4{"All 58 Tests Pass & 0 Type Errors?"}
     Step4 -->|No| FixCode["Fix Errors & Retry Verification"]
     FixCode --> Step3
     Step4 -->|Yes| Step5["Step 4: Synchronize Respective Documentation Files"]

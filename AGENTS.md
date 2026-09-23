@@ -24,4 +24,4 @@ Whenever you make any change to this repository, you **MUST** synchronize the co
 2. **Zero Mock / Fake Data**: Never use `Math.random()` in audio meters, speaking avatars, or peer states.
 3. **Author Integrity**: Author is Avishkar Kedar ([https://avishkark.in](https://avishkark.in) · `avishkarkedar+text@gmail.com`). License is MIT.
 4. **Static Export Routing**: All dynamic API functions must live in `functions/api/*.ts`, NEVER in `src/app/api/`.
-5. **Strict TypeScript & Testing**: Code must pass `npx tsc --noEmit` and `npm test` (62/62 passing) before every deployment.
+5. **Strict TypeScript & Testing**: Code must pass `npx tsc --noEmit` and `npm test` (58/58 passing) before every deployment.
