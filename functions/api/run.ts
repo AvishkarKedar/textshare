@@ -16,7 +16,7 @@ interface RunBody {
 // Languages the VPS sandbox actually executes. Anything else is rejected
 // here — before a single byte is proxied.
 const LANGS = new Set([
-  "python", "py", "javascript", "js", "node", "c", "cpp", "c++",
+  "python", "py", "javascript", "js", "node", "typescript", "ts", "c", "cpp", "c++",
   "go", "golang", "rust", "rs", "bash", "sh", "java",
 ]);
 
@@ -101,6 +101,7 @@ export async function onRequestPost(context: { request: Request }): Promise<Resp
 
   // A .c file containing C++ headers/namespaces compiles with g++, not gcc.
   if (language === "c" && code && looksLikeCpp(code)) language = "cpp";
+  if (language === "typescript" || language === "ts") language = "javascript";
 
   if (!code) {
     return Response.json(

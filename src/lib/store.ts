@@ -20,11 +20,13 @@ import {
   updateFileText,
   addYFile,
   removeYFile,
+  updateYFile,
   setGoal as sessionSetGoal,
   getSession,
   adminRoom,
 } from "./session";
 import { runJsTests } from "./test-runner";
+import { detectLanguage, extToLang } from "./detect";
 
 export type View = "landing" | "editor";
 export type { RoomExistsInfo, RoomStateFrame, ConnState };
@@ -556,6 +558,7 @@ interface AnonState {
 
   setActiveFile: (id: string) => void;
   updateFileContent: (id: string, content: string) => void;
+  setFileLanguage: (id: string, language: string, newName?: string) => void;
   addFile: (name: string, language: string) => void;
   removeFile: (id: string) => void;
 
@@ -1356,15 +1359,28 @@ export const useAnon = create<AnonState>()(
           files: s.files.map((f) => (f.id === id ? { ...f, content } : f)),
         }));
       },
-      addFile: (name, language) => {
+      setFileLanguage: (id, language, newName) => {
         if (sessionActive()) {
-          const id = addYFile(name, language);
-          set({ activeFileId: id });
+          updateYFile(id, { language, name: newName });
           return;
         }
         set((s) => ({
-          files: [...s.files, { id: "f" + (s.files.length + 1), name, language, content: "" }],
-          activeFileId: "f" + (s.files.length + 1),
+          files: s.files.map((f) =>
+            f.id === id ? { ...f, language, name: newName || f.name } : f
+          ),
+        }));
+      },
+      addFile: (name, language) => {
+        const inferredLang = language && language !== "text" ? language : extToLang(name);
+        if (sessionActive()) {
+          const id = addYFile(name, inferredLang);
+          set({ activeFileId: id });
+          return;
+        }
+        const nextId = "f" + (get().files.length + 1);
+        set((s) => ({
+          files: [...s.files, { id: nextId, name, language: inferredLang, content: "" }],
+          activeFileId: nextId,
         }));
       },
       removeFile: (id) => {
@@ -1387,13 +1403,27 @@ export const useAnon = create<AnonState>()(
         const file = s.files.find((f) => f.id === s.activeFileId);
         if (!file) return;
 
-        // C++ snippets pasted into a .c file compile with g++ (the /api/run
-        // proxy and the relay runner apply the same routing — doing it here
-        // too keeps the terminal meta line honest about the actual language).
-        const sendLang =
-          file.language.toLowerCase() === "c" && CPP_SOURCE_RE.test(file.content)
-            ? "cpp"
-            : file.language;
+        // Auto-detect / resolve language:
+        let sendLang = (file.language || "").toLowerCase().trim();
+        if (sendLang === "text" || !sendLang || sendLang === "txt") {
+          const inferred = extToLang(file.name);
+          if (inferred && inferred !== "text") {
+            sendLang = inferred;
+          } else {
+            const det = detectLanguage(file.content);
+            if (det.confidence > 0.4 && det.language !== "text") {
+              sendLang = det.language;
+            } else {
+              sendLang = "python"; // Default fallback runner language
+            }
+          }
+        }
+        if (sendLang === "c" && CPP_SOURCE_RE.test(file.content)) {
+          sendLang = "cpp";
+        }
+        if (sendLang === "typescript" || sendLang === "ts") {
+          sendLang = "javascript";
+        }
 
         set({ running: true, terminalOpen: true, stdinOpen: true });
         const startTs = Date.now();

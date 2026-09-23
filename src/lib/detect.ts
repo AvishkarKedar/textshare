@@ -22,7 +22,8 @@ const PATTERNS: { lang: string; label: string; regex: RegExp; weight: number }[]
   // Java
   { lang: "java", label: "Java", regex: /\b(public\s+class|public\s+static\s+void\s+main|System\.out\.println|import\s+java\.)/, weight: 0.85 },
   // C / C++
-  { lang: "c", label: "C/C++", regex: /#\s*include\s*<|#include.*\.h|printf\s*\(|int\s+main\s*\(/, weight: 0.75 },
+  { lang: "cpp", label: "C++", regex: /#\s*include\s*<(?:iostream|vector|string|map|set|algorithm|memory|thread|mutex|chrono|queue|stack|utility)>|\busing\s+namespace\s+std\b|\bstd::/, weight: 0.9 },
+  { lang: "c", label: "C", regex: /#\s*include\s*<stdio\.h>|#include.*\.h|printf\s*\(|int\s+main\s*\(/, weight: 0.75 },
   // Ruby
   { lang: "ruby", label: "Ruby", regex: /\b(def\s+\w+|puts\s|require\s+['"]|end\s*$|do\s*\|)/, weight: 0.8 },
   // Shell / Bash
@@ -37,6 +38,8 @@ const PATTERNS: { lang: string; label: string; regex: RegExp; weight: number }[]
   { lang: "markdown", label: "Markdown", regex: /^#{1,6}\s+\S|^>\s|^\s*[-*]\s+\S/m, weight: 0.7 },
   // YAML
   { lang: "yaml", label: "YAML", regex: /^\s*\w+:\s/m, weight: 0.6 },
+  // SQL
+  { lang: "sql", label: "SQL", regex: /\b(SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|WHERE|GROUP\s+BY|ORDER\s+BY)\b/i, weight: 0.8 },
 ];
 
 export function detectLanguage(source: string): DetectionResult {
@@ -69,6 +72,7 @@ export function langToExt(lang: string): string {
     rust: "rs",
     java: "java",
     c: "c",
+    cpp: "cpp",
     ruby: "rb",
     bash: "sh",
     html: "html",
@@ -76,7 +80,47 @@ export function langToExt(lang: string): string {
     json: "json",
     markdown: "md",
     yaml: "yaml",
+    sql: "sql",
     text: "txt",
   };
   return map[lang] || "txt";
+}
+
+/** Infer language identifier from a filename or extension. */
+export function extToLang(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() || "";
+  const map: Record<string, string> = {
+    py: "python",
+    js: "javascript",
+    mjs: "javascript",
+    cjs: "javascript",
+    ts: "typescript",
+    tsx: "typescript",
+    jsx: "javascript",
+    c: "c",
+    h: "c",
+    cpp: "cpp",
+    cc: "cpp",
+    cxx: "cpp",
+    hpp: "cpp",
+    hxx: "cpp",
+    go: "go",
+    rs: "rust",
+    java: "java",
+    sh: "bash",
+    bash: "bash",
+    zsh: "bash",
+    html: "html",
+    htm: "html",
+    css: "css",
+    json: "json",
+    md: "markdown",
+    markdown: "markdown",
+    yaml: "yaml",
+    yml: "yaml",
+    sql: "sql",
+    rb: "ruby",
+    txt: "text",
+  };
+  return map[ext] || "text";
 }

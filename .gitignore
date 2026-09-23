@@ -18,3 +18,5 @@ tsconfig.tsbuildinfo
 db/*.db
 tool-results/
 research/
+download/
+.zscripts/

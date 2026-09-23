@@ -113,6 +113,20 @@
   - **Deafen / Undeafen** toggle button with amber active badge.
 - **Participant Roster**: Live peer list displaying avatar initials, real speaking state, and mute status.
 
+### 5.4 Status Bar & Interactive Language Picker ([`StatusBar.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/editor/StatusBar.tsx))
+- **Height**: Fixed 28px (`h-7`), pinned to bottom with `hairline-t`.
+- **Left Zone**:
+  - Relay connection health indicator with pulsating color dot (`synced`, `connected`, `reconnecting`, `offline`).
+  - Peer presence indicator with live relay count badge.
+  - E2EE zero-knowledge lock badge (`Lock` icon).
+  - Room lock / read-only badge when restricted by owner.
+  - One-click FAQ & Help trigger (`⌘⇧F`).
+  - Piped program input (stdin) readiness chip (`in:N lines`).
+- **Right Zone**:
+  - **Interactive Language Selector**: Clickable button opening popover with instant switching across 15+ languages (Python, JavaScript, TypeScript, C, C++, Java, Rust, Go, Bash, HTML, CSS, JSON, Markdown, SQL, Text). Selecting a language automatically re-routes compiler execution and renames the file extension.
+  - Live room TTL remaining timer (`10m`, `1h`, `24h`).
+  - Live line, column, and selection counter (`ln X, col Y · Z selected`).
+
 ---
 
 ## 6. Mobile & Touch Screen Responsive System

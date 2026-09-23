@@ -525,6 +525,24 @@ export function removeYFile(fileId: string): void {
   });
 }
 
+export function updateYFile(fileId: string, meta: { name?: string; language?: string }): void {
+  if (!active) return;
+  const files = active.doc.getArray<YFileMeta>("files");
+  const arr = files.toArray();
+  const idx = arr.findIndex((f) => f.id === fileId);
+  if (idx < 0) return;
+  const existing = arr[idx];
+  const updated: YFileMeta = {
+    id: fileId,
+    name: meta.name ?? existing.name,
+    language: meta.language ?? existing.language,
+  };
+  active.doc.transact(() => {
+    files.delete(idx, 1);
+    files.insert(idx, [updated]);
+  });
+}
+
 export function setGoal(text: string): void {
   if (!active) return;
   const s = useAnon.getState();
