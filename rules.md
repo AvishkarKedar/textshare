@@ -178,11 +178,18 @@ set((s) => ({ files: [...s.files, newFile] }));
 
 ---
 
+### 📥 Rule 14: Standard Input (stdin) Sanitization & EPIPE Protection
+- **Invariant**:
+  - All input piped to child compiler / runner processes must be normalized to LF (`\n`), stripping Windows carriage returns (`\r`), and must guarantee a trailing newline so terminal readers (`input()`, `scanf`, `cin >>`, `read`) never stall.
+  - An error handler (`proc.stdin.on('error', () => {})`) **MUST** be attached to prevent unhandled `EPIPE` when processes exit before reading full inputs.
+
+---
+
 ## 8. Verification & Deployment Standard
 
 ### 🚀 Pre-Commit & Deployment Checklist:
 1. `npx tsc --noEmit` $\longrightarrow$ **0 errors**.
-2. `npm test` $\longrightarrow$ **56/56 passing tests**.
+2. `npm test` $\longrightarrow$ **58/58 passing tests**.
 3. `npm run build` $\longrightarrow$ **Clean Turbopack export into `dist/`**.
 4. `git status` $\longrightarrow$ **Clean working tree with zero untracked binaries**.
 5. `npx wrangler pages deploy dist --project-name textshare --branch main` $\longrightarrow$ **Successful Cloudflare deploy**.

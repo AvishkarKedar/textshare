@@ -133,12 +133,24 @@ export function TopBar() {
         <button
           onClick={() => s.toggleTerminal()}
           className={`anon-mono relative hidden h-7 items-center gap-1.5 px-2 text-xs hairline hover:bg-[var(--anon-panel)] sm:inline-flex ${
-            s.terminalOpen ? "bg-[var(--anon-panel)]" : ""
+            s.terminalOpen ? "bg-[var(--anon-panel)] anon-accent" : ""
           }`}
           title="Toggle terminal"
           aria-label="Toggle terminal"
         >
           <TerminalIcon className="h-3.5 w-3.5" />
+        </button>
+
+        <button
+          onClick={() => s.toggleMdPreview()}
+          className={`anon-mono relative hidden h-7 items-center gap-1.5 px-2 text-xs hairline hover:bg-[var(--anon-panel)] sm:inline-flex ${
+            s.mdPreviewOpen ? "bg-[var(--anon-panel)] anon-accent" : ""
+          }`}
+          title="Toggle live preview (HTML / Markdown / SVG) · ⌘⇧P"
+          aria-label="Toggle live preview"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          <span className="hidden xl:inline">Preview</span>
         </button>
 
         <button

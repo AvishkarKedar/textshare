@@ -255,6 +255,12 @@ bwrap \
   python3 -u main.py
 ```
 
+#### 4.4.3 Interactive Live Web Preview & Multi-Tab Asset Inlining
+- When executing web files (`.html`, `.svg`, `.md`), the IDE mounts the interactive **Live Web Preview** split pane (`⌘⇧P`).
+- **Asset Inlining**: Automatically detects `<link rel="stylesheet" href="style.css">` and `<script src="app.js"></script>` tags and injects the corresponding content from open room tabs into the iframe `srcDoc`.
+- **Live Console**: Intercepts `console.log`, `console.warn`, and `console.error` within the sandboxed iframe and displays them in a collapsible bottom tray.
+- **Responsive Viewport Switcher**: Instant switching between Desktop (100%), Tablet (768px), and Mobile (375px) device frames.
+
 ---
 
 ### 4.5 Complete Overlay, Modal & Drawer Catalog

@@ -1425,9 +1425,35 @@ export const useAnon = create<AnonState>()(
           sendLang = "javascript";
         }
 
+        // HTML, SVG, and Markdown files mount directly into the interactive Live Web Preview:
+        if (sendLang === "html" || sendLang === "htm" || sendLang === "xml" || sendLang === "svg" || sendLang === "markdown" || sendLang === "md") {
+          set({ mdPreviewOpen: true, terminalOpen: true });
+          const ts = Date.now();
+          set((st) => ({
+            terminalLines: [
+              ...st.terminalLines,
+              {
+                id: "t" + ts,
+                kind: "meta",
+                text: `$ render ${file.name} (${sendLang}) · live interactive preview mounted`,
+                ts,
+              },
+              {
+                id: "m" + ts,
+                kind: "meta",
+                text: `[exit 0] · 0ms`,
+                ts,
+                exit: 0,
+              },
+            ],
+          }));
+          return;
+        }
+
+        const cleanStdin = s.stdin ? s.stdin.replace(/\r\n/g, "\n").replace(/\r/g, "\n") : "";
         set({ running: true, terminalOpen: true, stdinOpen: true });
         const startTs = Date.now();
-        const stdinLineCount = s.stdin.trim() ? s.stdin.split("\n").length : 0;
+        const stdinLineCount = cleanStdin.trim() ? cleanStdin.split("\n").length : 0;
         set((st) => ({
           terminalLines: [
             ...st.terminalLines,
@@ -1457,7 +1483,7 @@ export const useAnon = create<AnonState>()(
             body: JSON.stringify({
               language: sendLang,
               source: file.content,
-              stdin: s.stdin,
+              stdin: cleanStdin,
             }),
           });
           const data = await res.json();

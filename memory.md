@@ -137,6 +137,26 @@
 
 ---
 
+### Incident INC-2026-09F: Stdin Windows CRLF Line Endings & Unhandled EPIPE
+
+#### 1. Symptoms & Initial Observations
+- Python programs taking input (`int(input())`) crashed with `ValueError: invalid literal for int() with base 10: '42\r'`.
+- Bash `read` scripts failed string comparisons due to attached `\r` carriage returns.
+- Programs that exited early before consuming all stdin lines occasionally triggered unhandled `EPIPE` exceptions on Node.js child process streams.
+
+#### 2. Root Cause Analysis
+- Textareas on Windows / Android browsers emit `\r\n` (CRLF) line endings into the stdin buffer.
+- Linux CLI runtimes inside `bwrap` retain `\r` when reading lines from standard input.
+- Missing trailing newline caused `fgets`/`getline`/`Scanner` to block waiting for EOF.
+- Node.js `proc.stdin.write()` throws `EPIPE` when the child process closes standard input early unless an error listener is attached.
+
+#### 3. Permanent Fix & Invariant
+- **Stdin Normalization**: Standard input is sanitized via `.replace(/\r\n/g, '\n').replace(/\r/g, '\n')` and guaranteed to terminate with `\n`.
+- **EPIPE Resilience**: `proc.stdin.on('error', () => {})` is attached before writing input to spawned child processes.
+- **Verification**: 16/16 test cases in `scripts/runner-matrix.mjs` pass across all 8 languages with multi-line CRLF stdin.
+
+---
+
 ## 2. Technical Constants & Configuration Reference
 
 ```

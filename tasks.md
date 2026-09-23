@@ -43,6 +43,15 @@
 | M-09          | VPS Relay Sandbox | Hardened bubblewrap runner (nproc 512, fsize| relay/server.js,            |
 |               | & Full Compilers  | 100MB), rotated secret, 8/8 languages pass. | scripts/*, ecosystem config |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-10          | HTML & Web Live   | Added sandboxed iframe preview with device  | MarkdownPreview.tsx,        |
+|               | Preview Runner    | modes (desktop/tablet/mobile), console logs.| store.ts, TabBar.tsx        |
++---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-11          | Program Input     | CRLF to LF normalization, trailing newline  | relay/server.js,            |
+|               | & EPIPE Resiliency| auto-append, proc.stdin error handling.     | scripts/runner-matrix.mjs   |
++---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-12          | Landing Privacy   | Removed recent rooms list from hero section | src/components/landing/     |
+|               | Cleanliness       | for zero-history anonymous session launch.  | Hero.tsx                    |
++---------------+-------------------+---------------------------------------------+-----------------------------+
 ```
 
 ---

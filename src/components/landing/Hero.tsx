@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, Shield, Timer, UserX, Loader2, Bookmark } from "lucide-react";
+import { ArrowRight, Shield, Timer, UserX, Loader2 } from "lucide-react";
 import { useAnon } from "@/lib/store";
 import { motion } from "framer-motion";
 import { DemoCard } from "./DemoCard";
@@ -16,9 +16,7 @@ function randomCode() {
 export function Hero() {
   const openEntryCreate = useAnon((s) => s.openEntryCreate);
   const openEntryJoin = useAnon((s) => s.openEntryJoin);
-  const recentRooms = useAnon((s) => s.recentRooms);
   const bootError = useAnon((s) => s.bootError);
-  const toggleBookmarks = useAnon((s) => s.toggleBookmarks);
   const toggleSecurity = useAnon((s) => s.toggleSecurity);
   const toggleFaq = useAnon((s) => s.toggleFaq);
   const [code, setCode] = useState("");
@@ -173,30 +171,6 @@ export function Hero() {
               <p role="alert" className="anon-mono mt-2 anim-shake text-xs" style={{ color: "var(--anon-danger)" }}>
                 {bootError}
               </p>
-            )}
-            {/* recent rooms quick-rejoin */}
-            {recentRooms.length > 0 && (
-              <div className="mt-4">
-                <button
-                  onClick={() => toggleBookmarks()}
-                  className="anon-mono inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider anon-dim hover:anon-accent"
-                >
-                  <Bookmark className="h-3 w-3" /> recent rooms
-                </button>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {recentRooms.slice(0, 4).map((r) => (
-                    <button
-                      key={r.code}
-                      onClick={() => openEntryJoin(r.code)}
-                      className="anon-mono hairline anon-raise px-2 py-1 text-[10px] anon-mut hover:bg-[var(--anon-panel)] hover:anon-fg transition-colors"
-                      title={`${r.title} · rejoin ${r.code}`}
-                    >
-                      <span>{r.emoji}</span>{" "}
-                      <span className="anon-accent">{r.code}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
             )}
           </div>
 

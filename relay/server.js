@@ -561,8 +561,15 @@ async function runLocalProcess(cmd, args, input = '', timeoutMs = 8000, cwd = un
       }
     }, timeoutMs)
 
-    if (input) {
-      try { proc.stdin.write(input); proc.stdin.end() } catch (e) {}
+    proc.stdin.on('error', () => {})
+
+    let normInput = typeof input === 'string' ? input.replace(/\r\n/g, '\n').replace(/\r/g, '\n') : ''
+    if (normInput && !normInput.endsWith('\n')) {
+      normInput += '\n'
+    }
+
+    if (normInput) {
+      try { proc.stdin.write(normInput); proc.stdin.end() } catch (e) {}
     } else {
       try { proc.stdin.end() } catch (e) {}
     }

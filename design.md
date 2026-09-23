@@ -127,6 +127,19 @@
   - Live room TTL remaining timer (`10m`, `1h`, `24h`).
   - Live line, column, and selection counter (`ln X, col Y · Z selected`).
 
+### 5.5 Live Web & Markdown Preview Pane ([`MarkdownPreview.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/editor/MarkdownPreview.tsx))
+- **Width**: Responsive side split pane (`flex-1 min-h-0 hairline-l`).
+- **Toolbar**:
+  - Mode title (`web preview`, `markdown preview`, `svg preview`).
+  - Active file name indicator.
+  - Device viewport selector for HTML: Desktop (`w-full`), Tablet (`w-[768px]`), Mobile (`w-[375px]`).
+  - Interactive Reload (`RotateCcw`) and Popout to new tab (`ExternalLink`) buttons.
+  - Prominent Close button (`X`).
+- **Execution & Inlining**:
+  - Automatically intercepts `<link rel="stylesheet">` and `<script src="...">` tags, resolving matching files from the room's open tabs without external network requests.
+  - Sandboxed iframe (`sandbox="allow-scripts allow-modals allow-forms"`).
+  - Live console capture drawer at the bottom displaying intercepted `console.log`, `console.warn`, and `console.error` entries with error badges.
+
 ---
 
 ## 6. Mobile & Touch Screen Responsive System

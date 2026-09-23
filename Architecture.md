@@ -131,6 +131,10 @@ sequenceDiagram
     PagesFunc-->>Browser: JSON { stdout: "hello\n", exitCode: 0, durationMs: 42 }
 ```
 
+> **Client-Side vs Remote Sandbox Routing:**
+> - **Native Languages (Python, C, C++, Java, Node.js, Go, Rust, Bash)**: Proxied via `/api/run` to the hardened bubblewrap sandbox on Oracle VPS with sanitized standard input (CRLF $\rightarrow$ LF, auto-terminating newline).
+> - **Web Languages (HTML, SVG, Markdown)**: Rendered immediately on the client inside a sandboxed `<iframe>` with automatic linked CSS/JS project tab inlining, zero network latency, and live console stream capture.
+
 ---
 
 ### 2.4 Binary Relay Protocol & Frame Specifications ([`relay/server.js`](file:///c:/Users/Dell/Desktop/textshare/relay/server.js))
