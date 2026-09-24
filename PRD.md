@@ -295,10 +295,11 @@ bwrap \
 
 | Slash Command | Label | Hint | Execution Action |
 |---|---|---|---|
+| `/whiteboard` | Collaborative Whiteboard | Open real-time drawing canvas | Opens vector canvas modal (`WhiteboardModal`) |
+| `/voice` | Voice & Screen Share | Talk & broadcast screen to peers | Opens `VoicePanel` drawer & initializes WebRTC |
 | `/faq` | FAQs & Help | Honest answers to all questions | Opens `FaqModal` with instant search |
 | `/run` | Run Code | Execute the active file | Invokes `/api/run` sandbox execution |
 | `/test` | Run Tests | Parse test()/assert patterns | Runs assertion test suite in terminal |
-| `/voice` | Start Voice | Join the voice mesh | Prompts microphone access & joins WebRTC mesh |
 | `/zen` | Toggle Zen | Distraction-free editor | Hides all toolbars, tabs, and status strips |
 | `/theme` | Switch Theme | Cycle color themes | Cycles Obsidian $\rightarrow$ Dracula $\rightarrow$ Nord $\rightarrow$ Amber $\rightarrow$ Paper |
 | `/crypto` | Crypto Breakdown | Inspect encryption keys | Opens `CryptoModal` showing PBKDF2 parameters |
@@ -333,7 +334,7 @@ bwrap \
 | PBKDF2 Key Derivation Time  | 150 ms - 350 ms   | WebCrypto 600,000 Iterations Benchmark      |
 | Code Sandbox Startup Time   | < 120 ms          | Linux Bubblewrap Namespace Creation         |
 | Static Export Bundle Size   | < 450 KB gzip     | Next.js Turbopack dist/ Build Output        |
-| Unit & Feature Test Suite   | 56/56 Passing     | Vitest Automation Suite                     |
+| Unit & Feature Test Suite   | 60/60 Passing     | Vitest Automation Suite                     |
 | TypeScript Type Diagnostics | 0 Errors          | Strict npx tsc --noEmit Typecheck           |
 +-----------------------------+-------------------+---------------------------------------------+
 ```

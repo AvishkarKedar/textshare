@@ -198,3 +198,9 @@
 1. Verify no dynamic API routes exist in `src/app/api/`.
 2. Check `next.config.ts` has `output: "export"` and `distDir: "dist"`.
 3. Verify all dynamic APIs reside in `functions/api/*.ts`.
+
+### Scenario D: Whiteboard Vector Drawing Stalls on Mobile Touch
+1. Verify canvas container has `touch-action: none` (Tailwind `touch-none`).
+2. Ensure `e.currentTarget.setPointerCapture(e.pointerId)` is called in `onPointerDown`.
+3. Verify `e.clientX - rect.left` and `e.clientY - rect.top` coordinate transformations are calculated relative to `canvas.getBoundingClientRect()`.
+

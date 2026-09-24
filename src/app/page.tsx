@@ -22,6 +22,8 @@ import { SecurityModal } from "@/components/palette/SecurityModal";
 import { PrivacyTermsModals } from "@/components/palette/PrivacyTermsModals";
 import { FaqModal } from "@/components/palette/FaqModal";
 import { RoomEntryDialog } from "@/components/palette/RoomEntryDialog";
+import { WhiteboardModal } from "@/components/palette/WhiteboardModal";
+import { VoicePanel } from "@/components/palette/VoicePanel";
 
 export default function Home() {
   const view = useAnon((s) => s.view);
@@ -71,6 +73,8 @@ export default function Home() {
         if (store.statusOpen) { store.toggleStatus(); return; }
         if (store.securityOpen) { store.toggleSecurity(); return; }
         if (store.faqOpen) { store.toggleFaq(); return; }
+        if (store.whiteboardOpen) { store.toggleWhiteboard(); return; }
+        if (store.voiceOpen) { store.toggleVoice(); return; }
         return;
       }
 
@@ -91,6 +95,12 @@ export default function Home() {
       } else if (mod && e.key === ".") {
         e.preventDefault();
         store.toggleZen();
+      } else if (mod && e.shiftKey && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        store.toggleWhiteboard();
+      } else if (mod && e.shiftKey && e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        store.toggleVoice();
       } else if (mod && e.shiftKey && e.key.toLowerCase() === "h") {
         e.preventDefault();
         store.toggleHistory();
@@ -196,6 +206,8 @@ export default function Home() {
       <SecurityModal />
       <PrivacyTermsModals />
       <FaqModal />
+      <WhiteboardModal />
+      <VoicePanel />
     </>
   );
 }

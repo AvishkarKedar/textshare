@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Plus, FileCode2, Sparkles, History as HistoryIcon, FolderOpen, FlaskConical, Eye } from "lucide-react";
+import { X, Plus, FileCode2, Sparkles, History as HistoryIcon, FolderOpen, FlaskConical, Eye, Palette, Radio } from "lucide-react";
 import { useAnon } from "@/lib/store";
 
 export function TabBar() {
@@ -57,6 +57,8 @@ export function TabBar() {
 
       <div className="ml-auto flex items-stretch">
         <HubTab icon={Eye} label="Preview" onClick={() => s.toggleMdPreview()} active={s.mdPreviewOpen} />
+        <HubTab icon={Palette} label="Whiteboard" onClick={() => s.toggleWhiteboard()} active={s.whiteboardOpen} />
+        <HubTab icon={Radio} label="Voice" onClick={() => s.toggleVoice()} active={s.voiceOpen} />
         <HubTab icon={Sparkles} label="Generative" onClick={() => s.toggleGenerative()} active={s.generativeOpen} />
         <HubTab icon={FlaskConical} label="Tests" onClick={() => s.toggleTestPanel()} active={s.testPanelOpen} />
         <HubTab icon={HistoryIcon} label="History" onClick={() => s.toggleHistory()} active={s.historyOpen} />

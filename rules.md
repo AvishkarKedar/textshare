@@ -185,11 +185,18 @@ set((s) => ({ files: [...s.files, newFile] }));
 
 ---
 
+### 🎨 Rule 15: Canvas Touch Pointer Capture & Viewport Isolation
+- **Invariant**:
+  - All `<canvas>` interactive surfaces (whiteboard, signature, scratchpad) **MUST** use Pointer Events (`onPointerDown`, `onPointerMove`, `onPointerUp`) with `e.currentTarget.setPointerCapture(e.pointerId)`.
+  - The canvas container **MUST** specify `touch-action: none` (Tailwind `touch-none`) to prevent mobile browsers from hijacking touch drawing as page pinch-to-zoom or vertical scrolling.
+
+---
+
 ## 8. Verification & Deployment Standard
 
 ### 🚀 Pre-Commit & Deployment Checklist:
 1. `npx tsc --noEmit` $\longrightarrow$ **0 errors**.
-2. `npm test` $\longrightarrow$ **58/58 passing tests**.
+2. `npm test` $\longrightarrow$ **60/60 passing tests**.
 3. `npm run build` $\longrightarrow$ **Clean Turbopack export into `dist/`**.
 4. `git status` $\longrightarrow$ **Clean working tree with zero untracked binaries**.
 5. `npx wrangler pages deploy dist --project-name textshare --branch main` $\longrightarrow$ **Successful Cloudflare deploy**.

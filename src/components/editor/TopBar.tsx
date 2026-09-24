@@ -26,6 +26,8 @@ import {
   Bookmark,
   Activity,
   HelpCircle,
+  Radio,
+  Palette,
 } from "lucide-react";
 import { useAnon } from "@/lib/store";
 import { initials } from "@/lib/themes";
@@ -154,6 +156,18 @@ export function TopBar() {
         </button>
 
         <button
+          onClick={() => s.toggleVoice()}
+          className={`anon-mono relative hidden h-7 items-center gap-1.5 px-2 text-xs hairline hover:bg-[var(--anon-panel)] sm:inline-flex ${
+            s.voiceOpen ? "bg-[var(--anon-panel)] anon-accent" : ""
+          }`}
+          title="Toggle Voice & Screen Share Mesh · ⌘⇧V"
+          aria-label="Toggle voice and screen share"
+        >
+          <Radio className="h-3.5 w-3.5" />
+          <span className="hidden xl:inline">Voice</span>
+        </button>
+
+        <button
           onClick={() => s.toggleChat()}
           className={`anon-mono relative inline-flex h-7 items-center gap-1.5 px-2 text-xs hairline hover:bg-[var(--anon-panel)] ${
             s.chatOpen ? "bg-[var(--anon-panel)]" : ""
@@ -202,6 +216,8 @@ export function TopBar() {
           </button>
           {overflow && (
             <div className="anim-rise absolute right-0 top-8 w-56 hairline anon-panel shadow-xl shadow-black/30 z-50">
+              <OverflowItem icon={Palette} label="Collaborative whiteboard" k="⌘⇧W" onClick={() => { s.toggleWhiteboard(); setOverflow(false); }} active={s.whiteboardOpen} />
+              <OverflowItem icon={Radio} label="Voice & screen mesh" k="⌘⇧V" onClick={() => { s.toggleVoice(); setOverflow(false); }} active={s.voiceOpen} />
               <OverflowItem icon={Eye} label="Markdown preview" k="⌘⇧P" onClick={() => { s.toggleMdPreview(); setOverflow(false); }} active={s.mdPreviewOpen} />
               <OverflowItem icon={Files} label="Files" k="⌘B" onClick={() => { s.toggleFiles(); setOverflow(false); }} active={s.filesOpen} />
               <OverflowItem icon={History} label="History (time machine)" k="⌘⇧H" onClick={() => { s.toggleHistory(); setOverflow(false); }} active={s.historyOpen} />

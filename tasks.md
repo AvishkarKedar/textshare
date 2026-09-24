@@ -2,7 +2,7 @@
 
 > **Engineering Status:** Master Baseline Active & Deployed  
 > **Production Target:** [https://code.avishkark.in](https://code.avishkark.in)  
-> **Automated Test Suite:** 58/58 Passing Tests (`vitest run`)  
+> **Automated Test Suite:** 60/60 Passing Tests (`vitest run`)  
 > **Compiler Diagnostics:** 0 TypeScript Errors (`npx tsc --noEmit`)  
 
 ---
@@ -51,6 +51,13 @@
 +---------------+-------------------+---------------------------------------------+-----------------------------+
 | M-12          | Landing Privacy   | Removed recent rooms list from hero section | src/components/landing/     |
 |               | Cleanliness       | for zero-history anonymous session launch.  | Hero.tsx                    |
++---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-13          | Collaborative     | Vector drawing canvas modal with tools (pen,| src/components/palette/     |
+|               | Whiteboard Canvas | highlighter, shapes), Yjs CRDT stroke sync. | WhiteboardModal.tsx         |
++---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-14          | Voice & Screen    | WebRTC voice mesh, AnalyserNode VAD volume, | src/lib/voice.ts,           |
+|               | Mesh UI & PTT     | push-to-talk, live screen stream sharing.   | src/components/palette/     |
+|               |                   |                                             | VoicePanel.tsx              |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
 ```
 

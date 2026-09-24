@@ -140,6 +140,16 @@
   - Sandboxed iframe (`sandbox="allow-scripts allow-modals allow-forms"`).
   - Live console capture drawer at the bottom displaying intercepted `console.log`, `console.warn`, and `console.error` entries with error badges.
 
+### 5.6 Collaborative Whiteboard Modal ([`WhiteboardModal.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/palette/WhiteboardModal.tsx))
+- **Layout**: Centered modal with responsive full-viewport backdrop (`w-full max-w-5xl h-[85vh]`).
+- **Tool Palette**:
+  - Tools: Pen, Highlighter (with alpha blend), Eraser, Line, Rectangle, Circle.
+  - 8-Color Palette: Obsidian, Dracula Purple, Nord Frost, Neon Green, Amber, Red, White, Gray.
+  - Stroke width selector: Thin (2px), Medium (4px), Thick (8px), Heavy (14px).
+  - Canvas background selector: Grid, Dot matrix, Blank.
+  - Action buttons: Undo, Redo, Clear Canvas, Export PNG.
+- **Touch & Pointer Handling**: `touch-none` canvas wrapper with pointer capture preventing touch screen scrolling while sketching.
+
 ---
 
 ## 6. Mobile & Touch Screen Responsive System

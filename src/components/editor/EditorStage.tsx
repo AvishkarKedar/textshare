@@ -167,6 +167,12 @@ export function EditorStage() {
         s.toggleSyntaxHighlight();
         toast.success(s.syntaxHighlight ? "Syntax highlighting off" : "Syntax highlighting on");
         break;
+      case "whiteboard":
+        s.toggleWhiteboard();
+        break;
+      case "voice":
+        s.toggleVoice();
+        break;
       case "tour":
         s.startTour();
         break;

@@ -27,6 +27,7 @@ import {
 } from "./session";
 import { runJsTests } from "./test-runner";
 import { detectLanguage, extToLang } from "./detect";
+import type { WhiteboardStroke } from "@/components/palette/WhiteboardModal";
 
 export type View = "landing" | "editor";
 export type { RoomExistsInfo, RoomStateFrame, ConnState };
@@ -195,6 +196,8 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: "⌘ J", label: "Toggle chat", group: "navigation" },
   { keys: "⌘ B", label: "Toggle files", group: "navigation" },
   { keys: "⌘ ⇧ B", label: "Toggle browser drawer", group: "navigation" },
+  { keys: "⌘ ⇧ W", label: "Toggle collaborative whiteboard", group: "tools" },
+  { keys: "⌘ ⇧ V", label: "Toggle voice chat & screen share", group: "tools" },
   { keys: "⌘ ,", label: "Open settings", group: "global" },
   { keys: "⌘ I", label: "Invite others (copy link / QR)", group: "global" },
   { keys: "⌘ ⇧ K", label: "Open crypto explainer", group: "tools" },
@@ -223,6 +226,8 @@ export const SHORTCUTS: ShortcutDef[] = [
 ];
 
 export const SLASH_COMMANDS: SlashCommand[] = [
+  { id: "whiteboard", trigger: "/whiteboard", label: "Collaborative whiteboard", hint: "open real-time drawing canvas (⌘⇧W)", icon: "🎨" },
+  { id: "voice", trigger: "/voice", label: "Voice & screen share", hint: "talk & broadcast screen to room peers (⌘⇧V)", icon: "🎙️" },
   { id: "faq", trigger: "/faq", label: "FAQs & Help", hint: "honest answers to all questions", icon: "❓" },
   { id: "run", trigger: "/run", label: "Run code", hint: "execute the active file", icon: "▶" },
   { id: "test", trigger: "/test", label: "Run tests", hint: "execute describe()/test() in the sandbox", icon: "✓" },
@@ -501,6 +506,18 @@ interface AnonState {
   togglePrivacy: () => void;
   toggleTerms: () => void;
   toggleFaq: () => void;
+
+  // whiteboard
+  whiteboardOpen: boolean;
+  toggleWhiteboard: () => void;
+  whiteboardStrokes: WhiteboardStroke[];
+  addWhiteboardStrokeLocal: (s: WhiteboardStroke) => void;
+  popWhiteboardStrokeLocal: () => void;
+  clearWhiteboardStrokesLocal: () => void;
+
+  // voice & screen share
+  voiceOpen: boolean;
+  toggleVoice: () => void;
 
   // actions
   setView: (v: View) => void;
@@ -991,6 +1008,11 @@ export const useAnon = create<AnonState>()(
       privacyOpen: false,
       termsOpen: false,
       faqOpen: false,
+
+      whiteboardOpen: false,
+      whiteboardStrokes: [],
+
+      voiceOpen: false,
 
       sharedFiles: [],
 
@@ -2102,6 +2124,17 @@ export const useAnon = create<AnonState>()(
       togglePrivacy: () => set((s) => ({ privacyOpen: !s.privacyOpen })),
       toggleTerms: () => set((s) => ({ termsOpen: !s.termsOpen })),
       toggleFaq: () => set((s) => ({ faqOpen: !s.faqOpen })),
+
+      // ---------- whiteboard ----------
+      toggleWhiteboard: () => set((s) => ({ whiteboardOpen: !s.whiteboardOpen })),
+      addWhiteboardStrokeLocal: (stroke) =>
+        set((s) => ({ whiteboardStrokes: [...s.whiteboardStrokes, stroke] })),
+      popWhiteboardStrokeLocal: () =>
+        set((s) => ({ whiteboardStrokes: s.whiteboardStrokes.slice(0, -1) })),
+      clearWhiteboardStrokesLocal: () => set({ whiteboardStrokes: [] }),
+
+      // ---------- voice & screen share ----------
+      toggleVoice: () => set((s) => ({ voiceOpen: !s.voiceOpen })),
       // ---------- end new actions ----------
 
       // ---------- notifications ----------

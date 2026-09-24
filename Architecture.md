@@ -236,3 +236,27 @@ graph TD
 ```
 
 - **Salt Separation Guarantee**: Because $\text{Salt}_{\text{enc}} \neq \text{Salt}_{\text{auth}}$, observing the authentication token $T_{\text{auth}}$ on the network or compromising the relay database provides **zero mathematical leverage** to derive $K_{\text{enc}}$ or decrypt the document.
+
+---
+
+### 2.7 Collaborative Whiteboard CRDT Vector Engine
+
+The collaborative whiteboard uses vector strokes synchronized deterministically over the E2EE Yjs CRDT document:
+- **CRDT Structure**: `doc.getArray<WhiteboardStroke>("whiteboard_strokes")`.
+- **Stroke Data Model**:
+  ```ts
+  interface WhiteboardStroke {
+    id: string;
+    tool: "pen" | "highlighter" | "eraser" | "line" | "rect" | "circle";
+    color: string;
+    size: number;
+    points: { x: number; y: number }[];
+    author?: string;
+    authorColor?: string;
+    timestamp: number;
+  }
+  ```
+- **Local Smooth Rendering**: Points sampled via pointer events with pointer capture (`setPointerCapture(e.pointerId)`) on HTML5 `<canvas>`.
+- **Highlighter Opacity**: Rendered with `ctx.globalAlpha = 0.35` and composited directly onto the vector layer.
+- **Export Pipeline**: High-resolution PNG rasterization using `canvas.toBlob("image/png")` triggering automatic download.
+

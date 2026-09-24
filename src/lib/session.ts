@@ -17,6 +17,7 @@ import * as Y from "yjs";
 import { RelayClient, relayHost, type RoomStateFrame, type ConnState } from "./relay";
 import { useAnon } from "./store";
 import type { EditorFile, ChatMessage, Participant, SharedFile } from "./store";
+import type { WhiteboardStroke } from "@/components/palette/WhiteboardModal";
 
 export interface SessionInfo {
   code: string;
@@ -188,6 +189,7 @@ export function startSession(args: StartSessionArgs): SessionInfo {
   const chat = doc.getArray<YChatEntry>("chat");
   const shared = doc.getArray<YSharedMeta>("shared_files");
   const meta = doc.getMap("meta");
+  const whiteboard = doc.getArray<WhiteboardStroke>("whiteboard_strokes");
 
   // Seed the default file only for freshly created rooms so every joiner
   // receives it through the normal (encrypted) sync path.
@@ -365,6 +367,10 @@ export function startSession(args: StartSessionArgs): SessionInfo {
     useAnon.setState({ participants: [me, ...others] });
   };
 
+  const mirrorWhiteboard = () => {
+    useAnon.setState({ whiteboardStrokes: whiteboard.toArray() });
+  };
+
   files.observeDeep(() => mirrorFiles());
   // NOTE: Y.Map#observe only fires for set/delete of keys — NOT for mutations
   // inside the Y.Text values. observeDeep is required so local AND remote
@@ -376,6 +382,7 @@ export function startSession(args: StartSessionArgs): SessionInfo {
   });
   chat.observe(() => mirrorChat());
   shared.observe(() => mirrorShared());
+  whiteboard.observe(() => mirrorWhiteboard());
   meta.observe(() => {
     const m = meta.toJSON() as Record<string, unknown>;
     useAnon.setState({
@@ -392,6 +399,7 @@ export function startSession(args: StartSessionArgs): SessionInfo {
     mirrorFiles();
     mirrorChat();
     mirrorShared();
+    mirrorWhiteboard();
     mirrorParticipants();
   }, 400);
 
@@ -663,6 +671,18 @@ export async function deleteSharedFile(fileId: string): Promise<void> {
   const shared = active.doc.getArray<YSharedMeta>("shared_files");
   const idx = shared.toArray().findIndex((f) => f.id === fileId);
   if (idx >= 0) shared.delete(idx, 1);
+}
+
+export function addWhiteboardStroke(stroke: WhiteboardStroke) {
+  if (!active) return;
+  const wb = active.doc.getArray<WhiteboardStroke>("whiteboard_strokes");
+  wb.push([stroke]);
+}
+
+export function clearWhiteboardStrokes() {
+  if (!active) return;
+  const wb = active.doc.getArray<WhiteboardStroke>("whiteboard_strokes");
+  wb.delete(0, wb.length);
 }
 
 export const FILE_LIMITS = { CHUNK_SIZE, MAX_FILE_SIZE };
