@@ -67,7 +67,7 @@ export function SecurityModal() {
               <div className="space-y-2">
                 <ProtectRow icon={Key} title="Encryption key never leaves your browser" body="PBKDF2-SHA-256 (600k rounds) derives your AES-GCM 256 key from the room code + password. The key is used in SubtleCrypto — it never touches the network." color="var(--anon-ok)" />
                 <ProtectRow icon={Fingerprint} title="Relay stores only SHA-256(auth)" body="The auth token is derived with a DIFFERENT salt than the key. The relay persists only its SHA-256 hash, compared with constant-time constEq() on every request." color="var(--anon-ok)" />
-                <ProtectRow icon={Database} title="No persistence on disconnect" body="When the last peer leaves, the room self-destructs after the TTL (10m/1h/24h). Code, chat, files, history — all erased from the Durable Object's SQLite store." color="var(--anon-ok)" />
+                <ProtectRow icon={Database} title="No persistence after expiry" body="When the last peer leaves, the room self-destructs after the TTL (10m/1h/24h). Code, chat, files, history — all erased from the relay's storage with no backup." color="var(--anon-ok)" />
                 <ProtectRow icon={Lock} title="No account, no email, no cookies" body="Identity is a single owner token in localStorage. Clear your browser storage and it's gone. The relay only sees your IP for rate-limiting (60s window)." color="var(--anon-ok)" />
               </div>
             </div>
@@ -139,7 +139,7 @@ relay compares:  constEq(stored, incoming)  on every request
             <span className="inline-flex items-center gap-1">
               <EyeOff className="h-2.5 w-2.5" /> no telemetry · no analytics · no tracking
             </span>
-            <span>security.html</span>
+            <span>threat model · MIT-licensed project</span>
           </div>
         </motion.div>
       </motion.div>

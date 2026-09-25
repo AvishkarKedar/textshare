@@ -15,10 +15,10 @@
 ### 1.1 Executive Summary
 **anonshare** is an ultra-fast, zero-knowledge, end-to-end encrypted (E2EE) collaborative scratchpad and pair-programming IDE designed for developers, technical interviewers, educators, and security researchers. Users create or join a collaborative workspace in under a second using a 6-character room code. 
 
-All communications—multi-file source code, terminal input/output, real-time voice audio, cursor awareness, and binary attachments—are encrypted directly in the client browser using WebCrypto AES-GCM before leaving the machine. The server infrastructure (Cloudflare Pages, Cloudflare Functions, Oracle VPS Relay) operates as a zero-knowledge transport broker, forwarding opaque ciphertext frames without possessing the keys to decrypt or inspect room content. When all participants exit or the room reaches its Time-To-Live (TTL) expiration, all room state is permanently purged from memory and storage.
+All communications—multi-file source code, terminal input/output, cursor awareness, and binary attachments—are encrypted directly in the client browser using WebCrypto AES-GCM before leaving the machine. The server infrastructure (Cloudflare Pages, Cloudflare Functions, Oracle VPS Relay) operates as a zero-knowledge transport broker, forwarding opaque ciphertext frames without possessing the keys to decrypt or inspect room content. When all participants exit or the room reaches its Time-To-Live (TTL) expiration, all room state is permanently purged from memory and storage.
 
 ### 1.2 Core Product Principles & Non-Negotiables
-1. **Zero Knowledge by Design**: The server relay never receives plaintext document text, voice audio, file uploads, or encryption keys. Decryption keys exist exclusively in ephemeral client RAM.
+1. **Zero Knowledge by Design**: The server relay never receives plaintext document text, file uploads, or encryption keys. Decryption keys exist exclusively in ephemeral client RAM.
 2. **Zero Identity Tracking**: No accounts, passwords stored on servers, email verifications, OAuth providers, tracking cookies, advertising pixels, or telemetry beacons.
 3. **Strict Ephemerality**: Rooms, chats, files, and audio sessions exist only during active participation. Disconnection and TTL expiration trigger permanent self-destruction.
 4. **Tactile Craftsmanship**: Dense, high-contrast monospace typography, 0px sharp-corner geometry, 1px tactile hairlines, $< 50\text{ ms}$ synchronization latency, and 100% genuine real-time metrics (zero simulated or mock data).
@@ -26,12 +26,9 @@ All communications—multi-file source code, terminal input/output, real-time vo
 ### 1.3 Terminology & Technical Glossary
 - **CRDT (Conflict-Free Replicated Data Type)**: A data structure that converges deterministically across distributed peers without central lock arbitration (implemented via Yjs).
 - **Awareness**: Ephemeral state sharing (presence, cursor line/column coordinates, active selection, identity color, and typing indicator) distributed among room peers.
-- **Glare / Offer Collision**: A WebRTC condition where two peers simultaneously transmit an SDP offer to each other. Resolved via deterministic *Polite Peer Negotiation*.
 - **Polite Peer**: The peer designated to yield (rollback its local offer) upon an offer collision based on lexicographical UUID sorting.
-- **DTLS-SRTP**: Datagram Transport Layer Security / Secure Real-Time Transport Protocol used for encrypting WebRTC voice media packets.
 - **PBKDF2**: Password-Based Key Derivation Function 2 with SHA-256 HMAC executed at $600,000$ iterations.
 - **AES-GCM**: Advanced Encryption Standard in Galois/Counter Mode providing authenticated symmetric encryption with 96-bit initialization vectors (IV) and 128-bit authentication tags.
-- **VAD (Voice Activity Detection)**: Real-time amplitude and frequency analysis powered by the Web Audio API (`AnalyserNode`) detecting active speech without server processing.
 - **Bubblewrap (`bwrap`)**: Low-level Linux unprivileged user namespace sandbox enforcing strict file system isolation, cgroup memory ceilings, and read-only system mounts during code execution.
 
 ---
@@ -58,7 +55,7 @@ The system maintains strict attribution to its author across all legal notices, 
 | Persona             | Role / Environment            | Key Pain Points Addressed         | Primary Features Utilized   |
 +---------------------+-------------------------------+-----------------------------------+-----------------------------+
 | Alex (Pair Coder)   | Senior Engineer / Remote Team | Heavy IDE setup, video call lag,  | Multi-file tabs, CodeRunner |
-|                     |                               | lack of live stdin/stdout         | WebRTC voice mesh, Diff view|
+|                     |                               | lack of live stdin/stdout         | Diff view (planned)      |
 +---------------------+-------------------------------+-----------------------------------+-----------------------------+
 | Maya (Security Eng) | Pentester / SecOps Team       | Permanent logs in Slack/Teams,    | Zero-knowledge PBKDF2 crypto|
 |                     |                               | public pastebin scraping          | 10m TTL, Threat model modal |
@@ -74,8 +71,7 @@ The system maintains strict attribution to its author across all legal notices, 
 ### 3.1 Step-by-Step Scenario: Pair Programming Technical Interview
 1. **Creation**: Alex opens `https://code.avishkark.in`, clicks **"Create a room"**. The client generates a random 6-character code (`X8K2M9`), verifies exclusivity with the relay via `GET /room/X8K2M9?create=1&excl=1` ($200\text{ OK}$), and mints a 256-bit owner token saved in `localStorage`.
 2. **Invitation**: Alex presses `⌘I` to open the **Invite Modal**, copies the link `https://code.avishkark.in/#X8K2M9`, and sends it to the candidate.
-3. **Voice Connection**: Alex clicks the microphone icon (`⌘⇧V`), browser prompts for microphone permission. Upon acceptance, `VoiceMesh` connects to `https://relay.avishkark.in`, sets up Web Audio `AnalyserNode` monitoring, and listens for candidate offers.
-4. **Candidate Arrival**: The candidate opens the link. The client computes PBKDF2 keys, connects to the WebSocket relay, and emits `join`. Candidate joins voice; `VoiceMesh` establishes a direct P2P DTLS-SRTP audio stream with Alex.
+ **Candidate Arrival**: The candidate opens the link. The client computes PBKDF2 keys, connects to the WebSocket relay, and emits `join`. Live cursors and typing indicators from both peers appear in the editor.
 5. **Coding & Tab Management**: Alex creates `solution.py` and `tests.py`. Both collaborate in real-time with multi-cursor presence and syntax highlighting.
 6. **Execution & Stdin Input**: Alex presses `⌘↵` to execute `solution.py`. The request routes to `/api/run` $\rightarrow$ VPS Bubblewrap sandbox. Output streams into the **Terminal Panel** with exit code and duration ($42\text{ ms}$).
 7. **Session Teardown**: Both participants close their browser tabs. The relay's 10-minute countdown ticker starts. At $0:00$, the room buffer is purged from VPS RAM.
@@ -181,55 +177,6 @@ export interface SyntaxToken {
 
 ---
 
-### 4.3 Real-Time WebRTC Voice Mesh Specifications ([`voice.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/voice.ts))
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant ClientA as Peer A (Initiator)
-    participant Relay as Sync Signaling Channel (:3003)
-    participant ClientB as Peer B (Receiver)
-
-    Note over ClientA,ClientB: Signaling Connected via Socket.io
-    ClientA->>Relay: socket.emit("voice-signal", { target: "PeerB", signal: { type: "voice-offer", sdp } })
-    Relay->>ClientB: socket.on("voice-signal", { sender: "PeerA", signal: { type: "voice-offer", sdp } })
-    ClientB->>ClientB: Evaluate glare: isPolite ? rollback : ignore
-    ClientB->>ClientB: pc.setRemoteDescription(offer)
-    ClientB->>ClientB: const answer = await pc.createAnswer()
-    ClientB->>ClientB: pc.setLocalDescription(answer)
-    ClientB->>Relay: socket.emit("voice-signal", { target: "PeerA", signal: { type: "voice-answer", sdp } })
-    Relay->>ClientA: socket.on("voice-signal", { sender: "PeerB", signal: { type: "voice-answer", sdp } })
-    ClientA->>ClientA: pc.setRemoteDescription(answer)
-
-    par ICE Candidate Exchange
-        ClientA->>Relay: socket.emit("voice-signal", { target: "PeerB", signal: { type: "voice-candidate", candidate } })
-        Relay->>ClientB: socket.on("voice-signal", candidate)
-        ClientB->>ClientB: pc.addIceCandidate(candidate)
-    and
-        ClientB->>Relay: socket.emit("voice-signal", { target: "PeerA", signal: { type: "voice-candidate", candidate } })
-        Relay->>ClientA: socket.on("voice-signal", candidate)
-        ClientA->>ClientA: pc.addIceCandidate(candidate)
-    end
-
-    Note over ClientA,ClientB: Direct P2P DTLS-SRTP Audio Flow Active
-```
-
-#### 4.3.1 Web Audio Frequency Analysis & VAD Algorithm
-Every $100\text{ ms}$, the local audio monitor executes:
-1. `analyser.getByteFrequencyData(buffer)` fills $128$ frequency bins ($FFT = 256$, sample rate $44.1\text{ kHz}$).
-2. Computes mean frequency amplitude:
-   $$\bar{A} = \frac{1}{128} \sum_{i=0}^{127} \text{buffer}[i]$$
-3. Computes normalized microphone volume percentage ($0\dots 100\%$):
-   $$\text{VolumeLevel} = \min\left(100, \text{round}\left(\frac{\bar{A}}{128} \times 100\right)\right)$$
-4. Voice Activity Detection: If $\bar{A} > 20$, updates `voice.speaking = true` and broadcasts `voice-state { speaking: true }`. If $\bar{A} \le 20$, sets `voice.speaking = false`.
-
-#### 4.3.2 Hardware Controls & Autoplay Recovery
-- **Hardware Mute**: `localStream.getAudioTracks().forEach(t => t.enabled = !muted)`. Emits `voice-state { muted }`.
-- **Hardware Deafen**: Sets `audioEl.muted = true` on all peer audio elements.
-- **Push-to-Talk**: Unmutes microphone on `onMouseDown` / `onTouchStart` and mutes on `onMouseUp` / `onTouchEnd`.
-- **Autoplay Recovery**: If browser blocks `<audio>.play()`, attaches one-shot `click`, `touchstart`, and `keydown` listeners to resume `AudioContext` and trigger audio playback upon user interaction.
-
----
 
 ### 4.4 Sandboxed Code Execution Engine (`/run`)
 
@@ -275,14 +222,12 @@ bwrap \
 | HistoryDrawer     | ⌘⇧H           | Right Slide-Over  | Time Machine revision scrubber, diff viewer, revert, save-tab |
 | FilesDrawer       | ⌘B            | Right Slide-Over  | 50MB encrypted file uploads, image/pdf/docx previews, download|
 | BookmarksDrawer   | ⌘⇧R           | Right Slide-Over  | Local storage recent room history with one-click rejoin       |
-| VoicePanel        | ⌘⇧V           | Right Slide-Over  | WebRTC P2P audio controls, mic level gauge, mute/deafen/PTT   |
 | NotificationsPanel| ⌘N            | Right Slide-Over  | Chronological list of user mentions, joins, and room warnings |
 | BrowserDrawer     | ⌘⇧B           | Right Slide-Over  | Sandboxed web preview drawer for external documentation       |
 | CryptoModal       | ⌘⇧K           | Centered Modal    | Interactive PBKDF2 derivation explainer and salt verification |
 | SecurityModal     | ⌘⇧X           | Centered Modal    | Plain-language threat model (protected vs out-of-scope risks)  |
 | StatusModal       | ⌘⇧Y           | Centered Modal    | Live WebSocket latency ping, memory heap, and system health   |
 | FaqModal          | ⌘⇧F           | Centered Modal    | Searchable FAQ accordion across 6 categorized sections        |
-| WhiteboardModal   | ⌘⇧W           | Centered Modal    | Collaborative vector drawing canvas with pencil, shapes, text |
 | OnboardingTour    | ⌘⇧O           | Centered Spotlight| 6-step guided walkthrough for first-time pair programmers      |
 | InviteModal       | ⌘I            | Centered Modal    | Instant URL copy, QR code display, and view-only link generator|
 | SettingsPanel     | ⌘,            | Centered Modal    | Room TTL cycle (10m/1h/24h), password lock, read-only toggle |
@@ -295,8 +240,6 @@ bwrap \
 
 | Slash Command | Label | Hint | Execution Action |
 |---|---|---|---|
-| `/whiteboard` | Collaborative Whiteboard | Open real-time drawing canvas | Opens vector canvas modal (`WhiteboardModal`) |
-| `/voice` | Voice & Screen Share | Talk & broadcast screen to peers | Opens `VoicePanel` drawer & initializes WebRTC |
 | `/faq` | FAQs & Help | Honest answers to all questions | Opens `FaqModal` with instant search |
 | `/run` | Run Code | Execute the active file | Invokes `/api/run` sandbox execution |
 | `/test` | Run Tests | Parse test()/assert patterns | Runs assertion test suite in terminal |
@@ -330,7 +273,6 @@ bwrap \
 | First Contentful Paint (FCP)| < 500 ms          | Lighthouse on 4G Throttle                   |
 | Time to Interactive (TTI)   | < 800 ms          | Puppeteer Headless Chrome Benchmark         |
 | WebSocket Latency (RTT)     | < 40 ms           | WSS Ping/Pong to Oracle VPS Relay           |
-| WebRTC Audio End-to-End Lag | < 60 ms           | Direct DTLS-SRTP P2P Audio Stream           |
 | PBKDF2 Key Derivation Time  | 150 ms - 350 ms   | WebCrypto 600,000 Iterations Benchmark      |
 | Code Sandbox Startup Time   | < 120 ms          | Linux Bubblewrap Namespace Creation         |
 | Static Export Bundle Size   | < 450 KB gzip     | Next.js Turbopack dist/ Build Output        |

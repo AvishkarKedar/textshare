@@ -71,8 +71,8 @@ export function Hero() {
           <button
             onClick={() => {
               import("sonner").then(({ toast }) => {
-                toast("What's new in v5.3", {
-                  description: "Program input (stdin) panel with per-language hints · Python libraries on the runner (numpy, pandas…) · resizable terminal · mobile keyboard & notch fixes · scroll-reveal landing · typing indicators · real history.",
+                toast("What's new in v5.4", {
+                  description: "Streamlined editor — real-time preview, generative UI, and history stay; everything else got out of the way · refreshed design system and animations · detailed privacy policy, terms, and threat model · new FAQ.",
                   duration: 8000,
                 });
               });
@@ -80,7 +80,7 @@ export function Hero() {
             className="anon-mono group inline-flex w-fit items-center gap-2 hairline anon-raise px-2.5 py-1 text-[10px] anon-mut transition-colors hover:bg-[var(--anon-panel)]"
           >
             <span className="inline-flex h-1.5 w-1.5 rounded-full anim-beat" style={{ background: "var(--anon-ok)" }} />
-            <span className="anon-fg">v5.3</span> · program input, python libraries, mobile polish
+            <span className="anon-fg">v5.4</span> · focused editor, refreshed design, detailed legal
             <span className="anon-accent transition-transform group-hover:translate-x-0.5">→</span>
           </button>
 
@@ -93,14 +93,14 @@ export function Hero() {
               <button
                 type="button"
                 onClick={() => toggleFaq()}
-                className="anon-mono text-xs text-[#8c8c8c] hover:text-[#e7e7e7] hover:underline transition-colors cursor-pointer"
+                className="anon-mono anon-mut hover:anon-fg text-xs hover:underline transition-colors cursor-pointer"
               >
                 FAQ
               </button>
               <button
                 type="button"
                 onClick={() => toggleSecurity()}
-                className="anon-mono text-xs text-[#8c8c8c] hover:text-[#e7e7e7] hover:underline transition-colors cursor-pointer"
+                className="anon-mono anon-mut hover:anon-fg text-xs hover:underline transition-colors cursor-pointer"
               >
                 Security
               </button>
@@ -187,13 +187,12 @@ export function Hero() {
           </div>
         </div>
 
-        {/* right: animated demo card */}
+        {/* right: animated demo card — enters once, no perpetual motion */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.22, 0.61, 0.36, 1] }}
-          className="relative anim-float"
-          style={{ animationDuration: "6s" }}
+          className="relative"
         >
           <DemoCard />
         </motion.div>

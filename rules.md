@@ -187,7 +187,7 @@ set((s) => ({ files: [...s.files, newFile] }));
 
 ### 🎨 Rule 15: Canvas Touch Pointer Capture & Viewport Isolation
 - **Invariant**:
-  - All `<canvas>` interactive surfaces (whiteboard, signature, scratchpad) **MUST** use Pointer Events (`onPointerDown`, `onPointerMove`, `onPointerUp`) with `e.currentTarget.setPointerCapture(e.pointerId)`.
+  - All `<canvas>` interactive surfaces **MUST** use Pointer Events (`onPointerDown`, `onPointerMove`, `onPointerUp`) with `e.currentTarget.setPointerCapture(e.pointerId)`.
   - The canvas container **MUST** specify `touch-action: none` (Tailwind `touch-none`) to prevent mobile browsers from hijacking touch drawing as page pinch-to-zoom or vertical scrolling.
 
 ---

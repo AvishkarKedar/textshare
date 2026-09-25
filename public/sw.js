@@ -2,7 +2,7 @@
  * anonshare service worker.
  * Navigations use the offline app shell; missing assets never receive HTML.
  */
-const VERSION = 'anonshare-v22'
+const VERSION = 'anonshare-v23'
 const SHELL = ['./','./index.html','./security.html','./privacy.html','./terms.html','./manifest.webmanifest']
 
 self.addEventListener('install', event => {

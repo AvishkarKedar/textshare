@@ -123,9 +123,9 @@ html[data-theme="dark"] {
   --anon-panel: #0b0b0b;
   --anon-line: #1c1c1c;
   --anon-line2: #2a2a2a;
-  --anon-fg: #e7e7e7;
-  --anon-mut: #6d6d6d;
-  --anon-dim: #3d3d3d;
+  --anon-fg: #ececec;
+  --anon-mut: #8f8f8f;
+  --anon-dim: #454545;
   --anon-accent: #4c8dff;
   --anon-accent-fg: #ffffff;
   --anon-ok: #3ddc84;
@@ -145,7 +145,7 @@ html[data-theme="light"] {
   --anon-line: #e5e5e5;
   --anon-line2: #d8d8d8;
   --anon-fg: #111111;
-  --anon-mut: #767676;
+  --anon-mut: #6e6e6e;
   --anon-dim: #c2c2c2;
   --anon-accent: #0b62e0;
   --anon-accent-fg: #ffffff;
@@ -161,7 +161,7 @@ html[data-theme="dracula"] {
   --anon-line: #44475a;
   --anon-line2: #6272a4;
   --anon-fg: #f8f8f2;
-  --anon-mut: #6272a4;
+  --anon-mut: #8f95c0;
   --anon-dim: #44475a;
   --anon-accent: #bd93f9;
   --anon-accent-fg: #282a36;
@@ -193,7 +193,7 @@ html[data-theme="monokai"] {
   --anon-line: #3e3d32;
   --anon-line2: #49483e;
   --anon-fg: #f8f8f2;
-  --anon-mut: #75715e;
+  --anon-mut: #94907c;
   --anon-dim: #49483e;
   --anon-accent: #66d9ef;
   --anon-accent-fg: #272822;
@@ -325,14 +325,13 @@ html[data-theme] {
 .anim-float { animation: anon-float 3s ease-in-out infinite; }
 .anim-glow { animation: anon-glow-pulse 4s ease-in-out infinite; }
 
-/* gradient text for hero accent */
+/* gradient text for hero accent — a calm, static two-tone blend
+   (the old 6s background-position animation read as gimmicky) */
 .gradient-text {
-  background: linear-gradient(135deg, var(--anon-accent), var(--anon-ok));
-  background-size: 200% 200%;
+  background: linear-gradient(120deg, var(--anon-accent) 20%, var(--anon-ok) 90%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: anon-gradient-shift 6s ease infinite;
 }
 
 /* smooth scrollbar for main scroll containers */

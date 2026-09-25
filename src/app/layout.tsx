@@ -68,6 +68,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Apply the persisted theme before first paint to avoid a flash of
+            the wrong theme. Mirrors the zustand persist key + theme ids from
+            src/lib/themes.ts. Falls back to dark (the default). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var p=JSON.parse(localStorage.getItem('anonshare-prefs-v5')||'{}');var t=p&&p.state&&p.state.theme;var ok=['dark','light','dracula','nord','monokai'];if(t&&ok.indexOf(t)>=0){document.documentElement.setAttribute('data-theme',t);if(t!=='light')document.documentElement.classList.add('dark');}}catch(e){}`,
+          }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${jetbrainsMono.variable} antialiased bg-anon-bg text-anon-fg`}
       >

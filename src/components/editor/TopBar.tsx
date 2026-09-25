@@ -19,15 +19,11 @@ import {
   Command,
   Bell,
   Loader2,
-  FlaskConical,
   Wand2,
   Shield,
   Download,
-  Bookmark,
   Activity,
   HelpCircle,
-  Radio,
-  Palette,
 } from "lucide-react";
 import { useAnon } from "@/lib/store";
 import { initials } from "@/lib/themes";
@@ -156,18 +152,6 @@ export function TopBar() {
         </button>
 
         <button
-          onClick={() => s.toggleVoice()}
-          className={`anon-mono relative hidden h-7 items-center gap-1.5 px-2 text-xs hairline hover:bg-[var(--anon-panel)] sm:inline-flex ${
-            s.voiceOpen ? "bg-[var(--anon-panel)] anon-accent" : ""
-          }`}
-          title="Toggle Voice & Screen Share Mesh · ⌘⇧V"
-          aria-label="Toggle voice and screen share"
-        >
-          <Radio className="h-3.5 w-3.5" />
-          <span className="hidden xl:inline">Voice</span>
-        </button>
-
-        <button
           onClick={() => s.toggleChat()}
           className={`anon-mono relative inline-flex h-7 items-center gap-1.5 px-2 text-xs hairline hover:bg-[var(--anon-panel)] ${
             s.chatOpen ? "bg-[var(--anon-panel)]" : ""
@@ -216,19 +200,15 @@ export function TopBar() {
           </button>
           {overflow && (
             <div className="anim-rise absolute right-0 top-8 w-56 hairline anon-panel shadow-xl shadow-black/30 z-50">
-              <OverflowItem icon={Palette} label="Collaborative whiteboard" k="⌘⇧W" onClick={() => { s.toggleWhiteboard(); setOverflow(false); }} active={s.whiteboardOpen} />
-              <OverflowItem icon={Radio} label="Voice & screen mesh" k="⌘⇧V" onClick={() => { s.toggleVoice(); setOverflow(false); }} active={s.voiceOpen} />
               <OverflowItem icon={Eye} label="Markdown preview" k="⌘⇧P" onClick={() => { s.toggleMdPreview(); setOverflow(false); }} active={s.mdPreviewOpen} />
               <OverflowItem icon={Files} label="Files" k="⌘B" onClick={() => { s.toggleFiles(); setOverflow(false); }} active={s.filesOpen} />
               <OverflowItem icon={History} label="History (time machine)" k="⌘⇧H" onClick={() => { s.toggleHistory(); setOverflow(false); }} active={s.historyOpen} />
-              <OverflowItem icon={FlaskConical} label="Test runner" k="⌘⇧T" onClick={() => { s.toggleTestPanel(); setOverflow(false); }} active={s.testPanelOpen} />
               <OverflowItem icon={Wand2} label="Generative UI" k="⌘⇧G" onClick={() => { s.toggleGenerative(); setOverflow(false); }} active={s.generativeOpen} />
               <OverflowItem icon={Globe} label="Browser" k="⌘⇧B" onClick={() => { s.toggleBrowser(); setOverflow(false); }} active={s.browserOpen} />
               <OverflowItem icon={Shield} label="Crypto explainer" k="⌘⇧K" onClick={() => { s.toggleCrypto(); setOverflow(false); }} active={s.cryptoOpen} />
               <OverflowItem icon={Sparkles} label="Restart onboarding tour" k="⌘⇧O" onClick={() => { s.startTour(); setOverflow(false); }} />
               <OverflowItem icon={TerminalIcon} label="Terminal" k="⌘\\" onClick={() => { s.toggleTerminal(); setOverflow(false); }} active={s.terminalOpen} />
               <OverflowItem icon={Download} label="Export project ZIP" k="⌘⇧E" onClick={() => { s.exportProjectZip(); setOverflow(false); }} />
-              <OverflowItem icon={Bookmark} label="Recent rooms" k="⌘⇧R" onClick={() => { s.toggleBookmarks(); setOverflow(false); }} active={s.bookmarksOpen} />
               <OverflowItem icon={Activity} label="System status" k="⌘⇧Y" onClick={() => { s.toggleStatus(); setOverflow(false); }} active={s.statusOpen} />
               <OverflowItem icon={Shield} label="Threat model" k="⌘⇧X" onClick={() => { s.toggleSecurity(); setOverflow(false); }} active={s.securityOpen} />
               <OverflowItem icon={HelpCircle} label="FAQs & Help" k="⌘⇧F" onClick={() => { s.toggleFaq(); setOverflow(false); }} active={s.faqOpen} />

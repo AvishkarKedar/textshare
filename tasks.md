@@ -24,9 +24,6 @@
 | M-03          | CSP Hydration     | Diagnosed & resolved dead button bug caused | public/_headers,            |
 |               | Unblock           | by CSP blocking Next.js inline scripts.     | dist/_headers               |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
-| M-04          | WebRTC Voice      | Ported real WebRTC mesh engine with polite  | src/lib/voice.ts,           |
-|               | Mesh Engine       | peer negotiation, Web Audio VAD, mic levels.| src/components/palette/     |
-|               |                   | Eliminated all Math.random() placeholders.  | VoicePanel.tsx              |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
 | M-05          | Signaling Relay   | Integrated Socket.io sync & voice-signal    | src/lib/use-sync.ts,        |
 |               | Integration       | routing on relay.avishkark.in (:3003).      | mini-services/anonshare-sync|
@@ -53,11 +50,7 @@
 |               | Cleanliness       | for zero-history anonymous session launch.  | Hero.tsx                    |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
 | M-13          | Collaborative     | Vector drawing canvas modal with tools (pen,| src/components/palette/     |
-|               | Whiteboard Canvas | highlighter, shapes), Yjs CRDT stroke sync. | WhiteboardModal.tsx         |
-+---------------+-------------------+---------------------------------------------+-----------------------------+
-| M-14          | Voice & Screen    | WebRTC voice mesh, AnalyserNode VAD volume, | src/lib/voice.ts,           |
-|               | Mesh UI & PTT     | push-to-talk, live screen stream sharing.   | src/components/palette/     |
-|               |                   |                                             | VoicePanel.tsx              |
+|               +---------------+-------------------+---------------------------------------------+-----------------------------+
 +---------------+-------------------+---------------------------------------------+-----------------------------+
 ```
 
@@ -78,17 +71,6 @@
   - [x] Direct "Revert to here" state restoration.
   - [x] "Save as tab" snapshot branching.
 
-### 2.2 Audio & Voice Mesh Subsystem
-- [x] **WebRTC Mesh Engine ([`src/lib/voice.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/voice.ts))**:
-  - [x] Polite peer negotiation algorithm resolving glare collisions.
-  - [x] Asymmetric listener-mode transceivers (`recvonly`).
-  - [x] Web Audio `AnalyserNode` monitoring with 0–100% volume calculation.
-  - [x] Voice Activity Detection threshold ($> 20$) driving speaking indicators.
-  - [x] Autoplay unlock listeners attached to user interaction events.
-- [x] **Voice Panel UI ([`VoicePanel.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/palette/VoicePanel.tsx))**:
-  - [x] Clean `join` / `disconnect` toggle wired to `getUserMedia`.
-  - [x] Hardware Mute and Hardware Deafen actions.
-  - [x] Push-to-Talk button with keyboard and touch event bindings.
 
 ### 2.3 Cloudflare Edge & Serverless Functions
 - [x] **Pages Functions Routing (`functions/api/`)**:
@@ -128,8 +110,6 @@
 - [ ] **Direct WebSocket Compression**: Enable `permessage-deflate` on VPS WebSocket relay.
 
 ### 4.2 Extended Features
-- [ ] **WebRTC Screen Sharing**: Integrate `navigator.mediaDevices.getDisplayMedia` to allow peer screen streaming in a side-by-side video viewport.
-- [ ] **Multiplayer Whiteboard Sync**: Connect Whiteboard vector canvas path events to Yjs CRDT for live collaborative sketching.
 - [ ] **AI Pair Programmer (`/ai`)**: Introduce optional client-side API key configuration for LLM inline code completion.
 - [ ] **Additional Compilers**: Expand `/api/run` sandbox to support Zig, Kotlin, Swift, and PHP.
 

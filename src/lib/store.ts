@@ -25,9 +25,7 @@ import {
   getSession,
   adminRoom,
 } from "./session";
-import { runJsTests } from "./test-runner";
 import { detectLanguage, extToLang } from "./detect";
-import type { WhiteboardStroke } from "@/components/palette/WhiteboardModal";
 
 export type View = "landing" | "editor";
 export type { RoomExistsInfo, RoomStateFrame, ConnState };
@@ -96,31 +94,6 @@ export interface AppNotification {
   read: boolean;
 }
 
-export interface TestCase {
-  id: string;
-  name: string;
-  status: "pass" | "fail" | "skip" | "pending";
-  durationMs?: number;
-  error?: string;
-  assertions: number;
-}
-
-export interface TestSuite {
-  id: string;
-  name: string;
-  cases: TestCase[];
-}
-
-export interface TestRunResult {
-  suites: TestSuite[];
-  total: number;
-  passed: number;
-  failed: number;
-  skipped: number;
-  durationMs: number;
-  ranAt: number;
-}
-
 export interface NamedSnapshot {
   id: string;
   label: string;
@@ -181,23 +154,12 @@ export interface SyntaxToken {
   value: string;
 }
 
-export interface RecentRoom {
-  code: string;
-  title: string;
-  emoji: string;
-  visitedAt: number;
-  hasPassword: boolean;
-  isOwner: boolean;
-}
-
 export const SHORTCUTS: ShortcutDef[] = [
   { keys: "⌘ K", label: "Open command palette", group: "global" },
   { keys: "?", label: "Show keyboard shortcuts", group: "global" },
   { keys: "⌘ J", label: "Toggle chat", group: "navigation" },
   { keys: "⌘ B", label: "Toggle files", group: "navigation" },
   { keys: "⌘ ⇧ B", label: "Toggle browser drawer", group: "navigation" },
-  { keys: "⌘ ⇧ W", label: "Toggle collaborative whiteboard", group: "tools" },
-  { keys: "⌘ ⇧ V", label: "Toggle voice chat & screen share", group: "tools" },
   { keys: "⌘ ,", label: "Open settings", group: "global" },
   { keys: "⌘ I", label: "Invite others (copy link / QR)", group: "global" },
   { keys: "⌘ ⇧ K", label: "Open crypto explainer", group: "tools" },
@@ -206,7 +168,6 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: "⌘ ⇧ E", label: "Export project as ZIP", group: "tools" },
   { keys: "⌘ N", label: "Toggle notifications", group: "navigation" },
   { keys: "/", label: "Slash commands in editor", group: "editor" },
-  { keys: "⌘ ⇧ T", label: "Toggle test runner", group: "navigation" },
   { keys: "⌘ ⇧ G", label: "Open generative UI", group: "tools" },
   { keys: "⌘ /", label: "Toggle line comment", group: "editor" },
   { keys: "⌘ D", label: "Duplicate line", group: "editor" },
@@ -215,7 +176,6 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: "⌘ ⌥ F", label: "Find and replace", group: "editor" },
   { keys: "⌘ ⇧ P", label: "Toggle markdown preview", group: "editor" },
   { keys: "⌘ ⇧ S", label: "Toggle syntax highlighting", group: "editor" },
-  { keys: "⌘ ⇧ R", label: "Open recent rooms (bookmarks)", group: "navigation" },
   { keys: "⌘ ⇧ Y", label: "Open system status", group: "tools" },
   { keys: "⌘ ⇧ X", label: "Open threat model", group: "tools" },
   { keys: "⌘ ⇧ F", label: "Open FAQs & help", group: "tools" },
@@ -226,11 +186,8 @@ export const SHORTCUTS: ShortcutDef[] = [
 ];
 
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { id: "whiteboard", trigger: "/whiteboard", label: "Collaborative whiteboard", hint: "open real-time drawing canvas (⌘⇧W)", icon: "🎨" },
-  { id: "voice", trigger: "/voice", label: "Voice & screen share", hint: "talk & broadcast screen to room peers (⌘⇧V)", icon: "🎙️" },
   { id: "faq", trigger: "/faq", label: "FAQs & Help", hint: "honest answers to all questions", icon: "❓" },
   { id: "run", trigger: "/run", label: "Run code", hint: "execute the active file", icon: "▶" },
-  { id: "test", trigger: "/test", label: "Run tests", hint: "execute describe()/test() in the sandbox", icon: "✓" },
   { id: "zen", trigger: "/zen", label: "Toggle zen mode", hint: "distraction-free editor", icon: "◗" },
   { id: "clear", trigger: "/clear", label: "Clear editor", hint: "wipe the active file", icon: "✕" },
   { id: "goal", trigger: "/goal", label: "Set a goal", hint: "pin a session objective", icon: "◎" },
@@ -242,7 +199,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { id: "crypto", trigger: "/crypto", label: "Crypto explainer", hint: "see the real PBKDF2 flow", icon: "🔑" },
   { id: "export", trigger: "/export", label: "Export project ZIP", hint: "download all files as .zip", icon: "📦" },
   { id: "files", trigger: "/files", label: "Open files drawer", hint: "upload + share files", icon: "📁" },
-  { id: "rooms", trigger: "/rooms", label: "Recent rooms", hint: "rejoin a past room", icon: "🔖" },
   { id: "status", trigger: "/status", label: "System status", hint: "relay metrics + health check", icon: "📊" },
   { id: "security", trigger: "/security", label: "Threat model", hint: "honest security write-up", icon: "🛡️" },
   { id: "find", trigger: "/find", label: "Find in file", hint: "search + replace (⌘F)", icon: "🔍" },
@@ -278,7 +234,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: "slash",
     title: "Type / for slash commands",
-    body: "In the editor, type / to get a popup of commands: /run, /test, /clear, /history, /crypto, /export — instant actions without reaching for the mouse.",
+    body: "In the editor, type / to get a popup of commands: /run, /clear, /history, /crypto, /export — instant actions without reaching for the mouse.",
     kbd: "/",
     action: "slash",
   },
@@ -350,7 +306,6 @@ interface AnonState {
   terminalOpen: boolean;
   slashOpen: boolean;
   notificationsOpen: boolean;
-  testPanelOpen: boolean;
   generativeOpen: boolean;
 
   // settings
@@ -373,11 +328,6 @@ interface AnonState {
   // real document history (snapshots of what was actually in the editor)
   docHistory: HistoryEntry[];
   undoDepth: number; // how many steps back from the newest snapshot we are
-
-  // test runner
-  testResult: TestRunResult | null;
-  testing: boolean;
-  testExpanded: Record<string, boolean>;
 
   // named snapshots
   snapshots: NamedSnapshot[];
@@ -443,10 +393,8 @@ interface AnonState {
   // shared files (upload/sharing)
   sharedFiles: SharedFile[];
 
-  // recent rooms (bookmarks for quick rejoin)
-  recentRooms: RecentRoom[];
-  bookmarksOpen: boolean;
-  paletteRecents: string[]; // command IDs recently used
+  // command palette recents (command IDs recently used)
+  paletteRecents: string[];
 
   // syntax highlighting
   syntaxHighlight: boolean;
@@ -480,10 +428,6 @@ interface AnonState {
   recordHistory: (meta: { author: string; color: string; authorId: string }) => void;
   undoEdit: () => void;
   redoEdit: () => void;
-  // recent rooms
-  addRecentRoom: (r: Omit<RecentRoom, "visitedAt">) => void;
-  removeRecentRoom: (code: string) => void;
-  toggleBookmarks: () => void;
   trackPaletteUse: (id: string) => void;
   // goal
   setGoal: (text: string) => void;
@@ -506,18 +450,6 @@ interface AnonState {
   togglePrivacy: () => void;
   toggleTerms: () => void;
   toggleFaq: () => void;
-
-  // whiteboard
-  whiteboardOpen: boolean;
-  toggleWhiteboard: () => void;
-  whiteboardStrokes: WhiteboardStroke[];
-  addWhiteboardStrokeLocal: (s: WhiteboardStroke) => void;
-  popWhiteboardStrokeLocal: () => void;
-  clearWhiteboardStrokesLocal: () => void;
-
-  // voice & screen share
-  voiceOpen: boolean;
-  toggleVoice: () => void;
 
   // actions
   setView: (v: View) => void;
@@ -565,7 +497,6 @@ interface AnonState {
   toggleHistory: () => void;
   toggleTerminal: () => void;
   toggleNotifications: () => void;
-  toggleTestPanel: () => void;
   toggleGenerative: () => void;
   setSlashOpen: (b: boolean) => void;
 
@@ -585,11 +516,6 @@ interface AnonState {
   setTerminalHeight: (h: number) => void;
   setStdinOpen: (v: boolean) => void;
   setStdin: (s: string) => void;
-
-  // test runner
-  runTests: () => Promise<void>;
-  clearTests: () => void;
-  toggleTestExpanded: (suiteId: string) => void;
 
   // named snapshots
   addSnapshot: (label: string) => void;
@@ -626,105 +552,11 @@ function sessionActive(): boolean {
   return getSession() !== null;
 }
 
-/* ---------------------------------------------------- real test harness */
+/* ---------------------------------------------------- language routing */
 
 /** C++-only includes / namespace markers (used to route .c files to g++). */
 const CPP_SOURCE_RE =
   /#\s*include\s*<(?:iostream|bits\/stdc\+\+\.h|string|vector|map|unordered_map|multimap|set|unordered_set|queue|priority_queue|stack|deque|list|array|forward_list|memory|functional|algorithm|utility|numeric|random|regex|sstream|fstream|iomanip|chrono|thread|mutex|future|atomic|optional|variant|tuple|bitset)>|(?:\busing\s+namespace\s+std\b|\bstd\s*::)/;
-
-/**
- * Wraps user code in a REAL test harness that executes describe()/test()
- * inside the sandbox runner. Every pass/fail, assertion count and duration
- * comes from actual execution — nothing is simulated.
- */
-function buildTestHarness(source: string, lang: string): string {
-  if (lang.startsWith("py")) {
-    return `import json, time
-
-__results = {"suites": []}
-__cur = {"name": "default", "cases": []}
-__results["suites"].append(__cur)
-__registered = set()
-
-def describe(name, fn=None):
-    global __cur
-    __cur = {"name": name, "cases": []}
-    __results["suites"].append(__cur)
-    if fn:
-        fn()
-
-def test(name, fn):
-    __registered.add(id(fn))
-    t0 = time.time()
-    entry = {"name": name, "status": "pass", "assertions": 0, "error": None, "durationMs": 0}
-    __cur["cases"].append(entry)
-    try:
-        fn()
-        entry["status"] = "pass"
-    except Exception as e:
-        entry["status"] = "fail"
-        entry["error"] = type(e).__name__ + ": " + str(e)
-    entry["durationMs"] = round((time.time() - t0) * 1000)
-
-${source}
-
-# auto-collect pytest-style module-level test_* functions not already run
-for __n in [n for n in list(globals()) if n.startswith("test_") and callable(globals()[n])]:
-    __fn = globals()[__n]
-    if id(__fn) not in __registered:
-        test(__n, __fn)
-
-print("__ANON_RESULTS__" + json.dumps(__results))
-`;
-  }
-
-  // JavaScript — a minimal expect() plus describe/test that really run.
-  return `const __results = { suites: [] };
-let __cur = { name: "default", cases: [] };
-__results.suites.push(__cur);
-
-function __expect(entry, actual) {
-  return {
-    toBe: (exp) => { entry.assertions++; if (actual !== exp) throw new Error("expected " + JSON.stringify(exp) + ", got " + JSON.stringify(actual)); },
-    toEqual: (exp) => { entry.assertions++; if (JSON.stringify(actual) !== JSON.stringify(exp)) throw new Error("expected " + JSON.stringify(exp) + ", got " + JSON.stringify(actual)); },
-    toBeTruthy: () => { entry.assertions++; if (!actual) throw new Error("expected truthy, got " + JSON.stringify(actual)); },
-    toBeFalsy: () => { entry.assertions++; if (actual) throw new Error("expected falsy, got " + JSON.stringify(actual)); },
-    toContain: (n) => { entry.assertions++; const has = typeof actual === "string" ? actual.includes(n) : Array.isArray(actual) && actual.includes(n); if (!has) throw new Error("expected to contain " + JSON.stringify(n)); },
-    toHaveLength: (n) => { entry.assertions++; if ((actual && actual.length) !== n) throw new Error("expected length " + n + ", got " + (actual && actual.length)); },
-    toBeCloseTo: (n, digits = 2) => { entry.assertions++; if (Math.abs(actual - n) > Math.pow(10, -digits) / 2) throw new Error("expected ~" + n + ", got " + actual); },
-    toThrow: () => { entry.assertions++; let threw = false; try { actual(); } catch (e) { threw = true; } if (!threw) throw new Error("expected function to throw"); },
-  };
-}
-
-async function describe(name, fn) {
-  __cur = { name, cases: [] };
-  __results.suites.push(__cur);
-  if (fn) await fn();
-}
-
-async function test(name, fn) {
-  const t0 = Date.now();
-  const entry = { name, status: "pass", assertions: 0, error: null, durationMs: 0 };
-  __cur.cases.push(entry);
-  try {
-    await fn((a) => __expect(entry, a));
-    entry.status = "pass";
-  } catch (e) {
-    entry.status = "fail";
-    entry.error = String((e && e.message) || e);
-  }
-  entry.durationMs = Date.now() - t0;
-}
-
-function __report() {
-  console.log("__ANON_RESULTS__" + JSON.stringify(__results));
-}
-
-(async () => {
-${source}
-})().then(() => __report(), (e) => { console.error(String((e && e.stack) || e)); __report(); });
-`;
-}
 
 function describeRoomError(res: { ok: false; reason: string; status?: number; detail?: string }): string {
   switch (res.reason) {
@@ -944,7 +776,6 @@ export const useAnon = create<AnonState>()(
       terminalOpen: false,
       slashOpen: false,
       notificationsOpen: false,
-      testPanelOpen: false,
       generativeOpen: false,
 
       theme: "dark",
@@ -963,10 +794,6 @@ export const useAnon = create<AnonState>()(
 
       docHistory: [],
       undoDepth: 0,
-
-      testResult: null,
-      testing: false,
-      testExpanded: {},
 
       snapshots: [],
       newSnapLabel: "",
@@ -1009,15 +836,8 @@ export const useAnon = create<AnonState>()(
       termsOpen: false,
       faqOpen: false,
 
-      whiteboardOpen: false,
-      whiteboardStrokes: [],
-
-      voiceOpen: false,
-
       sharedFiles: [],
 
-      recentRooms: [],
-      bookmarksOpen: false,
       paletteRecents: [],
 
       syntaxHighlight: true,
@@ -1153,11 +973,6 @@ export const useAnon = create<AnonState>()(
           const emoji = opts.emoji ?? "✦";
           const hasPassword = opts.hasPassword ?? false;
           const isOwner = opts.isOwner ?? true;
-          // add to recents (dedupe by code, filter demo codes, cap 12)
-          const filteredRecents = (s.recentRooms || []).filter(
-            (r) => r.code !== code && !["K7Q9M2", "XBP3RJ", "ZNF8HK"].includes(r.code)
-          );
-          const newRecent: RecentRoom = { code, title, emoji, visitedAt: Date.now(), hasPassword, isOwner };
           try {
             window.history.replaceState(null, "", `#${code}`);
           } catch { /* ignore */ }
@@ -1179,7 +994,6 @@ export const useAnon = create<AnonState>()(
             snapshots: [],
             docHistory: [],
             undoDepth: 0,
-            recentRooms: [newRecent, ...filteredRecents].slice(0, 12),
           };
         }),
       exitRoom: () => {
@@ -1198,14 +1012,12 @@ export const useAnon = create<AnonState>()(
           terminalOpen: false,
           slashOpen: false,
           notificationsOpen: false,
-          testPanelOpen: false,
           generativeOpen: false,
           browserOpen: false,
           cryptoOpen: false,
           mdPreviewOpen: false,
           tourOpen: false,
           sharedFiles: [],
-          bookmarksOpen: false,
           privacyOpen: false,
           termsOpen: false,
           faqOpen: false,
@@ -1320,7 +1132,6 @@ export const useAnon = create<AnonState>()(
             ? s.notifications.map((n) => ({ ...n, read: true }))
             : s.notifications,
         })),
-      toggleTestPanel: () => set((s) => ({ testPanelOpen: !s.testPanelOpen })),
       toggleGenerative: () => set((s) => ({ generativeOpen: !s.generativeOpen })),
       toggleBrowser: () => set((s) => ({ browserOpen: !s.browserOpen })),
       setBrowserUrl: (url) => set({ browserUrl: url }),
@@ -1651,186 +1462,6 @@ export const useAnon = create<AnonState>()(
         set({ undoDepth: nextDepth });
       },
 
-      // ---------- test runner (REAL execution: JS in-browser, Python via sandbox) ----------
-      runTests: async () => {
-        const s = get();
-        if (s.testing) return;
-        const file = s.files.find((f) => f.id === s.activeFileId);
-        if (!file) return;
-        set({ testing: true, testPanelOpen: true });
-        const startTs = Date.now();
-        try {
-          const lang = (file.language || "javascript").toLowerCase();
-          if (lang !== "javascript" && lang !== "js" && lang !== "python" && lang !== "py") {
-            const result: TestRunResult = {
-              suites: [],
-              total: 0, passed: 0, failed: 0, skipped: 0,
-              durationMs: Date.now() - startTs,
-              ranAt: startTs,
-            };
-            set({ testResult: result, testing: false });
-            get().pushNotification({
-              kind: "info",
-              title: "Test runner unavailable for " + lang,
-              body: "Real test execution currently supports JavaScript and Python files.",
-            });
-            return;
-          }
-
-          // JavaScript: execute FOR REAL in this browser tab (src/lib/test-runner
-          // — describe/test/it/expect actually run; pass/fail, durations,
-          // assertion counts and console output are measured, not simulated).
-          // No server round-trip: tests keep working even when the sandbox
-          // runner is unreachable.
-          if (lang === "javascript" || lang === "js") {
-            const harness = await runJsTests(file.content);
-            const suites: TestSuite[] = harness.suites.map((su, i) => ({
-              id: `suite${i}`,
-              name: su.name,
-              cases: su.cases.map((tc, j) => ({
-                id: `case${i}-${j}`,
-                name: tc.name,
-                status: tc.status,
-                durationMs: tc.durationMs,
-                error: tc.error,
-                assertions: tc.assertions,
-              })),
-            }));
-            if (harness.rootError) {
-              suites.unshift({
-                id: "suite-root",
-                name: "runtime",
-                cases: [{
-                  id: "case-root",
-                  name: "loading the file",
-                  status: "fail" as const,
-                  error: harness.rootError,
-                  assertions: 0,
-                }],
-              });
-            }
-            const passed = suites.reduce((acc, su) => acc + su.cases.filter((c) => c.status === "pass").length, 0);
-            const failed = suites.reduce((acc, su) => acc + su.cases.filter((c) => c.status === "fail").length, 0);
-            const total = suites.reduce((acc, su) => acc + su.cases.length, 0);
-            const result: TestRunResult = {
-              suites,
-              total,
-              passed,
-              failed,
-              skipped: total - passed - failed,
-              durationMs: Date.now() - startTs,
-              ranAt: startTs,
-            };
-            set({ testResult: result, testing: false, testExpanded: {} });
-            if (total === 0) {
-              get().pushNotification({
-                kind: "info",
-                title: "No tests found",
-                body: "Wrap code in describe(\"…\", () => { test(\"…\", () => { … }) }) to make it discoverable.",
-              });
-            } else if (failed > 0) {
-              get().pushNotification({ kind: "warning", title: failed + " test" + (failed > 1 ? "s" : "") + " failed", body: "See the test panel for assertion errors." });
-            } else {
-              get().pushNotification({ kind: "info", title: "All " + total + " tests passed", body: "in " + result.durationMs + "ms · real in-browser execution" });
-            }
-            return;
-          }
-
-          // Python: build a real harness and execute it in the sandbox runner;
-          // results are reported on stdout as JSON.
-          const wrapped = buildTestHarness(file.content, lang);
-          const res = await fetch("/api/run", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              language: lang.startsWith("py") ? "python" : "javascript",
-              source: wrapped,
-            }),
-          });
-          const data = await res.json();
-          const stdout: string = data.stdout || "";
-          const marker = stdout.indexOf("__ANON_RESULTS__");
-          if (marker === -1) {
-            // The file crashed before reporting — surface the real error.
-            const stderr: string = data.stderr || "";
-            const result: TestRunResult = {
-              suites: [{
-                id: "suite0",
-                name: "runtime",
-                cases: [{
-                  id: "case0",
-                  name: "harness",
-                  status: "fail",
-                  error: (stderr || stdout || "no output").split("\n").slice(0, 6).join("\n").slice(0, 400),
-                  assertions: 0,
-                }],
-              }],
-              total: 1, passed: 0, failed: 1, skipped: 0,
-              durationMs: Date.now() - startTs,
-              ranAt: startTs,
-            };
-            set({ testResult: result, testing: false });
-            get().pushNotification({ kind: "warning", title: "Test run crashed", body: "See the test panel for the error." });
-            return;
-          }
-
-          const json = stdout.slice(marker + "__ANON_RESULTS__".length).split("\n")[0];
-          const raw = JSON.parse(json) as {
-            suites: { name: string; cases: { name: string; status: string; assertions: number; error: string | null; durationMs: number }[] }[];
-          };
-          const suites: TestSuite[] = raw.suites.map((su, i) => ({
-            id: `suite${i}`,
-            name: su.name,
-            cases: su.cases.map((tc, j) => ({
-              id: `case${i}-${j}`,
-              name: tc.name,
-              status: (tc.status === "pass" ? "pass" : tc.status === "fail" ? "fail" : "skip") as "pass" | "fail" | "skip",
-              durationMs: tc.durationMs,
-              error: tc.error ?? undefined,
-              assertions: tc.assertions,
-            })),
-          }));
-          const passed = suites.reduce((acc, su) => acc + su.cases.filter((c) => c.status === "pass").length, 0);
-          const failed = suites.reduce((acc, su) => acc + su.cases.filter((c) => c.status === "fail").length, 0);
-          const total = suites.reduce((acc, su) => acc + su.cases.length, 0);
-          const result: TestRunResult = {
-            suites,
-            total,
-            passed,
-            failed,
-            skipped: 0,
-            durationMs: Date.now() - startTs,
-            ranAt: startTs,
-          };
-          set({ testResult: result, testing: false, testExpanded: {} });
-          if (total === 0) {
-            get().pushNotification({
-              kind: "info",
-              title: "No tests found",
-              body: "Wrap code in describe(\"…\", () => { test(\"…\", () => { … }) }) to make it discoverable.",
-            });
-          } else if (failed > 0) {
-            get().pushNotification({
-              kind: "warning",
-              title: `${failed} test${failed > 1 ? "s" : ""} failed`,
-              body: `${passed} passed, ${failed} failed in ${file.name} (real sandbox execution)`,
-            });
-          }
-        } catch (e) {
-          set({ testing: false });
-          get().pushNotification({
-            kind: "warning",
-            title: "Test run failed to reach the runner",
-            body: e instanceof Error ? e.message : String(e),
-          });
-        }
-      },
-      clearTests: () => set({ testResult: null, testExpanded: {} }),
-      toggleTestExpanded: (suiteId) =>
-        set((s) => ({
-          testExpanded: { ...s.testExpanded, [suiteId]: !s.testExpanded[suiteId] },
-        })),
-
       // ---------- named snapshots (bookmark a REAL history entry) ----------
       addSnapshot: (label) => {
         const s = get();
@@ -2065,16 +1696,6 @@ export const useAnon = create<AnonState>()(
       // ---------- syntax highlighting ----------
       toggleSyntaxHighlight: () => set((s) => ({ syntaxHighlight: !s.syntaxHighlight })),
 
-      // ---------- recent rooms ----------
-      addRecentRoom: (r) =>
-        set((s) => {
-          // dedupe by code, move to front, cap at 12
-          const filtered = s.recentRooms.filter((x) => x.code !== r.code);
-          return { recentRooms: [{ ...r, visitedAt: Date.now() }, ...filtered].slice(0, 12) };
-        }),
-      removeRecentRoom: (code) =>
-        set((s) => ({ recentRooms: s.recentRooms.filter((r) => r.code !== code) })),
-      toggleBookmarks: () => set((s) => ({ bookmarksOpen: !s.bookmarksOpen })),
       trackPaletteUse: (id) =>
         set((s) => ({
           paletteRecents: [id, ...s.paletteRecents.filter((x) => x !== id)].slice(0, 5),
@@ -2125,17 +1746,6 @@ export const useAnon = create<AnonState>()(
       toggleTerms: () => set((s) => ({ termsOpen: !s.termsOpen })),
       toggleFaq: () => set((s) => ({ faqOpen: !s.faqOpen })),
 
-      // ---------- whiteboard ----------
-      toggleWhiteboard: () => set((s) => ({ whiteboardOpen: !s.whiteboardOpen })),
-      addWhiteboardStrokeLocal: (stroke) =>
-        set((s) => ({ whiteboardStrokes: [...s.whiteboardStrokes, stroke] })),
-      popWhiteboardStrokeLocal: () =>
-        set((s) => ({ whiteboardStrokes: s.whiteboardStrokes.slice(0, -1) })),
-      clearWhiteboardStrokesLocal: () => set({ whiteboardStrokes: [] }),
-
-      // ---------- voice & screen share ----------
-      toggleVoice: () => set((s) => ({ voiceOpen: !s.voiceOpen })),
-      // ---------- end new actions ----------
 
       // ---------- notifications ----------
       pushNotification: (n) =>
@@ -2162,7 +1772,6 @@ export const useAnon = create<AnonState>()(
         fontSize: s.fontSize,
         chatColored: s.chatColored,
         keybindings: s.keybindings,
-        recentRooms: (s.recentRooms || []).filter((r) => !["K7Q9M2", "XBP3RJ", "ZNF8HK"].includes(r.code)),
         paletteRecents: s.paletteRecents,
         customKeys: s.customKeys,
         goalText: s.goalText,

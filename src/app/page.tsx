@@ -16,14 +16,11 @@ import { BrowserDrawer } from "@/components/palette/BrowserDrawer";
 import { CryptoModal } from "@/components/palette/CryptoModal";
 import { OnboardingTour } from "@/components/palette/OnboardingTour";
 import { FilesDrawer } from "@/components/palette/FilesDrawer";
-import { BookmarksDrawer } from "@/components/palette/BookmarksDrawer";
 import { StatusModal } from "@/components/palette/StatusModal";
 import { SecurityModal } from "@/components/palette/SecurityModal";
 import { PrivacyTermsModals } from "@/components/palette/PrivacyTermsModals";
 import { FaqModal } from "@/components/palette/FaqModal";
 import { RoomEntryDialog } from "@/components/palette/RoomEntryDialog";
-import { WhiteboardModal } from "@/components/palette/WhiteboardModal";
-import { VoicePanel } from "@/components/palette/VoicePanel";
 
 export default function Home() {
   const view = useAnon((s) => s.view);
@@ -65,16 +62,12 @@ export default function Home() {
         if (store.historyOpen) { store.toggleHistory(); return; }
         if (store.notificationsOpen) { store.toggleNotifications(); return; }
         if (store.generativeOpen) { store.toggleGenerative(); return; }
-        if (store.testPanelOpen) { store.toggleTestPanel(); return; }
         if (store.browserOpen) { store.toggleBrowser(); return; }
         if (store.cryptoOpen) { store.toggleCrypto(); return; }
         if (store.filesOpen) { store.toggleFiles(); return; }
-        if (store.bookmarksOpen) { store.toggleBookmarks(); return; }
         if (store.statusOpen) { store.toggleStatus(); return; }
         if (store.securityOpen) { store.toggleSecurity(); return; }
         if (store.faqOpen) { store.toggleFaq(); return; }
-        if (store.whiteboardOpen) { store.toggleWhiteboard(); return; }
-        if (store.voiceOpen) { store.toggleVoice(); return; }
         return;
       }
 
@@ -95,12 +88,6 @@ export default function Home() {
       } else if (mod && e.key === ".") {
         e.preventDefault();
         store.toggleZen();
-      } else if (mod && e.shiftKey && e.key.toLowerCase() === "w") {
-        e.preventDefault();
-        store.toggleWhiteboard();
-      } else if (mod && e.shiftKey && e.key.toLowerCase() === "v") {
-        e.preventDefault();
-        store.toggleVoice();
       } else if (mod && e.shiftKey && e.key.toLowerCase() === "h") {
         e.preventDefault();
         store.toggleHistory();
@@ -113,9 +100,6 @@ export default function Home() {
       } else if (mod && e.shiftKey && e.key.toLowerCase() === "s") {
         e.preventDefault();
         store.toggleSyntaxHighlight();
-      } else if (mod && e.shiftKey && e.key.toLowerCase() === "r") {
-        e.preventDefault();
-        store.toggleBookmarks();
       } else if (mod && e.shiftKey && e.key.toLowerCase() === "y") {
         e.preventDefault();
         store.toggleStatus();
@@ -125,9 +109,6 @@ export default function Home() {
       } else if (mod && e.shiftKey && e.key.toLowerCase() === "f") {
         e.preventDefault();
         store.toggleFaq();
-      } else if (mod && e.shiftKey && e.key.toLowerCase() === "t") {
-        e.preventDefault();
-        store.runTests();
       } else if (mod && e.shiftKey && e.key.toLowerCase() === "g") {
         e.preventDefault();
         store.toggleGenerative();
@@ -201,13 +182,10 @@ export default function Home() {
       <CryptoModal />
       <OnboardingTour />
       <FilesDrawer />
-      <BookmarksDrawer />
       <StatusModal />
       <SecurityModal />
       <PrivacyTermsModals />
       <FaqModal />
-      <WhiteboardModal />
-      <VoicePanel />
     </>
   );
 }
