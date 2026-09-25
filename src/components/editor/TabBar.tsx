@@ -37,7 +37,7 @@ export function TabBar() {
                     e.stopPropagation();
                     s.removeFile(f.id);
                   }}
-                  className="opacity-0 group-hover:opacity-100 hover:text-[var(--anon-danger)] ml-1 transition-opacity cursor-pointer p-0.5"
+                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-[var(--anon-danger)] ml-1 transition-opacity cursor-pointer p-0.5"
                   title="Close tab"
                 >
                   <X className="h-3 w-3" />

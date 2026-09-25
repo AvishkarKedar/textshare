@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectLanguage, extToLang } from '../src/lib/detect'
+import { detectLanguage, extToLang, langToExt } from '../src/lib/detect'
 import { SHORTCUTS, SLASH_COMMANDS } from '../src/lib/store'
 
 describe('language detection', () => {
@@ -23,6 +23,38 @@ describe('language detection', () => {
     expect(extToLang('index.html')).toBe('html')
     expect(extToLang('script.js')).toBe('javascript')
     expect(extToLang('style.css')).toBe('css')
+    expect(extToLang('data.json')).toBe('json')
+    expect(extToLang('readme.md')).toBe('markdown')
+    expect(extToLang('app.go')).toBe('go')
+    expect(extToLang('lib.rs')).toBe('rust')
+    expect(extToLang('unknown.xyz')).toBe('text')
+  })
+
+  it('maps languages back to file extensions', () => {
+    expect(langToExt('python')).toBe('py')
+    expect(langToExt('javascript')).toBe('js')
+    expect(langToExt('typescript')).toBe('ts')
+    expect(langToExt('c')).toBe('c')
+    expect(langToExt('cpp')).toBe('cpp')
+    expect(langToExt('html')).toBe('html')
+    expect(langToExt('markdown')).toBe('md')
+  })
+
+  it('handles empty or short input safely', () => {
+    expect(detectLanguage('').language).toBe('text')
+    expect(detectLanguage('   ').language).toBe('text')
+    expect(detectLanguage('abc').language).toBe('text')
+  })
+
+  it('detects Go and Rust from syntax signatures', () => {
+    expect(detectLanguage('package main\nimport "fmt"\nfunc main() { fmt.Println("hi") }').language).toBe('go')
+    expect(detectLanguage('fn main() {\n    let mut x = 5;\n    println!("{}", x);\n}').language).toBe('rust')
+  })
+
+  it('detects HTML, Markdown, and SQL', () => {
+    expect(detectLanguage('<!DOCTYPE html>\n<html><body><h1>Hello</h1></body></html>').language).toBe('html')
+    expect(detectLanguage('# Main Title\n\n> Quote text\n- item 1\n- item 2').language).toBe('markdown')
+    expect(detectLanguage('SELECT * FROM users WHERE active = 1;').language).toBe('sql')
   })
 })
 

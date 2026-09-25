@@ -73,7 +73,7 @@ export function LandingFooter() {
             <ul className="space-y-2 anon-mono text-xs anon-mut">
               <li>v5.4.0</li>
               <li>relay: relay.avishkark.in</li>
-              <li>sw: anonshare-v22</li>
+              <li>sw: anonshare-v23</li>
               <li>region: auto</li>
             </ul>
           </div>

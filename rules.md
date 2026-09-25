@@ -196,7 +196,7 @@ set((s) => ({ files: [...s.files, newFile] }));
 
 ### 🚀 Pre-Commit & Deployment Checklist:
 1. `npx tsc --noEmit` $\longrightarrow$ **0 errors**.
-2. `npm test` $\longrightarrow$ **60/60 passing tests**.
+2. `npm test` $\longrightarrow$ **17/17 passing tests**.
 3. `npm run build` $\longrightarrow$ **Clean Turbopack export into `dist/`**.
 4. `git status` $\longrightarrow$ **Clean working tree with zero untracked binaries**.
 5. `npx wrangler pages deploy dist --project-name textshare --branch main` $\longrightarrow$ **Successful Cloudflare deploy**.

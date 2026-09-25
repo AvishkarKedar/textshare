@@ -2,7 +2,7 @@
 
 > **Engineering Status:** Master Baseline Active & Deployed  
 > **Production Target:** [https://code.avishkark.in](https://code.avishkark.in)  
-> **Automated Test Suite:** 60/60 Passing Tests (`vitest run`)  
+> **Automated Test Suite:** 17/17 Passing Tests (`vitest run`)  
 > **Compiler Diagnostics:** 0 TypeScript Errors (`npx tsc --noEmit`)  
 
 ---
@@ -24,33 +24,38 @@
 | M-03          | CSP Hydration     | Diagnosed & resolved dead button bug caused | public/_headers,            |
 |               | Unblock           | by CSP blocking Next.js inline scripts.     | dist/_headers               |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
-+---------------+-------------------+---------------------------------------------+-----------------------------+
-| M-05          | Signaling Relay   | Integrated Socket.io sync & voice-signal    | src/lib/use-sync.ts,        |
+| M-04          | Signaling Relay   | Integrated Socket.io sync & awareness       | src/lib/use-sync.ts,        |
 |               | Integration       | routing on relay.avishkark.in (:3003).      | mini-services/anonshare-sync|
 +---------------+-------------------+---------------------------------------------+-----------------------------+
-| M-06          | Strict TypeScript | Fixed all type errors across modals & store.| tsconfig.json, store.ts,    |
+| M-05          | Strict TypeScript | Fixed all type errors across modals & store.| tsconfig.json, store.ts,    |
 |               | Compliance        | Enabled strict compilation (0 build errors).| CryptoModal, SecurityModal  |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
-| M-07          | Mobile & Touch UI | Added touch button visibility classes       | TabBar.tsx, FilesDrawer.tsx,|
-|               | Accessibility     | (opacity-100 sm:opacity-0 sm:group-hover).  | BookmarksDrawer.tsx         |
+| M-06          | Mobile & Touch UI | Added touch button visibility classes       | TabBar.tsx, FilesDrawer.tsx,|
+|               | Accessibility     | (opacity-100 sm:opacity-0 sm:group-hover).  | src/components/editor/*     |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
-| M-08          | Author & Branding | Set genuine author credentials & MIT license| README.md, layout.tsx,      |
+| M-07          | Author & Branding | Set genuine author credentials & MIT license| README.md, layout.tsx,      |
 |               | Integrity         | across footers, legal dialogs, and metadata.| Hero.tsx, LandingFooter.tsx |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
-| M-09          | VPS Relay Sandbox | Hardened bubblewrap runner (nproc 512, fsize| relay/server.js,            |
+| M-08          | VPS Relay Sandbox | Hardened bubblewrap runner (nproc 512, fsize| relay/server.js,            |
 |               | & Full Compilers  | 100MB), rotated secret, 8/8 languages pass. | scripts/*, ecosystem config |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
-| M-10          | HTML & Web Live   | Added sandboxed iframe preview with device  | MarkdownPreview.tsx,        |
+| M-09          | HTML & Web Live   | Added sandboxed iframe preview with device  | MarkdownPreview.tsx,        |
 |               | Preview Runner    | modes (desktop/tablet/mobile), console logs.| store.ts, TabBar.tsx        |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
-| M-11          | Program Input     | CRLF to LF normalization, trailing newline  | relay/server.js,            |
+| M-10          | Program Input     | CRLF to LF normalization, trailing newline  | relay/server.js,            |
 |               | & EPIPE Resiliency| auto-append, proc.stdin error handling.     | scripts/runner-matrix.mjs   |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
-| M-12          | Landing Privacy   | Removed recent rooms list from hero section | src/components/landing/     |
-|               | Cleanliness       | for zero-history anonymous session launch.  | Hero.tsx                    |
+| M-11          | Landing Redesign  | Tokenized theme palette, interactive Demo   | src/components/landing/*,   |
+|               | & Contrast Pass   | card tokenizer, FOUC theme pre-paint guard. | FaqModal.tsx, globals.css   |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
-| M-13          | Collaborative     | Vector drawing canvas modal with tools (pen,| src/components/palette/     |
-|               +---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-12          | SSR Hydration Fix | Mount-gated Reveal animations to prevent    | src/components/landing/     |
+|               | & Reduced Motion  | useReducedMotion SSR markup divergence.     | Reveal.tsx                  |
++---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-13          | Legal & Privacy   | 13-section GDPR/CCPA Privacy Policy and     | src/components/palette/     |
+|               | Modernization     | Terms of Service in-app modals.             | PrivacyTermsModals.tsx      |
++---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-14          | v5.4 Editor Focus | Removed legacy Vite files & experimental    | package.json, sw.js,        |
+|               | & Cache Hardening | dead features, upgraded SW cache to v23.    | tests/*                     |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
 ```
 

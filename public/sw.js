@@ -3,7 +3,7 @@
  * Navigations use the offline app shell; missing assets never receive HTML.
  */
 const VERSION = 'anonshare-v23'
-const SHELL = ['./','./index.html','./security.html','./privacy.html','./terms.html','./manifest.webmanifest']
+const SHELL = ['./', './index.html', './manifest.webmanifest', './favicon.png', './favicon.svg', './logo.svg', './og.png']
 
 self.addEventListener('install', event => {
   self.skipWaiting()
@@ -18,9 +18,9 @@ self.addEventListener('fetch', event => {
   const request = event.request
   if (request.method !== 'GET') return
   const url = new URL(request.url)
-  if (url.origin !== location.origin || url.pathname.startsWith('/room/')) return
+  if (url.origin !== location.origin || url.pathname.startsWith('/room/') || url.pathname.startsWith('/api/')) return
 
-  if (url.pathname.startsWith('/assets/')) {
+  if (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/assets/')) {
     event.respondWith(caches.match(request).then(hit => hit || fetch(request).then(response => {
       if (response.ok) caches.open(VERSION).then(cache => cache.put(request, response.clone())).catch(() => {})
       return response
