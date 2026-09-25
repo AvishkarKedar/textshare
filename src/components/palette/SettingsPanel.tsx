@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useAnon, SHORTCUTS } from "@/lib/store";
 import { THEMES, PARTICIPANT_COLORS } from "@/lib/themes";
+import { NAME_MAX } from "@/lib/identity";
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 
@@ -59,9 +60,13 @@ export function SettingsPanel() {
               <input
                 value={s.displayName}
                 onChange={(e) => s.setDisplayName(e.target.value)}
-                maxLength={24}
+                maxLength={NAME_MAX}
+                placeholder="raven-otter-42"
                 className="anon-mono mt-1 w-full bg-[var(--anon-bg)] hairline px-3 py-2 text-sm outline-none focus:border-[var(--anon-accent)]"
               />
+              <p className="anon-mono mt-1 text-[9.5px] anon-dim">
+                shown to everyone in chat, cursors & typing — changes apply live
+              </p>
               <div className="anon-mono mt-3 text-[10px] uppercase tracking-wider anon-dim">
                 your color
               </div>

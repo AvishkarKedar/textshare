@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { detectLanguage, extToLang, langToExt } from '../src/lib/detect'
 import { SHORTCUTS, SLASH_COMMANDS } from '../src/lib/store'
+import { sanitizeName, guestHandle, isNamed, NAME_MAX } from '../src/lib/identity'
 
 describe('language detection', () => {
   it('detects Python from shebang and syntax', () => {
@@ -80,5 +81,31 @@ describe('shortcut + slash command registry', () => {
   it('slash command triggers are unique', () => {
     const triggers = SLASH_COMMANDS.map((c) => c.trigger)
     expect(new Set(triggers).size).toBe(triggers.length)
+  })
+})
+
+describe('identity — names, guest handles, "who is who"', () => {
+  it('sanitizes names: trims, collapses whitespace, caps length', () => {
+    expect(sanitizeName('  Ada   Lovelace  ')).toBe('Ada Lovelace')
+    expect(sanitizeName('   ')).toBe('')
+    expect(sanitizeName('x'.repeat(60)).length).toBe(NAME_MAX)
+    expect(sanitizeName('a\n\tb')).toBe('a b')
+  })
+
+  it('guest handles are non-empty, slug-shaped and never "you"', () => {
+    for (let i = 0; i < 50; i++) {
+      const h = guestHandle()
+      expect(h).toMatch(/^[a-z]+-[a-z]+-\d{2}$/)
+      expect(h).not.toBe('you')
+      expect(isNamed(h)).toBe(true)
+    }
+  })
+
+  it('isNamed rejects the legacy useless default "you"', () => {
+    expect(isNamed('you')).toBe(false)
+    expect(isNamed('')).toBe(false)
+    expect(isNamed(undefined)).toBe(false)
+    expect(isNamed(null)).toBe(false)
+    expect(isNamed('Avishkar')).toBe(true)
   })
 })

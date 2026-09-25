@@ -2,7 +2,7 @@
 
 > **Engineering Status:** Master Baseline Active & Deployed  
 > **Production Target:** [https://code.avishkark.in](https://code.avishkark.in)  
-> **Automated Test Suite:** 17/17 Passing Tests (`vitest run`)  
+> **Automated Test Suite:** 20/20 Passing Tests (`vitest run`)  
 > **Compiler Diagnostics:** 0 TypeScript Errors (`npx tsc --noEmit`)  
 
 ---
@@ -56,6 +56,10 @@
 +---------------+-------------------+---------------------------------------------+-----------------------------+
 | M-14          | v5.4 Editor Focus | Removed legacy Vite files & experimental    | package.json, sw.js,        |
 |               | & Cache Hardening | dead features, upgraded SW cache to v23.    | tests/*                     |
++---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-15          | v5.5 Room         | Optional name at room entry + auto guest    | identity.ts, store.ts,      |
+|               | Identity          | handles, live rename via awareness, mobile  | RoomEntryDialog.tsx,        |
+|               |                   | statusbar overflow fix, modal Escape/stack. | StatusBar.tsx, sw.js        |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
 ```
 

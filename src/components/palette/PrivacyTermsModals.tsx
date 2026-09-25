@@ -1,11 +1,25 @@
 "use client";
 
+import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Shield, FileText } from "lucide-react";
 import { useAnon } from "@/lib/store";
 
 export function PrivacyTermsModals() {
   const s = useAnon();
+
+  // Escape closes whichever legal modal is open (matches FAQ / entry dialog).
+  useEffect(() => {
+    if (!s.privacyOpen && !s.termsOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (useAnon.getState().privacyOpen) useAnon.getState().togglePrivacy();
+      if (useAnon.getState().termsOpen) useAnon.getState().toggleTerms();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [s.privacyOpen, s.termsOpen]);
+
   return (
     <>
       <PrivacyModal open={s.privacyOpen} onClose={() => s.togglePrivacy()} />
@@ -411,7 +425,7 @@ function LegalModal({
           </div>
           <div className="anon-mut anon-mono flex items-center justify-between px-3 py-1.5 text-[10px] hairline-t">
             <span>{fileLabel} · MIT-licensed project</span>
-            <span>last updated: v5.4</span>
+            <span>last updated: v5.5</span>
           </div>
         </motion.div>
       </motion.div>

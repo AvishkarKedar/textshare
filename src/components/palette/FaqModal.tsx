@@ -109,6 +109,12 @@ export const FAQ_DATA: FaqItem[] = [
     a: "Never. There is no sign-up, no email, no tracking cookies, and no analytics. A random 256-bit owner token is kept in your browser's localStorage purely to remember your moderation rights for rooms you created — clear your browser storage and even that disappears. Preferences (theme, display name, font size) also live only in your browser.",
   },
   {
+    id: "identity",
+    category: "account",
+    q: "Why does the room ask for my name? What do others see?",
+    a: "A name is the only way collaborators can tell who is typing, who sent each chat message, and who made which edit — without it, everyone would show up as an anonymous blob. The field is optional: leave it empty and you get a random handle like “raven-otter-42” instead. Whatever you pick is stored only in your own browser, travels inside the end-to-end-encrypted awareness channel (the relay sees ciphertext, not your name), and never leaves the room. Change it any time in Settings → Identity; the update applies live.",
+  },
+  {
     id: "who",
     category: "account",
     q: "Who built this and why is it free?",

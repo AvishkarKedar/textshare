@@ -22,9 +22,11 @@ import {
   removeYFile,
   updateYFile,
   setGoal as sessionSetGoal,
+  setLocalUser,
   getSession,
   adminRoom,
 } from "./session";
+import { guestHandle, sanitizeName, isNamed } from "./identity";
 import { detectLanguage, extToLang } from "./detect";
 
 export type View = "landing" | "editor";
@@ -274,6 +276,8 @@ interface AnonState {
   entryInfo: RoomExistsInfo | null;
   entryPassword: string;
   entryTtl: "10m" | "1h" | "24h";
+  /** Name typed into the room-entry dialog (scratch, not persisted). */
+  entryName: string;
   booting: boolean;
   bootError: string;
 
@@ -460,6 +464,7 @@ interface AnonState {
   closeEntry: () => void;
   setEntryPassword: (p: string) => void;
   setEntryTtl: (t: "10m" | "1h" | "24h") => void;
+  setEntryName: (n: string) => void;
   submitEntry: () => Promise<void>;
 
   enterRoom: (opts: {
@@ -747,6 +752,7 @@ export const useAnon = create<AnonState>()(
       entryInfo: null,
       entryPassword: "",
       entryTtl: "1h",
+      entryName: "",
       booting: false,
       bootError: "",
 
@@ -854,11 +860,27 @@ export const useAnon = create<AnonState>()(
       setView: (v) => set({ view: v }),
       // ---------- real room lifecycle ----------
       openEntryCreate: () =>
-        set({ entryMode: "create", entryCode: "", entryInfo: null, entryPassword: "", entryTtl: "1h", bootError: "" }),
+        set({
+          entryMode: "create",
+          entryCode: "",
+          entryInfo: null,
+          entryPassword: "",
+          entryTtl: "1h",
+          entryName: isNamed(get().displayName) ? get().displayName : "",
+          bootError: "",
+        }),
 
       openEntryJoin: async (code) => {
         const c = code.trim().toUpperCase();
-        set({ entryMode: "join", entryCode: c, entryInfo: null, entryPassword: "", bootError: "", booting: true });
+        set({
+          entryMode: "join",
+          entryCode: c,
+          entryInfo: null,
+          entryPassword: "",
+          entryName: isNamed(get().displayName) ? get().displayName : "",
+          bootError: "",
+          booting: true,
+        });
         const info = await relayRoomInfo(relayHost(), c);
         set({ booting: false });
         if (!info) {
@@ -882,8 +904,10 @@ export const useAnon = create<AnonState>()(
           return;
         }
         set({ entryInfo: info });
-        // Passwordless rooms can be joined immediately.
-        if (!info.hasPassword) {
+        // Passwordless rooms join instantly — but only once the visitor has a
+        // usable identity. First-timers (name still "you") see the dialog so
+        // they can type a name; leaving it blank gives them a guest handle.
+        if (!info.hasPassword && isNamed(get().displayName)) {
           await get().submitEntry();
         }
       },
@@ -893,12 +917,20 @@ export const useAnon = create<AnonState>()(
 
       setEntryPassword: (p) => set({ entryPassword: p }),
       setEntryTtl: (t) => set({ entryTtl: t }),
+      setEntryName: (n) => set({ entryName: n }),
 
       submitEntry: async () => {
         const s = get();
         if (s.booting || !s.entryMode) return;
         const mode = s.entryMode;
         set({ booting: true, bootError: "" });
+
+        // Resolve the identity BEFORE the session starts: typed name wins,
+        // otherwise the persisted one, otherwise a fresh guest handle. This
+        // is what makes "who is typing / who did what" work for everyone.
+        const typedName = sanitizeName(s.entryName);
+        const resolvedName = typedName || (isNamed(s.displayName) ? s.displayName : guestHandle());
+        if (resolvedName !== s.displayName) set({ displayName: resolvedName });
 
         try {
           if (mode === "create") {
@@ -918,7 +950,7 @@ export const useAnon = create<AnonState>()(
               owner: res.owner,
               created: true,
               hasPassword: !!s.entryPassword,
-              displayName: s.displayName,
+              displayName: resolvedName,
               color: s.color,
             });
             get().enterRoom({
@@ -951,7 +983,7 @@ export const useAnon = create<AnonState>()(
             owner: owner || null,
             created: false,
             hasPassword: !!(s.entryInfo?.hasPassword),
-            displayName: s.displayName,
+            displayName: resolvedName,
             color: s.color,
           });
           get().enterRoom({
@@ -1100,8 +1132,16 @@ export const useAnon = create<AnonState>()(
         return res.ok;
       },
 
-      setDisplayName: (n) => set({ displayName: n }),
-      setColor: (c) => set({ color: c }),
+      setDisplayName: (n) => {
+        const clean = sanitizeName(n);
+        set({ displayName: clean || "you" });
+        // propagate to the live awareness session (Settings → Identity)
+        setLocalUser(clean || "you");
+      },
+      setColor: (c) => {
+        set({ color: c });
+        setLocalUser(get().displayName || "you", c);
+      },
       setTheme: (t) => set({ theme: t }),
       setFontSize: (n) => set({ fontSize: Math.max(12, Math.min(18, n)) }),
       setKeybindings: (k) => set({ keybindings: k }),
@@ -1742,8 +1782,12 @@ export const useAnon = create<AnonState>()(
       setFindMatch: (idx, count) => set({ findMatchIndex: idx, findMatchCount: count }),
 
       // ---------- privacy + terms + faq ----------
-      togglePrivacy: () => set((s) => ({ privacyOpen: !s.privacyOpen })),
-      toggleTerms: () => set((s) => ({ termsOpen: !s.termsOpen })),
+      // Opening one legal/overlay modal closes its sibling — stacking two
+      // opaque dialogs left users with an unclosable layer underneath.
+      togglePrivacy: () =>
+        set((s) => ({ privacyOpen: !s.privacyOpen, termsOpen: false })),
+      toggleTerms: () =>
+        set((s) => ({ termsOpen: !s.termsOpen, privacyOpen: false })),
       toggleFaq: () => set((s) => ({ faqOpen: !s.faqOpen })),
 
 

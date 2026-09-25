@@ -96,7 +96,7 @@ export function StatusBar() {
   }
 
   return (
-    <footer className="relative flex h-7 items-center gap-3 hairline-t anon-raise px-3 anon-mono text-[10px] anon-mut select-none">
+    <footer className="relative flex h-7 min-w-0 items-center gap-3 hairline-t anon-raise px-3 anon-mono text-[10px] anon-mut select-none">
       <button
         onClick={() => s.toggleStatus()}
         className="inline-flex items-center gap-1.5 hover:text-[var(--anon-fg)] cursor-pointer transition-colors"
@@ -111,7 +111,7 @@ export function StatusBar() {
         {conn.label}
       </button>
 
-      <span className="inline-flex items-center gap-1.5">
+      <span className="hidden items-center gap-1.5 md:inline-flex">
         <Radio className="h-3 w-3" /> {online} online
         {s.roomState && s.roomState.peers > 0 && (
           <span className="anon-dim">({s.roomState.peers} relay)</span>
@@ -141,7 +141,7 @@ export function StatusBar() {
 
       <button
         onClick={() => s.toggleFaq()}
-        className="inline-flex items-center gap-1 hover:text-[var(--anon-accent)] cursor-pointer transition-colors"
+        className="hidden items-center gap-1 hover:text-[var(--anon-accent)] cursor-pointer transition-colors sm:inline-flex"
         title="Open FAQs & Help (⌘⇧F)"
       >
         <HelpCircle className="h-3 w-3" /> FAQ
@@ -173,7 +173,7 @@ export function StatusBar() {
         </button>
       )}
 
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto flex flex-none items-center gap-3">
         {/* Language selector popover */}
         {activeFile && (
           <div ref={langRef} className="relative inline-block">
@@ -183,7 +183,7 @@ export function StatusBar() {
               title="Click to change programming language / compiler"
             >
               <Code2 className="h-3 w-3 anon-accent" />
-              <span>{activeFile.language || "text"}</span>
+              <span className="max-w-[76px] truncate sm:max-w-none">{activeFile.language || "text"}</span>
               <ChevronUp className="h-2.5 w-2.5 anon-dim" />
             </button>
 

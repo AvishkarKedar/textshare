@@ -327,10 +327,13 @@ export function startSession(args: StartSessionArgs): SessionInfo {
   const mirrorParticipants = () => {
     const states = relay.awareness.getStates() as Map<number, Record<string, unknown>>;
     const now = Date.now();
+    // Read the live store so mid-session renames (Settings) reflect instantly
+    // instead of freezing the name the session started with.
+    const live = useAnon.getState();
     const me = {
       id: "me",
-      name: args.displayName || "You",
-      color: args.color,
+      name: live.displayName || args.displayName || "You",
+      color: live.color || args.color,
       isOwner: !!args.owner,
       online: true,
       cursorLine: 1,
@@ -446,6 +449,18 @@ export function sendCursor(line: number): void {
   if (!active) return;
   const user = (active.relay.awareness.getLocalState()?.user || {}) as { name?: string; color?: string; own?: boolean; cursorLine?: number };
   active.relay.awareness.setLocalStateField("user", { ...user, cursorLine: line });
+  active.relay.awareness.setLocalStateField("act", Date.now());
+}
+
+/**
+ * Live-update the local user's name / color in awareness — used when the
+ * user renames themselves mid-session (Settings → Identity) so peers see
+ * the change immediately instead of after a rejoin.
+ */
+export function setLocalUser(name: string, color?: string): void {
+  if (!active) return;
+  const user = (active.relay.awareness.getLocalState()?.user || {}) as Record<string, unknown>;
+  active.relay.awareness.setLocalStateField("user", { ...user, name, ...(color ? { color } : {}) });
   active.relay.awareness.setLocalStateField("act", Date.now());
 }
 

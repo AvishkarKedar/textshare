@@ -10,9 +10,10 @@
  */
 
 import { useEffect } from "react";
-import { Loader2, X, Lock, Timer, Shield } from "lucide-react";
+import { Loader2, X, Lock, Timer, Shield, User } from "lucide-react";
 import { useAnon } from "@/lib/store";
 import { PBKDF2_ROUNDS } from "@/lib/relay";
+import { NAME_MAX } from "@/lib/identity";
 
 export function RoomEntryDialog() {
   const s = useAnon();
@@ -31,6 +32,9 @@ export function RoomEntryDialog() {
   if (!open || !mode) return null;
 
   const isCreate = mode === "create";
+  // Joining a code-only room (no password)? Then the only question left is
+  // the visitor's name — the password field is hidden for those rooms.
+  const joinNeedsPassword = !isCreate && !!s.entryInfo?.hasPassword;
 
   return (
     <div
@@ -75,27 +79,53 @@ export function RoomEntryDialog() {
             void s.submitEntry();
           }}
         >
-          {/* password */}
+          {/* your name — the one field that makes “who is typing / who did
+              what” readable. Optional: blank still gets a guest handle. */}
           <label className="flex flex-col gap-1.5">
             <span className="anon-mono inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider anon-dim">
-              <Lock className="h-3 w-3" />
-              {isCreate ? "room password (optional)" : "room password"}
+              <User className="h-3 w-3" />
+              your name (optional)
             </span>
             <input
-              type="password"
-              value={s.entryPassword}
-              onChange={(e) => s.setEntryPassword(e.target.value)}
-              placeholder={isCreate ? "leave empty for code-only access" : "required for this room"}
+              type="text"
+              value={s.entryName}
+              onChange={(e) => s.setEntryName(e.target.value)}
+              placeholder="shown in chat, cursors & typing"
+              maxLength={NAME_MAX}
               autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
               disabled={s.booting}
               className="anon-mono h-10 bg-[var(--anon-bg)] hairline px-3 text-sm outline-none focus:border-[var(--anon-accent)] disabled:opacity-50"
             />
             <span className="anon-mono text-[9.5px] anon-dim">
-              {isCreate
-                ? "the password never leaves this browser — the relay can't see it"
-                : "the key is derived locally and verified by the relay"}
+              leave empty and you'll get a random handle like “raven-otter-42”
             </span>
           </label>
+
+          {/* password */}
+          {(isCreate || joinNeedsPassword) && (
+            <label className="flex flex-col gap-1.5">
+              <span className="anon-mono inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider anon-dim">
+                <Lock className="h-3 w-3" />
+                {isCreate ? "room password (optional)" : "room password"}
+              </span>
+              <input
+                type="password"
+                value={s.entryPassword}
+                onChange={(e) => s.setEntryPassword(e.target.value)}
+                placeholder={isCreate ? "leave empty for code-only access" : "required for this room"}
+                autoComplete="off"
+                disabled={s.booting}
+                className="anon-mono h-10 bg-[var(--anon-bg)] hairline px-3 text-sm outline-none focus:border-[var(--anon-accent)] disabled:opacity-50"
+              />
+              <span className="anon-mono text-[9.5px] anon-dim">
+                {isCreate
+                  ? "the password never leaves this browser — the relay can't see it"
+                  : "the key is derived locally and verified by the relay"}
+              </span>
+            </label>
+          )}
 
           {/* TTL (create only) */}
           {isCreate && (

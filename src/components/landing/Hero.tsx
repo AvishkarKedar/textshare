@@ -71,8 +71,8 @@ export function Hero() {
           <button
             onClick={() => {
               import("sonner").then(({ toast }) => {
-                toast("What's new in v5.4", {
-                  description: "Streamlined editor — real-time preview, generative UI, and history stay; everything else got out of the way · refreshed design system and animations · detailed privacy policy, terms, and threat model · new FAQ.",
+                toast("What's new in v5.5", {
+                  description: "Names in rooms — type your name when you create or join, or get a friendly guest handle like “raven-otter-42”. See who is typing and who did what · mid-session renames apply live · mobile status bar no longer overflows.",
                   duration: 8000,
                 });
               });
@@ -80,7 +80,7 @@ export function Hero() {
             className="anon-mono group inline-flex w-fit items-center gap-2 hairline anon-raise px-2.5 py-1 text-[10px] anon-mut transition-colors hover:bg-[var(--anon-panel)]"
           >
             <span className="inline-flex h-1.5 w-1.5 rounded-full anim-beat" style={{ background: "var(--anon-ok)" }} />
-            <span className="anon-fg">v5.4</span> · focused editor, refreshed design, detailed legal
+            <span className="anon-fg">v5.5</span> · names & presence, who-is-typing, mobile polish
             <span className="anon-accent transition-transform group-hover:translate-x-0.5">→</span>
           </button>
 

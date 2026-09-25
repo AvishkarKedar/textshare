@@ -37,10 +37,11 @@ characters, write together. Nothing is stored once everyone leaves.
 
 ## Features
 
-**Collaboration** - live cursors with names, Google-Docs-style flags that fade and
-return on hover, initials in the gutter, an "N people editing below" pill,
-click an avatar to jump to someone, double-click to follow them, idle detection,
-room chat with `@mentions`, and ephemeral cursor chat (`Alt` `/`).
+**Collaboration** - optional display name at room entry (blank gives you a
+random guest handle like `raven-otter-42`, persisted in your browser),
+"X is typing…" indicators, per-author chat attribution and edit history,
+live presence with identity colours, rename any time in Settings with the
+change applying live, and a mobile layout.
 
 **Editing** - CodeMirror 6, multiple files as tabs, undo/redo scoped per user,
 find and replace, bracket matching, autocomplete, language auto-detection on
