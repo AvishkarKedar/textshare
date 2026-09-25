@@ -1,269 +1,240 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { tokenizeLine, TOKEN_COLORS } from "@/lib/highlight";
 
-interface DemoLine {
+/**
+ * Hero demo card — a small, self-contained simulation of a live room:
+ * three peers typing a short program together, one line each, with the
+ * same syntax tokenizer the real editor uses.
+ *
+ * Everything is deterministic and CSS-driven except the character cadence,
+ * which uses a fixed rhythm with tiny pauses after punctuation so it reads
+ * as human typing without jitter.
+ */
+
+interface Line {
   text: string;
-  typed: string;
-  author: "me" | "av" | "lz";
+  author: "you" | "av" | "mz";
 }
 
-const FULL_SCRIPT: { text: string; author: "me" | "av" | "lz" }[] = [
-  { text: "function shareRoom(code, opts = {}) {", author: "me" },
-  { text: "  const key  = deriveKey(code, opts.password)", author: "av" },
-  { text: "  const auth = deriveAuth(code, opts.password)", author: "av" },
-  { text: "  // relay sees SHA-256(auth) only", author: "lz" },
-  { text: "  return connect(`wss://relay.avishkark.in/room/${code}`, { key, auth })", author: "me" },
-  { text: "}", author: "me" },
-  { text: "", author: "me" },
-  { text: 'const room = shareRoom("ABC123", { ttl: "1h" })', author: "lz" },
-  { text: 'room.on("peer", (p) => console.log(p.name + " joined"))', author: "lz" },
+const SCRIPT: Line[] = [
+  { text: "// three strangers, one room, zero servers", author: "mz" },
+  { text: "const room = await anonshare.join('XK42QM')", author: "you" },
+  { text: "", author: "you" },
+  { text: "const seal = (msg) => room.encrypt(msg)", author: "av" },
+  { text: "// the relay only ever sees this:", author: "mz" },
+  { text: "// a2f9…c41b  (AES-GCM, 256-bit)", author: "mz" },
+  { text: "", author: "av" },
+  { text: "room.on('peer', (p) => p.send(seal('hi ' + p.name)))", author: "av" },
+  { text: "// erased for everyone when the last tab closes", author: "you" },
 ];
 
 const AUTHORS = {
-  me: { name: "ME", color: "#4c8dff" },
-  av: { name: "AV", color: "#3ddc84" },
-  lz: { name: "LZ", color: "#c792ea" },
-};
+  you: { name: "you", color: "#4c8dff" },
+  av: { name: "ava", color: "#3ddc84" },
+  mz: { name: "moe", color: "#c792ea" },
+} as const;
+
+/** Base cadence + human pause after sentence-ish punctuation. */
+const BASE_MS = 26;
+function charDelay(ch: string, next: string | undefined): number {
+  if (ch === "" ) return BASE_MS;
+  if (".,:;".includes(ch)) return 170;
+  if (ch === "(" || ch === "{") return 90;
+  if (ch === " ") return 46;
+  if (next === undefined) return 220; // end of line — beat before newline
+  if ("w".includes(ch) && Math.random() < 0.06) return 140; // rare think-pause
+  return BASE_MS + Math.random() * 14;
+}
 
 export function DemoCard() {
-  const [lines, setLines] = useState<DemoLine[]>(
-    FULL_SCRIPT.map((l) => ({ ...l, typed: "" })),
-  );
-  const [currentLine, setCurrentLine] = useState(0);
-  const [currentChar, setCurrentChar] = useState(0);
-  const [phase, setPhase] = useState<"typing" | "pause" | "restart">("typing");
+  const [typedLines, setTypedLines] = useState<string[]>(SCRIPT.map(() => ""));
+  const [current, setCurrent] = useState(0);
+  const [phase, setPhase] = useState<"typing" | "hold" | "fade">("typing");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // typing animation — single setTimeout chain, no synchronous setState
   useEffect(() => {
     let cancelled = false;
-    let lineIdx = 0;
-    let charIdx = 0;
-    let phase: "typing" | "pause" | "restart" = "typing";
+    let line = 0;
+    let char = 0;
+    let mode: "typing" | "hold" | "fade" = "typing";
+    // local mirror so setTimeout closures never read stale state
+    let mirror: string[] = SCRIPT.map(() => "");
 
-    function typeNext() {
+    function step() {
       if (cancelled) return;
 
-      if (phase === "restart") {
-        phase = "typing";
-        lineIdx = 0;
-        charIdx = 0;
-        setLines(FULL_SCRIPT.map((l) => ({ ...l, typed: "" })));
-        setCurrentLine(0);
-        setCurrentChar(0);
-        setTimeout(typeNext, 100);
+      if (mode === "fade") {
+        // card content faded out silently — start over
+        mode = "typing";
+        line = 0;
+        char = 0;
+        mirror = SCRIPT.map(() => "");
+        setPhase("typing");
+        setCurrent(0);
+        setTypedLines(mirror);
+        setTimeout(step, 420);
         return;
       }
 
-      if (phase === "pause") {
-        phase = "restart";
-        setPhase("restart");
-        setTimeout(typeNext, 4000);
+      if (mode === "hold") {
+        mode = "fade";
+        setPhase("fade");
+        setTimeout(step, 700);
         return;
       }
 
-      // typing phase
-      if (lineIdx >= FULL_SCRIPT.length) {
-        phase = "pause";
-        setPhase("pause");
-        setTimeout(typeNext, 1500);
+      if (line >= SCRIPT.length) {
+        mode = "hold";
+        setPhase("hold");
+        setTimeout(step, 5200);
         return;
       }
 
-      const target = FULL_SCRIPT[lineIdx].text;
+      const target = SCRIPT[line].text;
 
-      if (charIdx >= target.length) {
-        // move to next line
-        lineIdx++;
-        charIdx = 0;
-        setCurrentLine(lineIdx);
-        setCurrentChar(0);
-        setTimeout(typeNext, 180 + Math.random() * 120);
+      if (char >= target.length) {
+        line += 1;
+        char = 0;
+        setCurrent(line);
+        setTimeout(step, 240);
         return;
       }
 
-      // type next char
-      const delay = target[charIdx] === " " ? 20 : 28 + Math.random() * 35;
+      const ch = target[char];
+      const delay = charDelay(ch, target[char + 1]);
       setTimeout(() => {
         if (cancelled) return;
-        const newTyped = target.slice(0, charIdx + 1);
-        setLines((prev) => {
-          const next = [...prev];
-          next[lineIdx] = { ...next[lineIdx], typed: newTyped };
-          return next;
-        });
-        setCurrentChar(charIdx + 1);
-        charIdx++;
-        typeNext();
+        mirror = [...mirror];
+        mirror[line] = target.slice(0, char + 1);
+        setTypedLines(mirror);
+        char += 1;
+        step();
       }, delay);
     }
 
-    typeNext();
+    step();
     return () => { cancelled = true; };
   }, []);
 
-  // auto-scroll to keep current line visible
+  // keep the current line in view — smooth, never jumpy
   useEffect(() => {
     if (scrollRef.current) {
-      const lineHeight = 13 * 1.6;
-      const target = currentLine * lineHeight - 60;
-      scrollRef.current.scrollTop = Math.max(0, target);
+      const lh = 21.6; // 13.5px * 1.6 line-height
+      scrollRef.current.scrollTo({ top: Math.max(0, current * lh - 64), behavior: "smooth" });
     }
-  }, [currentLine]);
+  }, [current]);
 
-  const activeAuthor = FULL_SCRIPT[currentLine]?.author ?? "me";
-  const authorInfo = AUTHORS[activeAuthor];
+  const activeAuthor = SCRIPT[Math.min(current, SCRIPT.length - 1)]?.author ?? "you";
+  const author = AUTHORS[activeAuthor];
+  const typing = phase === "typing" && current < SCRIPT.length;
 
   return (
     <div className="hairline anon-panel shadow-2xl shadow-black/40">
-      {/* demo top bar */}
-      <div className="flex h-9 items-center gap-2 hairline-b px-3">
-        <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#ff5c4d" }} />
-        <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#e8b339" }} />
-        <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#3ddc84" }} />
-        <span className="anon-mono ml-3 text-xs anon-mut">DEMO01 · shareRoom.js</span>
+      {/* window chrome — file + live presence */}
+      <div className="anon-mono anon-mut flex h-10 items-center gap-2.5 px-3.5 hairline-b">
+        <span className="anon-accent">{'>'}</span>
+        <span className="anon-fg text-xs">room.js</span>
+        <span className="anon-dim">·</span>
+        <span className="text-[10px]">XK42QM</span>
+
         <div className="ml-auto flex items-center gap-1.5">
-          {(["me", "av", "lz"] as const).map((k) => {
+          {(["you", "av", "mz"] as const).map((k) => {
             const a = AUTHORS[k];
-            const isActive = activeAuthor === k && phase === "typing";
+            const isActive = activeAuthor === k && typing;
             return (
               <span
                 key={k}
-                className="anon-mono relative inline-flex h-5 w-5 items-center justify-center text-[10px] font-semibold text-black transition-all"
+                title={isActive ? `${a.name} is typing…` : a.name}
+                className="relative inline-flex h-5 w-5 items-center justify-center text-[9px] font-semibold text-black transition-all duration-300"
                 style={{
                   background: a.color,
-                  transform: isActive ? "scale(1.15)" : "scale(1)",
+                  opacity: isActive ? 1 : 0.55,
+                  transform: isActive ? "scale(1.12)" : "scale(0.94)",
                   zIndex: isActive ? 5 : 1,
                 }}
               >
-                {a.name}
-                {isActive && (
-                  <span
-                    className="absolute -inset-0.5 rounded-sm"
-                    style={{
-                      border: `1.5px solid ${a.color}`,
-                      opacity: 0.6,
-                    }}
-                  />
-                )}
+                {a.name.slice(0, 1).toUpperCase() + a.name.slice(1, 2)}
               </span>
+            );
+          })}
+          <span className="anim-beat ml-1.5 h-1.5 w-1.5 rounded-full" style={{ background: "var(--anon-ok)" }} aria-label="live" />
+        </div>
+      </div>
+
+      {/* typing surface */}
+      <div
+        ref={scrollRef}
+        className="anon-scroll relative h-[300px] overflow-y-auto bg-[var(--anon-raise)] px-4 py-3.5 anon-mono text-[13.5px] leading-[1.6] sm:h-[320px]"
+        style={{ scrollbarWidth: "none" }}
+        aria-hidden
+      >
+        <div className={phase === "fade" ? "transition-opacity duration-500 opacity-0" : "transition-opacity duration-300 opacity-100"}>
+          {SCRIPT.map((line, i) => {
+            const isCurrent = i === current && typing;
+            const typed = typedLines[i] ?? "";
+            const lineAuthor = AUTHORS[line.author];
+            return (
+              <div
+                key={i}
+                className="relative flex min-h-[1.6em]"
+                style={
+                  isCurrent
+                    ? { boxShadow: `inset 2px 0 0 0 ${lineAuthor.color}` }
+                    : undefined
+                }
+              >
+                <span className="anon-dim mr-4 w-6 flex-none select-none text-right tabular-nums">
+                  {i + 1}
+                </span>
+                <span className="anon-fg whitespace-pre-wrap break-all">
+                  <Tokens line={typed} />
+                  {isCurrent && (
+                    <span
+                      className="anim-blink inline-block h-[1.05em] w-[2px] align-middle"
+                      style={{ background: lineAuthor.color }}
+                    />
+                  )}
+                </span>
+              </div>
             );
           })}
         </div>
       </div>
 
-      {/* code area */}
-      <div
-        ref={scrollRef}
-        className="anon-scroll relative h-[320px] overflow-y-auto px-4 py-3 anon-mono text-[13px] leading-[1.6] anon-raise"
-        style={{ scrollbarWidth: "none" }}
-      >
-        {lines.map((line, i) => {
-          const isCurrent = i === currentLine && phase === "typing";
-          const isPast = i < currentLine || (i === currentLine && phase !== "typing");
-          const lineAuthor = AUTHORS[line.author] ?? AUTHORS.me;
-          return (
-            <div
-              key={i}
-              className="flex relative"
-              style={{ minHeight: "1.6em" }}
-            >
-              {/* line number */}
-              <span
-                className="anon-dim mr-4 w-6 flex-none select-none text-right"
-                style={{ color: isCurrent ? lineAuthor.color : undefined }}
-              >
-                {i + 1}
-              </span>
-              {/* author indicator on left */}
-              {isCurrent && (
-                <span
-                  className="anon-mono absolute left-10 -ml-1 -mt-0.5 px-1 text-[8px] font-bold text-black anim-flagfade"
-                  style={{ background: lineAuthor.color, top: "-12px" }}
-                >
-                  {lineAuthor.name}
-                </span>
-              )}
-              {/* code */}
-              <span className="anon-fg whitespace-pre-wrap break-all">
-                {renderLine(line.typed)}
-                {isCurrent && (
-                  <span
-                    className="inline-block w-[2px] h-[1.1em] align-middle anim-blink"
-                    style={{ background: lineAuthor.color }}
-                  />
-                )}
-              </span>
-            </div>
-          );
-        })}
-        {phase === "restart" && (
-          <div className="mt-3 anon-mono text-[11px] anon-dim flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full anim-beat" style={{ background: "var(--anon-ok)" }} />
-            restarting demo…
-          </div>
+      {/* footer — what the room would show */}
+      <div className="anon-mut anon-mono flex h-8 items-center gap-2 px-3.5 text-[10px] hairline-t">
+        {typing ? (
+          <>
+            <span className="anim-beat h-1.5 w-1.5 rounded-full" style={{ background: author.color }} />
+            <span>
+              <span style={{ color: author.color }}>{author.name}</span> is typing…
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--anon-ok)" }} />
+            <span>synced · 3 peers · e2ee</span>
+          </>
         )}
-      </div>
-
-      {/* demo footer */}
-      <div className="hairline-t flex h-7 items-center gap-2 px-3">
-        <span className="h-1.5 w-1.5 rounded-full anim-beat" style={{ background: "var(--anon-ok)" }} />
-        <span className="anon-mono text-[10px] anon-mut">
-          {phase === "typing" ? `${authorInfo.name} typing…` : "live"} · 3 online · e2e
-        </span>
-        <span className="anon-mono ml-auto text-[10px] anon-dim">⌘K to try it</span>
+        <span className="anon-dim ml-auto hidden sm:inline">no account · erased on exit</span>
       </div>
     </div>
   );
 }
 
-function renderLine(line: string) {
+/** Render one line through the real editor tokenizer. */
+function Tokens({ line }: { line: string }) {
   if (!line) return null;
-  const tokens: React.ReactNode[] = [];
-  let key = 0;
-
-  // comments
-  const commentIdx = line.indexOf("//");
-  let code = line;
-  let comment = "";
-  if (commentIdx >= 0) {
-    code = line.slice(0, commentIdx);
-    comment = line.slice(commentIdx);
-  }
-
-  // tokenize: strings, keywords, numbers
-  const combined =
-    /(["`])(?:\\.|(?!\1).)*\1|\b(?:function|const|return|on|if|else|new|console|log)\b|\b\d+\b/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = combined.exec(code))) {
-    if (m.index > last) {
-      tokens.push(<span key={key++}>{code.slice(last, m.index)}</span>);
-    }
-    const tok = m[0];
-    if (tok.startsWith('"') || tok.startsWith("`")) {
-      tokens.push(
-        <span key={key++} style={{ color: "var(--anon-ok)" }}>{tok}</span>,
-      );
-    } else if (/^\d+$/.test(tok)) {
-      tokens.push(
-        <span key={key++} style={{ color: "var(--anon-warn)" }}>{tok}</span>,
-      );
-    } else {
-      tokens.push(
-        <span key={key++} style={{ color: "var(--anon-accent)" }}>{tok}</span>,
-      );
-    }
-    last = m.index + tok.length;
-  }
-  if (last < code.length) {
-    tokens.push(<span key={key++}>{code.slice(last)}</span>);
-  }
-  if (comment) {
-    tokens.push(
-      <span key={key++} style={{ color: "var(--anon-dim)" }}>{comment}</span>,
-    );
-  }
-  return tokens;
+  const tokens = tokenizeLine(line, "javascript");
+  return (
+    <>
+      {tokens.map((t, i) => (
+        <span key={i} style={{ color: TOKEN_COLORS[t.type] }}>
+          {t.value}
+        </span>
+      ))}
+    </>
+  );
 }

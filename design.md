@@ -66,8 +66,8 @@
 | z-10          | z-10              | Tab bar, status bar, line numbers gutter    |
 | z-20          | z-20              | TopBar navigation, sticky mobile action bar |
 | z-30          | z-30              | Terminal panel, find/replace floating bar   |
-| z-40          | z-40              | Right slide-over drawers (Voice, Files, etc)|
-| z-50          | z-50              | Centered modals (Crypto, Faq, Whiteboard)   |
+| z-40          | z-40              | Right slide-over drawers (Files, etc)       |
+| z-50          | z-50              | Centered modals (Crypto, Faq)               |
 | z-60          | z-60              | Command palette fuzzy finder (⌘K)          |
 | z-100         | z-[100]           | System toast notifications (Sonner Toaster) |
 +---------------+-------------------+---------------------------------------------+
@@ -89,7 +89,6 @@
   - Web Audio speaking pulse rings (`anim-pulse-ring`).
 - **Right Zone**:
   - **Run Button**: `bg-[var(--anon-ok)] text-black px-3 py-1 font-mono text-xs font-semibold` with `⌘↵` indicator.
-  - **Voice Button**: Live mic status icon (`Mic` / `MicOff`) and pulse indicator.
   - **Terminal Toggle**: `⌘\` hotkey button.
   - **Overflow Dropdown Menu**: Accessible secondary tool trigger.
 
@@ -101,17 +100,6 @@
   - Close button: `X` icon button (`h-3 w-3`) rendered with `hover:text-[var(--anon-danger)]` when 2+ files exist.
   - Add Tab button: `+` icon button appending a new file buffer.
 
-### 5.3 WebRTC Voice Panel ([`VoicePanel.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/palette/VoicePanel.tsx))
-- **Width**: Responsive slide-over drawer `w-full max-w-sm sm:max-w-md hairline-l`.
-- **Connection Header**: Displays WebRTC DTLS-SRTP P2P connection badge with real active peer count.
-- **Audio Level Meter**:
-  - 100-step linear level bar reading directly from Web Audio `AnalyserNode`.
-  - Color gradient: Green ($< 30\%$), Amber ($30\% - 65\%$), Red ($> 65\%$).
-- **Controls Grid**:
-  - Large **Hold to Talk** push-to-talk button (`h-16`).
-  - **Mute / Unmute** toggle button with red active badge.
-  - **Deafen / Undeafen** toggle button with amber active badge.
-- **Participant Roster**: Live peer list displaying avatar initials, real speaking state, and mute status.
 
 ### 5.4 Status Bar & Interactive Language Picker ([`StatusBar.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/editor/StatusBar.tsx))
 - **Height**: Fixed 28px (`h-7`), pinned to bottom with `hairline-t`.
@@ -140,36 +128,3 @@
   - Sandboxed iframe (`sandbox="allow-scripts allow-modals allow-forms"`).
   - Live console capture drawer at the bottom displaying intercepted `console.log`, `console.warn`, and `console.error` entries with error badges.
 
-### 5.6 Collaborative Whiteboard Modal ([`WhiteboardModal.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/palette/WhiteboardModal.tsx))
-- **Layout**: Centered modal with responsive full-viewport backdrop (`w-full max-w-5xl h-[85vh]`).
-- **Tool Palette**:
-  - Tools: Pen, Highlighter (with alpha blend), Eraser, Line, Rectangle, Circle.
-  - 8-Color Palette: Obsidian, Dracula Purple, Nord Frost, Neon Green, Amber, Red, White, Gray.
-  - Stroke width selector: Thin (2px), Medium (4px), Thick (8px), Heavy (14px).
-  - Canvas background selector: Grid, Dot matrix, Blank.
-  - Action buttons: Undo, Redo, Clear Canvas, Export PNG.
-- **Touch & Pointer Handling**: `touch-none` canvas wrapper with pointer capture preventing touch screen scrolling while sketching.
-
----
-
-## 6. Mobile & Touch Screen Responsive System
-
-```
-+------------------------------------------+
-|  TopBar: Room Code · Avatars · Voice · ☰  |
-+------------------------------------------+
-|  TabBar: [main.py X] [data.json X] [+]   |
-+------------------------------------------+
-|                                          |
-|            CodeMirror Editor             |
-|                                          |
-+------------------------------------------+
-|  StatusBar: Ln 1, Col 1 · Python · UTF-8 |
-+------------------------------------------+
-|  #mbar: [▶ Run] [💬 Chat] [📁 Files] [⌘] |
-+------------------------------------------+
-```
-
-1. **Touch Target Constraint**: Every button, tab, and icon must maintain a minimum touch area of `44x44px`.
-2. **Mobile Action Bar (`#mbar`)**: Fixed bottom navigation bar on mobile viewports ($< 640\text{px}$) offering one-tap triggers for Run, Chat, Files, Voice, and Palette.
-3. **No Invisible Buttons**: Mobile interfaces strictly employ `opacity-100 sm:opacity-0 sm:group-hover:opacity-100` to ensure full button visibility without requiring desktop mouse hover.

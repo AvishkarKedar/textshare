@@ -126,9 +126,6 @@ export function EditorStage() {
       case "run":
         s.runCode();
         break;
-      case "test":
-        s.runTests();
-        break;
       case "generative":
         s.toggleGenerative();
         break;
@@ -148,9 +145,6 @@ export function EditorStage() {
       case "files":
         s.toggleFiles();
         break;
-      case "rooms":
-        s.toggleBookmarks();
-        break;
       case "status":
         s.toggleStatus();
         break;
@@ -166,12 +160,6 @@ export function EditorStage() {
       case "syntax":
         s.toggleSyntaxHighlight();
         toast.success(s.syntaxHighlight ? "Syntax highlighting off" : "Syntax highlighting on");
-        break;
-      case "whiteboard":
-        s.toggleWhiteboard();
-        break;
-      case "voice":
-        s.toggleVoice();
         break;
       case "tour":
         s.startTour();

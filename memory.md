@@ -64,7 +64,7 @@
 
 ---
 
-### Incident INC-2026-09B: The Missing WebRTC Voice Mesh
+### Incident INC-2026-09B: The Missing WebRTC Voice Mesh *(historical — voice was later removed from the product in v5.4; kept for the engineering record)*
 
 #### 1. Symptoms & Observations
 - The Voice Mesh panel only toggled a local boolean state and displayed animated volume bars driven by `Math.random()`. No real WebRTC peer connections or audio streams were established between devices.
@@ -198,9 +198,4 @@
 1. Verify no dynamic API routes exist in `src/app/api/`.
 2. Check `next.config.ts` has `output: "export"` and `distDir: "dist"`.
 3. Verify all dynamic APIs reside in `functions/api/*.ts`.
-
-### Scenario D: Whiteboard Vector Drawing Stalls on Mobile Touch
-1. Verify canvas container has `touch-action: none` (Tailwind `touch-none`).
-2. Ensure `e.currentTarget.setPointerCapture(e.pointerId)` is called in `onPointerDown`.
-3. Verify `e.clientX - rect.left` and `e.clientY - rect.top` coordinate transformations are calculated relative to `canvas.getBoundingClientRect()`.
 

@@ -8,7 +8,6 @@ import { StatusBar } from "./StatusBar";
 import { ChatSidebar } from "./ChatSidebar";
 import { MobileNav } from "./MobileNav";
 import { TerminalDrawer } from "./TerminalDrawer";
-import { TestRunnerPanel } from "./TestRunnerPanel";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { GoalBanner } from "./GoalBanner";
 import { FindBar } from "./FindBar";
@@ -29,7 +28,6 @@ export function AppShell() {
           </div>
           {s.terminalOpen && <TerminalDrawer />}
         </main>
-        {s.testPanelOpen && <TestRunnerPanel />}
         <ChatSidebar />
       </div>
       <StatusBar />

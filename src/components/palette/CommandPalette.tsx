@@ -17,15 +17,11 @@ import {
   RotateCcw,
   Eye,
   LogOut,
-  FlaskConical,
   Bell,
-  Bookmark,
   Activity,
   Shield,
   HelpCircle,
   CornerDownLeft,
-  Radio,
-  Palette,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -48,10 +44,7 @@ export function CommandPalette() {
     const close = () => s.togglePalette();
     return [
       { id: "run", label: "Run code", kbd: "⌘↵", icon: Play, group: "editor", run: () => { s.runCode(); close(); } },
-      { id: "tests", label: "Run tests (parse test()/describe())", kbd: "⌘⇧T", icon: FlaskConical, group: "editor", run: () => { s.runTests(); close(); } },
       { id: "generative", label: "Generative UI builder", kbd: "⌘⇧G", icon: Sparkles, group: "tools", run: () => { s.toggleGenerative(); close(); } },
-      { id: "whiteboard", label: "Collaborative whiteboard", kbd: "⌘⇧W", icon: Palette, group: "tools", run: () => { s.toggleWhiteboard(); close(); } },
-      { id: "voice", label: s.voiceOpen ? "Close voice panel" : "Voice & screen share mesh", kbd: "⌘⇧V", icon: Radio, group: "tools", run: () => { s.toggleVoice(); close(); } },
       { id: "chat", label: s.chatOpen ? "Close chat" : "Open chat", kbd: "⌘J", icon: MessageSquare, group: "view", run: () => { s.toggleChat(); close(); } },
       { id: "files", label: s.filesOpen ? "Close files" : "Open files", kbd: "⌘B", icon: Files, group: "view", run: () => { s.toggleFiles(); close(); } },
       { id: "preview", label: "Toggle markdown preview", kbd: "⌘⇧P", icon: Eye, group: "view", run: () => { s.toggleMdPreview(); close(); } },
@@ -61,7 +54,6 @@ export function CommandPalette() {
       { id: "terminal", label: "Toggle terminal", kbd: "⌘\\", icon: Terminal, group: "tools", run: () => { s.toggleTerminal(); close(); } },
       { id: "notifications", label: "Open notifications", kbd: "⌘N", icon: Bell, group: "view", run: () => { s.toggleNotifications(); close(); } },
       { id: "invite", label: "Invite others (copy link / QR)", kbd: "⌘I", icon: Link2, group: "share", run: () => { s.toggleInvite(); close(); } },
-      { id: "bookmarks", label: "Open recent rooms", kbd: "⌘⇧R", icon: Bookmark, group: "navigation", run: () => { s.toggleBookmarks(); close(); } },
       { id: "status", label: "Open system status", kbd: "⌘⇧Y", icon: Activity, group: "tools", run: () => { s.toggleStatus(); close(); } },
       { id: "security", label: "Open threat model", kbd: "⌘⇧X", icon: Shield, group: "tools", run: () => { s.toggleSecurity(); close(); } },
       { id: "faq", label: "Open FAQs & Help", kbd: "⌘⇧F", icon: HelpCircle, group: "help", run: () => { s.toggleFaq(); close(); } },

@@ -138,18 +138,36 @@ this does *not* protect against.
 
 ```
 .
-├── functions/api/        Cloudflare Pages Functions (/api/run, /api/crypto, etc.)
-├── public/               static assets served as-is (sw.js, manifest, _headers, icons)
-├── src/                  Next.js App Router application
-│   ├── app/              layout, page, globals.css
-│   ├── components/       landing, editor, modals, drawers, panels
-│   └── lib/              store, yjs, crypto, presence, runner
-├── tests/                Vitest test suite
-├── worker/               Cloudflare Worker relay source (Durable Objects)
-├── relay/                Standalone Node.js / Bubblewrap relay server
-├── LICENSE               MIT License
-└── README.md
+├── src/                     the Next.js App Router application (the whole UI)
+│   ├── app/                 layout.tsx, page.tsx, globals.css (design tokens + 5 themes)
+│   ├── components/
+│   │   ├── landing/         hero, animated demo, use cases, FAQ, footer
+│   │   ├── editor/          app shell, top bar, tabs, editor stage, chat, terminal, status bar
+│   │   ├── palette/         modals & drawers (invite, settings, history, files, generative,
+│   │   │                    browser, crypto, status, security, privacy/terms, FAQ, entry dialog…)
+│   │   └── ui/              shadcn-style primitives
+│   └── lib/                 store (zustand), relay (binary WS protocol + E2EE),
+│                            session (Yjs ↔ store bridge), detect, highlight, themes
+├── functions/api/           Cloudflare Pages Functions — the real /api/run, /api/crypto,
+│                            /api/status, /api/generate edge handlers (production API)
+├── relay/                   self-hosted Node.js relay: WebSocket rooms + Bubblewrap code
+│                            sandbox (deploy guide, Caddy/nginx/systemd/Docker configs inside)
+├── worker/                  optional Cloudflare Worker fallback relay (Durable Objects)
+├── mini-services/           anonshare-sync — small local sync service for development
+├── admin/                   standalone relay admin dashboard (stats, moderation)
+├── scripts/                 live verification & ops scripts (relay probes, runner matrix, e2e)
+├── tests/                   Vitest suite (crypto contract, language detection, registries)
+├── public/                  static assets (sw.js, manifest, _headers, robots, sitemap, icons)
+├── prisma/                  database schema for the local dev database
+├── docs (root .md files)    PRD, Architecture, SECURITY policy, COMPLIANCE, CONTRIBUTING,
+│                            design/tasks/rules for agents, COMMANDS protocol
+└── next.config.ts           static export config (+ dev-only /api rewrites)
 ```
+
+**Where things happen:** UI entry is `src/app/page.tsx` → `src/lib/store.ts` (state) →
+`src/lib/session.ts` (Yjs) → `src/lib/relay.ts` (encrypted WebSocket). Code execution flows
+`runCode()` → `/api/run` → `functions/api/run.ts` → the relay's sandbox. Every layer is
+open source in this repository.
 
 ---
 
@@ -158,8 +176,14 @@ this does *not* protect against.
 ```bash
 npm install
 npm run relay        # starts the sync relay + code runner on :8787
-npm run dev           # Next.js app on :3000 (auto-targets localhost:8787)
+node scripts/dev-api-shim.js   # (dev only) mirrors the edge /api/* functions on :8788
+npm run dev           # Next.js app on :3000 (auto-targets localhost:8787,
+                      # and dev-only rewrites proxy /api/* → :8788)
 ```
+
+The dev shim stands in for the Cloudflare Pages Functions so the code runner,
+status probe, and crypto explainer work locally exactly as they do in
+production. It is never part of the build.
 
 The relay needs Node 18+. The code runner uses bubblewrap + prlimit when
 available (`/usr/bin/bwrap`, `/usr/bin/prlimit`); without them it runs without

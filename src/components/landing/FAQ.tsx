@@ -4,41 +4,12 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { useAnon } from "@/lib/store";
 import { toast } from "sonner";
+import { FAQ_DATA } from "@/components/palette/FaqModal";
 
-const FAQS = [
-  {
-    q: "Is it really end-to-end encrypted?",
-    a: "Yes. The 6-character code (plus optional password) is run through PBKDF2-SHA256 at 600,000 rounds with two different salts — one derives your AES-GCM 256 key (never leaves the browser), the other derives an auth token (the relay only stores SHA-256 of it). The relay forwards opaque ciphertext; it cannot read your code or chat.",
-  },
-  {
-    q: "What happens when everyone leaves?",
-    a: "The room's Durable Object tracks the last active timestamp. Once no one is connected for 10 minutes, 1 hour, or 24 hours (whichever TTL the owner chose), the entire room — code, chat, files, history — is erased from storage. There is no recovery.",
-  },
-  {
-    q: "Do I need an account?",
-    a: "Never. No email, no password, no cookies beyond a single owner token in localStorage that grants you lock / suspend / delete rights for that room only. Clear your browser storage and the token is gone — the room keeps living until its TTL expires.",
-  },
-  {
-    q: "Is the code-runner sandboxed?",
-    a: "On the operator's hosted relay, code runs inside a Bubblewrap-sealed Linux namespace with no network, a real memory cap, and tmpfs only. Eight languages run natively (Python, JS, C, C++, Java, Rust, Go, bash) — no external code-execution service is involved. Don't paste secrets regardless.",
-  },
-  {
-    q: "Can the owner lock or delete the room?",
-    a: "Yes. The owner has a 256-bit token (kept client-side) that grants lock / suspend / delete / change-TTL rights. Locking makes the room read-only for everyone. There's no recovery if you lose the owner token, but the TTL still applies.",
-  },
-  {
-    q: "What about rate limits and abuse?",
-    a: "Each IP is throttled by a per-scope Limiter Durable Object: 300 requests/min default, 20 creates/min, 8 auth attempts/min (to slow password guessing). Admins can override these at runtime via the admin dashboard.",
-  },
-  {
-    q: "How many people can be in a room?",
-    a: "Up to 60 concurrent connections per room. Beyond that, new joins get a 429. All sync traffic is sealed end-to-end (AES-GCM) and flows through the low-latency websocket relay, so capacity depends on room connections, not peer-to-peer links.",
-  },
-  {
-    q: "Is there an admin who can read my room?",
-    a: "No. Admins can suspend, lock, or delete rooms (moderation only) but cannot decrypt contents — they don't have the AES key. The auth token they could see is only a SHA-256 hash. Admin login itself is rate-limited and fail-closed if the secret is unset.",
-  },
-];
+/** Curated subset shown inline; the full set lives in the searchable modal. */
+const INLINE_FAQS = FAQ_DATA.filter((f) =>
+  ["e2e", "ttl", "account", "runner", "owner", "limits", "admin", "p2p"].includes(f.id),
+);
 
 export function FAQ() {
   const [open, setOpen] = useState<number | null>(0);
@@ -58,15 +29,17 @@ export function FAQ() {
               honestly answered.
             </h2>
             <p className="anon-sans mt-4 text-sm leading-relaxed anon-mut">
-              Including the ones most products dodge. See the full threat model
-              in our security write-up or search across all topics in the interactive modal.
+              Including the ones most products dodge. Every answer below is the
+              same one you&apos;ll get from the code — no marketing layer. See
+              all {FAQ_DATA.length} questions with search and category filters
+              in the interactive modal, or the full security write-up.
             </p>
             <div className="mt-4 flex flex-col gap-2 items-start">
               <button
                 onClick={() => toggleFaq()}
                 className="anon-mono inline-flex items-center gap-1.5 text-xs bg-[var(--anon-panel)] hairline px-3 py-1.5 hover:bg-[var(--anon-raise)] hover:text-[var(--anon-fg)] transition-colors cursor-pointer"
               >
-                <span>🔍</span> Search & Category Filters (⌘⇧F) →
+                <span>🔍</span> Search all {FAQ_DATA.length} questions (⌘⇧F) →
               </button>
               <button
                 onClick={() => {
@@ -80,10 +53,10 @@ export function FAQ() {
             </div>
           </div>
           <div className="hairline">
-            {FAQS.map((f, i) => {
+            {INLINE_FAQS.map((f, i) => {
               const isOpen = open === i;
               return (
-                <div key={i} className="hairline-b last:border-b-0">
+                <div key={f.id} className="hairline-b last:border-b-0">
                   <button
                     onClick={() => setOpen(isOpen ? null : i)}
                     className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition-colors hover:bg-[var(--anon-raise)]"
