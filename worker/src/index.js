@@ -121,7 +121,7 @@ const CORS = {
 // matches the production Pages site, the admin dashboard, and local dev.
 // Non-browser clients (curl, servers) are unaffected by CORS.
 const DEFAULT_ALLOWED_ORIGINS =
-  'https://code.avishkark.in,https://admin.code.avishkark.in,http://localhost:3000,http://127.0.0.1:3000'
+  'https://code.avishkark.in,https://admincode.avishkark.in,https://admin.code.avishkark.in,http://localhost:3000,http://127.0.0.1:3000'
 
 function allowedOrigins(env) {
   const raw = (env && env.ALLOWED_ORIGINS) || DEFAULT_ALLOWED_ORIGINS

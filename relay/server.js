@@ -120,7 +120,7 @@ const errorFrame = reason => textFrame(T_ERROR, reason)
 // legacy open policy. Default allowlist = production sites + local dev.
 // Non-browser clients (curl, server-to-server) are unaffected by CORS.
 const DEFAULT_ALLOWED_ORIGINS =
-  'https://code.avishkark.in,https://admin.code.avishkark.in,http://localhost:3000,http://127.0.0.1:3000'
+  'https://code.avishkark.in,https://admincode.avishkark.in,https://admin.code.avishkark.in,http://localhost:3000,http://127.0.0.1:3000'
 const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS || DEFAULT_ALLOWED_ORIGINS)
   .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
 const CORS_OPEN = ALLOWED_ORIGINS.includes('*')

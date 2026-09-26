@@ -1,6 +1,6 @@
 # Admin dashboard setup
 
-This dashboard is a separate static site from the main app, meant to be deployed on its own subdomain (`admin.code.avishkark.in`) so it never shares a deploy, cache, or blast radius with the public site. Everything in this folder is plain HTML/CSS/JS - no build step.
+This dashboard is a separate static site from the main app, meant to be deployed on its own subdomain (`admincode.avishkark.in`) so it never shares a deploy, cache, or blast radius with the public site. Everything in this folder is plain HTML/CSS/JS - no build step.
 
 ## 1. Set the admin password on the relay (required)
 
@@ -26,12 +26,13 @@ This has to be a **second, separate** Pages project from the main site (the main
 
 1. Cloudflare dashboard -> Workers & Pages -> Create -> Pages -> Connect to Git -> same `textshare` repo.
 2. Build settings: **no build command**, output directory `admin`.
-3. Deploy, then go to the new project's **Custom domains** and add `admin.code.avishkark.in`.
-4. Cloudflare will prompt you to add the DNS record automatically if `code.avishkark.in`'s zone is already on Cloudflare (it is).
+3. Deploy, then go to the new project's **Custom domains** and add `admincode.avishkark.in`.
+4. Cloudflare will prompt you to add the DNS record automatically if `avishkark.in`'s zone is already on Cloudflare (it is).
+5. CORS: the relay's origin allowlist must include the dashboard's origin. The defaults in `relay/server.js` and `worker/src/index.js` already include `https://admincode.avishkark.in` (and the `admin.code` variant). If you serve the dashboard from any other origin, set `ALLOWED_ORIGINS` on the relay (env var) / Worker (`wrangler var`) to include it - otherwise the browser blocks the login request at the preflight.
 
 ## 3. First login
 
-1. Open `https://admin.code.avishkark.in`.
+1. Open `https://admincode.avishkark.in`.
 2. On first visit it asks for your relay's base URL - enter your Worker's URL (either the `*.workers.dev` one or a custom domain if you've mapped one, e.g. `https://sync.avishkark.in`). This is stored only in that browser's `localStorage`.
 3. Enter the `ADMIN_PASSWORD` you set in step 1.
 
