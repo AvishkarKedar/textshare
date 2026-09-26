@@ -67,6 +67,9 @@
 | M-17          | Admin Security &  | Rotated relay & worker ADMIN_PASSWORD;      | relay/server.js, .env,      |
 |               | CORS Whitelisting | whitelisted https://admincode.avishkark.in. | worker/wrangler.toml        |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-18          | Automatic Relay   | Automatic failover + room self-heal; fixed  | relay.ts, session.ts,       |
+|               | Failover & WS Fix | Worker CORS dropping 101 WebSocket handle.  | store.ts, worker/src/index  |
++---------------+-------------------+---------------------------------------------+-----------------------------+
 ```
 
 ---
