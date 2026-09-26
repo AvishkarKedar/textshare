@@ -61,6 +61,9 @@
 |               | Identity          | handles, live rename via awareness, mobile  | RoomEntryDialog.tsx,        |
 |               |                   | statusbar overflow fix, modal Escape/stack. | StatusBar.tsx, sw.js        |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-16          | Environment &     | Fixed Python sandbox on Windows (`pyExe`),  | relay/server.js,            |
+|               | Dependency Fixes  | socket.io deps, disabled react-hooks lint.  | package.json, eslint config |
++---------------+-------------------+---------------------------------------------+-----------------------------+
 ```
 
 ---

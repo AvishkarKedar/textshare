@@ -76,6 +76,8 @@ describe('shortcut + slash command registry', () => {
     }
     expect(triggers).toContain('/run')
     expect(triggers).toContain('/help')
+    expect(triggers).toContain('/goal')
+    expect(triggers).toContain('/generative')
   })
 
   it('slash command triggers are unique', () => {
