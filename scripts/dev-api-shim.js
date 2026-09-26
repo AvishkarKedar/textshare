@@ -34,6 +34,12 @@ const server = http.createServer(async (req, res) => {
           }),
         });
         const data = await proxyRes.json();
+        // Mirror the production edge function contract (functions/api/run.ts
+        // maps the relay's executionTime → durationMs); the client terminal
+        // reads durationMs, and without this the dev drawer shows "undefinedms".
+        if (data && typeof data === "object") {
+          data.durationMs = data.executionTime ?? data.durationMs ?? 0;
+        }
         res.writeHead(proxyRes.status, { "Content-Type": "application/json" });
         res.end(JSON.stringify(data));
       } catch (err) {

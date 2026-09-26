@@ -73,7 +73,7 @@ flowchart TB
 ### 2.1 Frontend & Application Architecture
 - **Framework Core**: Next.js 16.3.5 utilizing React 19 Client Components (`"use client"`).
 - **Compilation Mode**: Static Export (`output: "export"`, `distDir: "dist"` in `next.config.ts`).
-- **State Store ([`store.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/store.ts))**:
+- **State Store ([`store.ts`](./src/lib/store.ts))**:
   - Centralized reactive state managed via Zustand 5 with immutable state updates.
   - Slice architecture covering: Editor Tabs, Participants, Room Lifecycle, Terminal Lines, Chat Messages, WebRTC Voice State, Notifications, Bookmarks, and UI Overlays.
 - **Offline & Storage Strategy**:
@@ -137,7 +137,7 @@ sequenceDiagram
 
 ---
 
-### 2.4 Binary Relay Protocol & Frame Specifications ([`relay/server.js`](file:///c:/Users/Dell/Desktop/textshare/relay/server.js))
+### 2.4 Binary Relay Protocol & Frame Specifications ([`relay/server.js`](./relay/server.js))
 
 The relay server communicates with clients over binary WebSocket connections utilizing 1-byte opcode headers followed by payload bytes:
 
@@ -166,7 +166,7 @@ The relay server communicates with clients over binary WebSocket connections uti
 
 ---
 
-### 2.5 Real-Time WebRTC Voice Mesh Protocol ([`voice.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/voice.ts))
+### 2.5 Real-Time WebRTC Voice Mesh Protocol ([`voice.ts`](./src/lib/voice.ts))
 
 ```mermaid
 sequenceDiagram

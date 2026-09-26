@@ -70,6 +70,12 @@
 | M-18          | Automatic Relay   | Automatic failover + room self-heal; fixed  | relay.ts, session.ts,       |
 |               | Failover & WS Fix | Worker CORS dropping 101 WebSocket handle.  | store.ts, worker/src/index  |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-19          | Full-Stack Audit  | Generated-UI files now route through Yjs   | store.ts,                   |
+|               | & Dev-Parity Fix  | (peers receive them, no tab-bar rollback);  | scripts/dev-api-shim.js,    |
+|               |                   | dev shim maps executionTime→durationMs;     | functions/api/status.ts,    |
+|               |                   | /api/status version synced to 5.5.0;        | AGENTS.md, tests/           |
+|               |                   | orphaned test scripts removed; docs synced. |                             |
++---------------+-------------------+---------------------------------------------+-----------------------------+
 ```
 
 ---
@@ -77,14 +83,14 @@
 ## 2. Detailed Subsystem Task Verification Status
 
 ### 2.1 Editor & Collaboration Subsystem
-- [x] **Multi-File Tab Bar ([`TabBar.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/editor/TabBar.tsx))**:
+- [x] **Multi-File Tab Bar ([`TabBar.tsx`](./src/components/editor/TabBar.tsx))**:
   - [x] File addition, deletion, and active tab switching.
   - [x] Tab close buttons (`X`) rendered for multiple files.
   - [x] Local export to ZIP via `buildZip()` without server dependency.
-- [x] **Syntax Engine ([`highlight.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/highlight.ts))**:
+- [x] **Syntax Engine ([`highlight.ts`](./src/lib/highlight.ts))**:
   - [x] Real-time tokenization for 15+ languages.
   - [x] Paste auto-detection heuristics for Python, Rust, TS, Go, C++, SQL.
-- [x] **Time Machine History ([`HistoryDrawer.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/palette/HistoryDrawer.tsx))**:
+- [x] **Time Machine History ([`HistoryDrawer.tsx`](./src/components/palette/HistoryDrawer.tsx))**:
   - [x] Snapshot scrubbing slider with side-by-side diffing.
   - [x] Direct "Revert to here" state restoration.
   - [x] "Save as tab" snapshot branching.
@@ -96,7 +102,7 @@
   - [x] `/api/crypto` — PBKDF2 derivation benchmarking.
   - [x] `/api/status` — Real-time health diagnostic metrics.
   - [x] `/api/generate` — Template fallback provider.
-- [x] **Security Headers ([`public/_headers`](file:///c:/Users/Dell/Desktop/textshare/public/_headers))**:
+- [x] **Security Headers ([`public/_headers`](./public/_headers))**:
   - [x] Strict CSP with `'unsafe-inline'` for React hydration.
   - [x] Static immutable caching for `/_next/static/*`.
 

@@ -1616,10 +1616,18 @@ export const useAnon = create<AnonState>()(
         const s = get();
         const gen = s.generatedUis.find((g) => g.id === id);
         if (!gen) return;
-        // insert as a new file
+        const name = `generated-${gen.id}.html`;
+        if (sessionActive()) {
+          // Route through the session so the file lands in the E2EE document:
+          // peers receive it and mirrorFiles() keeps it in the tab bar.
+          const newId = addYFile(name, "html", gen.html);
+          set({ activeFileId: newId, generativeOpen: false });
+          return;
+        }
+        // insert as a new file (offline / no session)
         const newId = "f" + (s.files.length + 1);
         set({
-          files: [...s.files, { id: newId, name: `generated-${gen.id}.html`, language: "html", content: gen.html }],
+          files: [...s.files, { id: newId, name, language: "html", content: gen.html }],
           activeFileId: newId,
           generativeOpen: false,
         });

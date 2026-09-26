@@ -77,7 +77,7 @@
 
 ## 5. Exhaustive Component Layout Specifications
 
-### 5.1 TopBar Navigation ([`TopBar.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/editor/TopBar.tsx))
+### 5.1 TopBar Navigation ([`TopBar.tsx`](./src/components/editor/TopBar.tsx))
 - **Height**: Fixed 44px (`h-11`), pinned to top with `hairline-b`.
 - **Left Zone**:
   - Logo vector with monospace brand name.
@@ -92,7 +92,7 @@
   - **Terminal Toggle**: `⌘\` hotkey button.
   - **Overflow Dropdown Menu**: Accessible secondary tool trigger.
 
-### 5.2 Multi-File TabBar ([`TabBar.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/editor/TabBar.tsx))
+### 5.2 Multi-File TabBar ([`TabBar.tsx`](./src/components/editor/TabBar.tsx))
 - **Height**: 36px (`h-9`), pinned below TopBar with `hairline-b`.
 - **Tab Layout**:
   - Inactive tab: `px-3 py-1.5 font-mono text-xs text-[var(--anon-mut)] hairline-r hover:bg-[var(--anon-raise)]`.
@@ -101,7 +101,7 @@
   - Add Tab button: `+` icon button appending a new file buffer.
 
 
-### 5.4 Status Bar & Interactive Language Picker ([`StatusBar.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/editor/StatusBar.tsx))
+### 5.4 Status Bar & Interactive Language Picker ([`StatusBar.tsx`](./src/components/editor/StatusBar.tsx))
 - **Height**: Fixed 28px (`h-7`), pinned to bottom with `hairline-t`.
 - **Left Zone**:
   - Relay connection health indicator with pulsating color dot (`synced`, `connected`, `reconnecting`, `offline`).
@@ -115,7 +115,7 @@
   - Live room TTL remaining timer (`10m`, `1h`, `24h`).
   - Live line, column, and selection counter (`ln X, col Y · Z selected`).
 
-### 5.5 Live Web & Markdown Preview Pane ([`MarkdownPreview.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/editor/MarkdownPreview.tsx))
+### 5.5 Live Web & Markdown Preview Pane ([`MarkdownPreview.tsx`](./src/components/editor/MarkdownPreview.tsx))
 - **Width**: Responsive side split pane (`flex-1 min-h-0 hairline-l`).
 - **Toolbar**:
   - Mode title (`web preview`, `markdown preview`, `svg preview`).

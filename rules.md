@@ -10,7 +10,7 @@
 
 ### 🚨 Rule 1: The CSP React Hydration Invariant (CRITICAL)
 - **Problem Statement**: `anonshare` is configured as a Next.js 16 static export (`output: "export"` in `next.config.ts`). Next.js static exports output inline `<script>` tags in `index.html` to inject the React hydration payload (`self.__next_f.push(...)`).
-- **Invariant**: The `Content-Security-Policy` header in [`public/_headers`](file:///c:/Users/Dell/Desktop/textshare/public/_headers) **MUST ALWAYS** include `'unsafe-inline'` inside `script-src` and `style-src`.
+- **Invariant**: The `Content-Security-Policy` header in [`public/_headers`](./public/_headers) **MUST ALWAYS** include `'unsafe-inline'` inside `script-src` and `style-src`.
 - **Why this fails if modified**: If an agent removes `'unsafe-inline'` in an attempt to make the CSP "stricter", the browser will silently trigger a `securitypolicyviolation` on `index.html` inline scripts. External chunks load, but React never attaches to the DOM (`reactKeys: []` on all elements). **Every button, drawer, modal, and accordion on production becomes dead with ZERO console errors.**
 
 #### ❌ PROHIBITED (Breaks React Hydration):
@@ -87,7 +87,7 @@ functions/api/crypto.ts       <-- NATIVE CLOUDFLARE PAGES FUNCTION
 ---
 
 ### 🛡️ Rule 5: Strict TypeScript Compilation (Zero Error Tolerance)
-- **Invariant**: `typescript.ignoreBuildErrors` in [`next.config.ts`](file:///c:/Users/Dell/Desktop/textshare/next.config.ts) must **ALWAYS** remain omitted or set to `false`.
+- **Invariant**: `typescript.ignoreBuildErrors` in [`next.config.ts`](./next.config.ts) must **ALWAYS** remain omitted or set to `false`.
 - **Enforcement**: Before every commit, execute `npx tsc --noEmit`. The command must exit with code 0.
 
 ---

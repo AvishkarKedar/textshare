@@ -81,7 +81,7 @@
 - Signaling events were not implemented on the sync relay server.
 
 #### 3. Permanent Fix & Verification
-- Created [`src/lib/voice.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/voice.ts) with:
+- Created [`src/lib/voice.ts`](./src/lib/voice.ts) with:
   - Polite peer negotiation algorithm resolving glare collisions.
   - Asymmetric listener-mode transceivers (`recvonly`).
   - Web Audio `AnalyserNode` monitoring with 0–100% volume calculation and VAD ($> 20$).

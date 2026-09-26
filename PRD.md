@@ -135,7 +135,7 @@ $$\text{PasswordString} = \text{RoomCode} \parallel \text{":"} \parallel \text{U
 
 ### 4.2 Multi-File Editor & Language Engine Specifications
 
-#### 4.2.1 Multi-File Tab Management ([`TabBar.tsx`](file:///c:/Users/Dell/Desktop/textshare/src/components/editor/TabBar.tsx))
+#### 4.2.1 Multi-File Tab Management ([`TabBar.tsx`](./src/components/editor/TabBar.tsx))
 - **File Buffer Model**:
   ```ts
   export interface EditorFile {
@@ -151,7 +151,7 @@ $$\text{PasswordString} = \text{RoomCode} \parallel \text{":"} \parallel \text{U
   - Adding a new tab defaults to `untitled-{n}.js` and focuses the editor immediately.
   - Export Project as ZIP (`⌘⇧E`) executes client-side via `buildZip()` and triggers an immediate browser file download.
 
-#### 4.2.2 Language Syntax Engine & Grammar Tokenizer ([`highlight.ts`](file:///c:/Users/Dell/Desktop/textshare/src/lib/highlight.ts))
+#### 4.2.2 Language Syntax Engine & Grammar Tokenizer ([`highlight.ts`](./src/lib/highlight.ts))
 Tokenizes 15+ grammars using high-speed regular expressions into categorized syntax tokens:
 ```ts
 export interface SyntaxToken {
