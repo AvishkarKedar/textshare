@@ -56,6 +56,28 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (url.pathname === "/generate" && req.method === "POST") {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", () => {
+      try {
+        const parsed = JSON.parse(body || "{}");
+        const prompt = (parsed.prompt || "Component").trim();
+        const html = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>${prompt}</title><style>body{background:#000;color:#fff;font-family:sans-serif;padding:20px;display:flex;justify-content:center;align-items:center;min-height:90vh;}.box{background:#111;border:1px solid #333;padding:24px;max-width:400px;width:100%;}button{background:#3b82f6;color:#fff;border:none;padding:8px 16px;margin-top:12px;cursor:pointer;}</style></head>
+<body><div class="box"><h3>${prompt}</h3><p style="color:#888;font-size:12px;margin:8px 0;">Dev shim generative component preview.</p><button onclick="alert('Clicked!')">Execute</button></div></body>
+</html>`;
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, html, prompt, model: "dev-shim-template" }));
+      } catch (err) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
   res.writeHead(404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ error: "not_found" }));
 });

@@ -725,10 +725,15 @@ async function ensurePythonBundle() {
     console.log('[relay] python bundle: disabled (PY_BOOTSTRAP_PACKAGES empty)')
     return
   }
+  const pyExe = process.platform === 'win32'
+    ? (fs.existsSync('C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python312\\python.exe')
+        ? 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python312\\python.exe'
+        : 'python')
+    : 'python3'
   try {
     const importNames = JSON.stringify(PY_BUNDLE.map((p) => PIP_TO_IMPORT[p] || p))
     const probe = await runLocalProcess(
-      'python3',
+      pyExe,
       ['-c', `import importlib.util, json\nmissing = [m for m in ${importNames} if importlib.util.find_spec(m) is None]\nprint(json.dumps(missing))`],
       '', 20000
     )
@@ -746,7 +751,7 @@ async function ensurePythonBundle() {
     if (!toInstall.length) return
     console.log('[relay] python bundle: installing', toInstall.join(', '), '(one-time, cached after)')
     const install = await runLocalProcess(
-      'python3',
+      pyExe,
       ['-m', 'pip', 'install', '--user', '--break-system-packages', '--no-input', '--disable-pip-version-check', ...toInstall],
       '', 240000
     )
