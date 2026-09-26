@@ -192,6 +192,14 @@ set((s) => ({ files: [...s.files, newFile] }));
 
 ---
 
+### 🔤 Rule 16: Turbopack Google Font Variable Font Configuration
+- **Invariant**:
+  - When importing variable Google Fonts (e.g., `JetBrains_Mono`, `Geist`, `Geist_Mono`) via `next/font/google` with Turbopack, **NEVER** specify static weight arrays (`weight: ["400", "500", "600", "700"]`).
+  - Specifying static weight arrays on variable fonts generates multiple query parameters, causing Turbopack's static export font replacer to crash on CI with: `Error: Module not found: Can't resolve '@vercel/turbopack-next/internal/font/google/font' (next/font/google queries have exactly one entry)`.
+  - Always configure variable fonts with `subsets: ["latin"]` alone.
+
+---
+
 ## 8. Verification & Deployment Standard
 
 ### 🚀 Pre-Commit & Deployment Checklist:

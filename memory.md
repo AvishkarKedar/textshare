@@ -32,6 +32,9 @@
 | INC-2026-09F  | Reveal.tsx Hydration    | framer-motion useReducedMotion() returned   | Added mounted state gate to   |
 |               | Mismatch                | null on SSR vs boolean on client.           | guarantee identical 1st paint.|
 +---------------+-------------------------+---------------------------------------------+-------------------------------+
+| INC-2026-09G  | Turbopack Font Query    | Passing static weight array to variable font| Configured JetBrains_Mono with|
+|               | Resolution Error on CI  | JetBrains_Mono crashed Turbopack replacer.  | subsets: ['latin'] as variable|
++---------------+-------------------------+---------------------------------------------+-------------------------------+
 ```
 
 ---
