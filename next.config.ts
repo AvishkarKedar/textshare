@@ -20,6 +20,11 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   reactStrictMode: false,
+  // Dev server cross-origin guard: accessing `next dev` via 127.0.0.1 (instead
+  // of localhost) makes Next 16 block its own dev resources (fonts, chunks) —
+  // the page then renders as static HTML that never hydrates, with zero
+  // console errors. Allow both loopback hosts in development.
+  ...(dev ? { allowedDevOrigins: ["localhost", "127.0.0.1"] } : {}),
   ...(dev
     ? {
         async rewrites() {

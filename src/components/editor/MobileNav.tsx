@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, FolderOpen, MessageSquare, Undo2, Redo2, MoreHorizontal } from "lucide-react";
+import { FolderOpen, MessageSquare, Undo2, Redo2, MoreHorizontal } from "lucide-react";
 import { useAnon } from "@/lib/store";
 
 export function MobileNav() {
@@ -10,18 +10,6 @@ export function MobileNav() {
 
   return (
     <>
-      {/* floating action button — Run (sits above the accessory keys bar) */}
-      <button
-        onClick={() => s.runCode()}
-        disabled={s.running}
-        className="fixed right-3 z-30 inline-flex h-12 w-12 items-center justify-center bg-[var(--anon-accent)] text-[var(--anon-accent-fg)] shadow-lg shadow-black/40 transition-transform active:scale-95 disabled:opacity-60 md:hidden"
-        style={{ bottom: "calc(5.75rem + env(safe-area-inset-bottom, 0px))" }}
-        title="Run code"
-        aria-label="Run code"
-      >
-        <Play className={`h-5 w-5 ${s.running ? "animate-spin" : ""}`} />
-      </button>
-
       {/* bottom nav — respects the home-indicator safe area on iOS */}
       <nav
         className="safe-bottom fixed inset-x-0 bottom-0 z-20 flex items-stretch hairline-t anon-raise md:hidden"

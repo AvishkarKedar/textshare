@@ -115,7 +115,14 @@
   - Live room TTL remaining timer (`10m`, `1h`, `24h`).
   - Live line, column, and selection counter (`ln X, col Y · Z selected`).
 
-### 5.5 Live Web & Markdown Preview Pane ([`MarkdownPreview.tsx`](./src/components/editor/MarkdownPreview.tsx))
+### 5.5 Mobile Navigation & Accessory Keys ([`MobileNav.tsx`](./src/components/editor/MobileNav.tsx))
+- **Visibility**: `md:hidden` — phones only; the layout collapses to a fixed bottom stack.
+- **Bottom nav** (48px, `safe-bottom` respects the iOS home-indicator inset): `files`, `chat`, `undo`, `redo`, `more` (command palette).
+- **Accessory keys bar** (40px, above the nav): `{ } ( ) [ ] ; = " ' / Tab =>` — 40px tap targets; Tab inserts a real `\t` and dispatches a synthetic `input` event so the edit reaches the E2EE sync.
+- **Run on mobile**: the ONLY Run control is the TopBar Run button (always visible ≥320px). The old floating Run FAB was removed in M-20 — it permanently covered ~4 editor lines plus the status bar and duplicated the TopBar control.
+- **AppShell spacer**: `calc(88px + env(safe-area-inset-bottom))` reserves room for the two fixed bars so the StatusBar stays visible.
+
+### 5.6 Live Web & Markdown Preview Pane ([`MarkdownPreview.tsx`](./src/components/editor/MarkdownPreview.tsx))
 - **Width**: Responsive side split pane (`flex-1 min-h-0 hairline-l`).
 - **Toolbar**:
   - Mode title (`web preview`, `markdown preview`, `svg preview`).

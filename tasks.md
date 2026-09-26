@@ -76,6 +76,14 @@
 |               |                   | /api/status version synced to 5.5.0;        | AGENTS.md, tests/           |
 |               |                   | orphaned test scripts removed; docs synced. |                             |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-20          | Mobile UX &       | Removed the redundant fixed Run FAB (it     | MobileNav.tsx,              |
+|               | Failover Audit    | covered ~4 editor lines + status bar; Run   | next.config.ts,             |
+|               | Round 2           | stays in TopBar, verified at 320–390px);    | design.md, tasks.md,        |
+|               |                   | allowedDevOrigins for 127.0.0.1 dev trap;   | workspace preview copy      |
+|               |                   | failover + room self-heal live-verified     |                             |
+|               |                   | (2 peers, content kept, post-failover       |                             |
+|               |                   | edits sync); ownerless-room race documented. |                             |
++---------------+-------------------+---------------------------------------------+-----------------------------+
 ```
 
 ---
