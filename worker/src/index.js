@@ -148,6 +148,12 @@ function corsHeadersFor(request, env) {
 // the edge so every response (including Durable Object passthroughs) is
 // consistent.
 function applyCors(request, env, res) {
+  // WebSocket upgrades must pass through untouched: reconstructing the
+  // response with new Response(res.body, ...) drops the `webSocket` handle
+  // from 101 responses, which kills the handshake (the client sees a 500
+  // and every room connection through the Worker fails). WebSocket traffic
+  // is not subject to CORS anyway — the room's own auth token gates it.
+  if (res.webSocket || res.status === 101) return res
   const headers = new Headers(res.headers)
   headers.delete('access-control-allow-origin')
   for (const [k, v] of Object.entries(corsHeadersFor(request, env))) headers.set(k, v)

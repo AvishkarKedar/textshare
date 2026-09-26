@@ -5,10 +5,9 @@ import { persist } from "zustand/middleware";
 import type { ThemeId } from "./themes";
 import type { RoomExistsInfo, RoomStateFrame, ConnState } from "./relay";
 import {
-  createRoom as relayCreateRoom,
-  joinRoom as relayJoinRoom,
-  roomInfo as relayRoomInfo,
-  relayHost,
+  createRoomWithFailover as relayCreateRoomFO,
+  joinRoomWithFailover as relayJoinRoomFO,
+  roomInfoWithFailover as relayRoomInfoFO,
   storeOwnerToken,
   loadOwnerToken,
   clearOwnerToken,
@@ -881,7 +880,8 @@ export const useAnon = create<AnonState>()(
           bootError: "",
           booting: true,
         });
-        const info = await relayRoomInfo(relayHost(), c);
+        const found = await relayRoomInfoFO(c);
+        const info = found?.info || null;
         set({ booting: false });
         if (!info) {
           set({ entryMode: null, bootError: "" });
@@ -934,7 +934,7 @@ export const useAnon = create<AnonState>()(
 
         try {
           if (mode === "create") {
-            const res = await relayCreateRoom(relayHost(), {
+            const res = await relayCreateRoomFO({
               password: s.entryPassword,
               ttl: s.entryTtl,
             });
@@ -950,6 +950,7 @@ export const useAnon = create<AnonState>()(
               owner: res.owner,
               created: true,
               hasPassword: !!s.entryPassword,
+              ttl: s.entryTtl,
               displayName: resolvedName,
               color: s.color,
             });
@@ -971,7 +972,7 @@ export const useAnon = create<AnonState>()(
             return;
           }
           const owner = loadOwnerToken(code);
-          const res = await relayJoinRoom(relayHost(), code, s.entryPassword, owner);
+          const res = await relayJoinRoomFO(code, s.entryPassword, owner);
           if (!res.ok) {
             set({ booting: false, bootError: describeRoomError(res) });
             return;
@@ -983,6 +984,7 @@ export const useAnon = create<AnonState>()(
             owner: owner || null,
             created: false,
             hasPassword: !!(s.entryInfo?.hasPassword),
+            ttl: "1h",
             displayName: resolvedName,
             color: s.color,
           });

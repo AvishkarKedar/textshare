@@ -45,6 +45,34 @@ export const TTLS = ["10m", "1h", "24h"] as const;
 export const DEFAULT_RELAY = "relay.avishkark.in";
 export const FALLBACK_RELAY = "textshare-sync.avishkarkedar.workers.dev";
 
+/**
+ * Ordered relay candidates for this environment: the home relay first, then
+ * the backup Worker. Deduplicated; a custom ?relay= override stays first so
+ * failover still has somewhere to go. Used by create/join and by the live
+ * reconnect loop in RelayClient.
+ */
+export function relayCandidates(home?: string): string[] {
+  const first = home || relayHost();
+  const list = [first];
+  if (FALLBACK_RELAY && !list.includes(FALLBACK_RELAY)) list.push(FALLBACK_RELAY);
+  return list;
+}
+
+/** Cheap liveness probe (GET /health, both relays implement it). */
+export async function probeRelay(host: string, timeoutMs = 4000): Promise<boolean> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const proto = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http:" : "https:";
+    const res = await fetch(`${proto}//${host}/health`, { cache: "no-store", signal: ctrl.signal });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const TE = new TextEncoder();
 const TD = new TextDecoder();
 
@@ -210,6 +238,72 @@ export async function joinRoom(
   return { ok: true, code: code.toUpperCase(), host, keys, owner: ownerToken || "", created: false };
 }
 
+/* ------------------------------------------------------ failover helpers */
+
+/**
+ * Create a room, failing over to the backup relay when the home relay is
+ * unreachable (or clearly 5xx-ing). Definitive answers (busy, collision,
+ * 4xx) are returned as-is — only infrastructure failures move on.
+ */
+export async function createRoomWithFailover(
+  opts: { password?: string; ttl?: string; code?: string },
+): Promise<RoomResult> {
+  let sawCollision = false;
+  for (const host of relayCandidates()) {
+    const res = await createRoom(host, opts);
+    if (res.ok) return res;
+    if (res.reason === "collision") sawCollision = true;
+    // Only fail over on infrastructure errors. busy/collision/4xx are about
+    // this client or this code, and spreading to the backup changes nothing.
+    if (res.reason === "network" || (res.reason === "relay" && (res.status || 0) >= 500)) continue;
+    return res;
+  }
+  return sawCollision
+    ? { ok: false, reason: "collision" }
+    : { ok: false, reason: "network" };
+}
+
+/**
+ * Join a room, trying each relay candidate in order. "gone" on one relay is
+ * NOT definitive — the room may live on the other one (e.g. it was created
+ * or failed over there) — so it moves on; every other verdict is final.
+ */
+export async function joinRoomWithFailover(
+  code: string,
+  password: string,
+  ownerToken: string | null,
+): Promise<RoomResult> {
+  let sawGone = false;
+  for (const host of relayCandidates()) {
+    const res = await joinRoom(host, code, password, ownerToken);
+    if (res.ok) return res;
+    if (res.reason === "gone") { sawGone = true; continue; }
+    if (res.reason === "network") continue;
+    return res;
+  }
+  return sawGone
+    ? { ok: false, reason: "gone" }
+    : { ok: false, reason: "network" };
+}
+
+/**
+ * Room info across candidates: the first relay that actually HAS the room
+ * wins; otherwise the first reachable relay (so the caller can still show
+ * suspended/password details); null when every relay is unreachable.
+ */
+export async function roomInfoWithFailover(
+  code: string,
+): Promise<{ host: string; info: RoomExistsInfo } | null> {
+  let reachable: { host: string; info: RoomExistsInfo } | null = null;
+  for (const host of relayCandidates()) {
+    const info = await roomInfo(host, code);
+    if (!info) continue;
+    if (info.exists) return { host, info };
+    if (!reachable) reachable = { host, info };
+  }
+  return reachable;
+}
+
 /* --------------------------------------------------------- relay client */
 
 export interface RoomStateFrame {
@@ -230,6 +324,21 @@ export interface RelayEvents {
   onKilled?: (reason: string) => void;
   onPeerCount?: (peers: number) => void;
   onError?: (reason: string) => void;
+  /** Fired when a failover moves the live connection to a different relay. */
+  onHost?: (host: string) => void;
+}
+
+export interface RelayClientOpts {
+  /**
+   * Self-heal config: when a healthy relay no longer has this room (VPS
+   * restart wipes in-memory rooms), the reconnect carries create=1 so the
+   * room springs back and the onopen doc-state push restores the content.
+   * Only sessions that already proved the room real (create/join ok) pass
+   * this — the auth token still gates who may resurrect a room.
+   */
+  recreate?: { ttl: string; hasPassword: boolean };
+  /** Extra hosts to try when the initial one is unreachable. */
+  fallbacks?: string[];
 }
 
 export class RelayClient {
@@ -246,12 +355,15 @@ export class RelayClient {
   tries = 0;
   dead = false;
   lastStateAt = 0;
+  private everConnected = false;
 
   private ws: WebSocket | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private events: RelayEvents;
+  private opts: RelayClientOpts;
+  private candidates: string[];
 
-  constructor(host: string, code: string, doc: Y.Doc, key: CryptoKey, auth: string, owner: string | null, events: RelayEvents = {}) {
+  constructor(host: string, code: string, doc: Y.Doc, key: CryptoKey, auth: string, owner: string | null, events: RelayEvents = {}, opts: RelayClientOpts = {}) {
     this.host = host;
     this.code = code;
     this.doc = doc;
@@ -260,35 +372,84 @@ export class RelayClient {
     this.auth = auth;
     this.owner = owner;
     this.events = events;
+    this.opts = opts;
+    // Current host first (fast resume), then the remaining candidates in
+    // order — home relay before the backup Worker.
+    this.candidates = [host, ...relayCandidates().filter((h) => h !== host)];
 
     doc.on("update", this.handleDocUpdate);
     this.awareness.on("update", this.handleAwarenessUpdate);
     window.addEventListener("beforeunload", this.handleUnload);
     window.addEventListener("pagehide", this.handleUnload);
 
-    this.connect();
+    void this.connectSmart();
   }
 
   get cid(): string {
     return String(this.doc.clientID);
   }
 
-  private url(): string {
+  private url(recreate: boolean): string {
     const p = new URLSearchParams();
     p.set("a", this.auth);
     if (this.owner) p.set("o", this.owner);
     p.set("cid", this.cid);
+    if (recreate) {
+      // Room vanished server-side (relay restart) — bring it back with the
+      // same auth gate; the servers treat create=1 on an existing room as a
+      // no-op, so this is safe even in races.
+      p.set("create", "1");
+      if (this.opts.recreate?.hasPassword) p.set("p", "1");
+      if (this.opts.recreate?.ttl) p.set("ttl", this.opts.recreate.ttl);
+    }
     const proto = this.host.startsWith("localhost") || this.host.startsWith("127.0.0.1")
       ? "ws:" : "wss:";
     return `${proto}//${this.host}/room/${this.code}?${p.toString()}`;
   }
 
   connect(): void {
+    void this.connectSmart();
+  }
+
+  /**
+   * Failover-aware connect: check the room on the current relay first; if
+   * that relay is unreachable, walk the candidates for one that answers; if
+   * a healthy relay no longer has the room (and we may self-heal), reconnect
+   * with create=1 so the room is resurrected and re-seeded from this doc.
+   */
+  private async connectSmart(): Promise<void> {
     if (this.dead) return;
     this.setConn("connecting");
+
+    let info = await roomInfo(this.host, this.code);
+    if (!info) {
+      for (const next of this.candidates) {
+        if (next === this.host) continue;
+        const alt = await roomInfo(next, this.code);
+        if (alt) {
+          this.host = next;
+          this.tries = 0;
+          this.events.onHost?.(next);
+          info = alt;
+          break;
+        }
+      }
+      if (!info) {
+        // Every relay is unreachable — keep backing off.
+        this.retry();
+        return;
+      }
+    }
+
+    const recreate = !!this.opts.recreate && !info.exists;
+    this.openSocket(recreate);
+  }
+
+  private openSocket(recreate: boolean): void {
+    if (this.dead) return;
     let ws: WebSocket;
     try {
-      ws = new WebSocket(this.url());
+      ws = new WebSocket(this.url(recreate));
     } catch {
       this.retry();
       return;
@@ -298,6 +459,7 @@ export class RelayClient {
 
     ws.onopen = () => {
       this.tries = 0;
+      this.everConnected = true;
       this.setConn("connected");
       // Send our current doc state (late joiners / room recovery) and presence.
       void this.send(T_UPDATE, Y.encodeStateAsUpdate(this.doc));
@@ -432,12 +594,8 @@ export class RelayClient {
     this.setConn("retrying");
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.tries++;
-    if (this.tries >= 3 && this.host === DEFAULT_RELAY && FALLBACK_RELAY) {
-      this.host = FALLBACK_RELAY;
-      this.tries = 0;
-    }
     const delay = Math.min(15000, 600 * Math.pow(1.6, this.tries));
-    this.retryTimer = setTimeout(() => this.connect(), delay);
+    this.retryTimer = setTimeout(() => void this.connectSmart(), delay);
   }
 
   private setConn(state: ConnState) {
