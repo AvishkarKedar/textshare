@@ -14,7 +14,7 @@
  */
 
 import * as Y from "yjs";
-import { RelayClient, relayHost, type RoomStateFrame, type ConnState } from "./relay";
+import { RelayClient, relayHost, FALLBACK_RELAY, type RoomStateFrame, type ConnState } from "./relay";
 import { useAnon } from "./store";
 import type { EditorFile, ChatMessage, Participant, SharedFile } from "./store";
 
@@ -174,6 +174,8 @@ export interface StartSessionArgs {
   owner: string | null;
   created: boolean;
   hasPassword: boolean;
+  /** TTL used when the room has to be resurrected on a relay after it vanished. */
+  ttl?: string;
   displayName: string;
   color: string;
 }
@@ -200,15 +202,30 @@ export function startSession(args: StartSessionArgs): SessionInfo {
 
   const store = useAnon.getState();
 
+  let wasConnected = false;
+  let failoverAnnounced = false;
+
   const relay = new RelayClient(host, args.code, doc, args.keys.key, args.keys.auth, args.owner, {
     onConn: (state: ConnState) => {
       useAnon.setState({ syncState: state });
+      if (state === "connected" || state === "synced") wasConnected = true;
     },
     onRoom: (frame: RoomStateFrame) => {
       useAnon.setState({
         roomState: frame,
         canEdit: frame.canEdit,
       });
+    },
+    onHost: (newHost) => {
+      if (!active || active.info.host === newHost) return;
+      active.info.host = newHost;
+      // File uploads and room-admin calls must follow the live relay.
+      if (wasConnected && !failoverAnnounced) {
+        failoverAnnounced = true;
+        const label = newHost === FALLBACK_RELAY ? "backup relay" : newHost;
+        import("sonner").then(({ toast }) =>
+          toast(`Primary relay unreachable — session continues on ${label}`, { duration: 6000 }));
+      }
     },
     onKilled: (reason) => {
       const message =
@@ -226,6 +243,8 @@ export function startSession(args: StartSessionArgs): SessionInfo {
         import("sonner").then(({ toast }) => toast.error("This room hit its size limit"));
       }
     },
+  }, {
+    recreate: { ttl: args.ttl || "1h", hasPassword: args.hasPassword },
   });
 
   // Awareness: presence, cursors, typing.

@@ -32,6 +32,45 @@
 
   const relaySel = $('relaySelect')
   const customIn = $('customRelayUrl')
+  // Known relays = the dropdown's non-custom options (primary VPS + backup
+  // Worker). Used for automatic failover when the selected relay is down.
+  const KNOWN_RELAYS = relaySel
+    ? Array.from(relaySel.options).map(o => o.value).filter(v => v && v !== 'custom')
+    : ['https://relay.avishkark.in']
+
+  function setRelay(url) {
+    relayUrl = url
+    localStorage.setItem(LS_URL, relayUrl)
+    if (relaySel && KNOWN_RELAYS.includes(url)) relaySel.value = url
+  }
+
+  function isNetworkError(e) {
+    // fetch() throws TypeError on network/CORS failure; HTTP error statuses
+    // (bad_password, 503, …) are normal responses and never reach here.
+    return e instanceof TypeError || /fetch|network/i.test(String(e && e.message))
+  }
+
+  // Try the current relay first, then every other known relay. Returns the
+  // successful (relayUrl, body) or null. Switches relayUrl on success.
+  async function fetchWithFailover(path, init) {
+    const order = [relayUrl].concat(KNOWN_RELAYS.filter(u => u !== relayUrl))
+    for (let i = 0; i < order.length; i++) {
+      const url = order[i]
+      try {
+        const res = await fetch(url + path, init)
+        if (i > 0) {
+          setRelay(url)
+          banner('Relay ' + order[0] + ' unreachable — using ' + url, false)
+        }
+        return res
+      } catch (e) {
+        if (!isNetworkError(e)) throw e
+        // network failure — try the next known relay
+      }
+    }
+    throw new TypeError('All relays unreachable')
+  }
+
   if (relaySel) {
     if (relayUrl === 'https://relay.avishkark.in' || relayUrl === 'https://textshare-sync.avishkarkedar.workers.dev') {
       relaySel.value = relayUrl
@@ -54,7 +93,7 @@
     opts = opts || {}
     const headers = Object.assign({ 'content-type': 'application/json' }, opts.headers || {})
     if (token) headers.Authorization = 'Bearer ' + token
-    const res = await fetch(relayUrl + path, Object.assign({}, opts, { headers }))
+    const res = await fetchWithFailover(path, Object.assign({}, opts, { headers }))
     let body = null
     try { body = await res.json() } catch (e) {}
     if (!res.ok) {
@@ -112,7 +151,7 @@
     localStorage.setItem(LS_URL, relayUrl)
 
     try {
-      const res = await fetch(relayUrl + '/admin/login', {
+      const res = await fetchWithFailover('/admin/login', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ password: pass }),
@@ -131,6 +170,7 @@
       $('loginErr').textContent = e.message === 'bad_password' ? 'Wrong password.'
         : e.message === 'rate_limited' ? 'Too many attempts, try again in a minute.'
         : e.message === 'admin_disabled' ? 'Admin is not enabled on this relay (ADMIN_PASSWORD not set).'
+        : isNetworkError(e) ? 'No relay is reachable right now. Try again in a moment.'
         : 'Could not sign in. Check the relay URL and try again.'
     }
   }
@@ -199,7 +239,7 @@
 
   async function refreshRoomStatus(code, tr) {
     try {
-      const res = await fetch(relayUrl + '/room/' + code + '/exists')
+      const res = await fetchWithFailover('/room/' + code + '/exists')
       const st = await res.json()
       const peers = tr.querySelector('.peers')
       const status = tr.querySelector('.status')
