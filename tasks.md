@@ -64,6 +64,9 @@
 | M-16          | Environment &     | Fixed Python sandbox on Windows (`pyExe`),  | relay/server.js,            |
 |               | Dependency Fixes  | socket.io deps, disabled react-hooks lint.  | package.json, eslint config |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-17          | Admin Security &  | Rotated relay & worker ADMIN_PASSWORD;      | relay/server.js, .env,      |
+|               | CORS Whitelisting | whitelisted https://admincode.avishkark.in. | worker/wrangler.toml        |
++---------------+-------------------+---------------------------------------------+-----------------------------+
 ```
 
 ---
