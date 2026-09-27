@@ -32,11 +32,17 @@ export function AppShell() {
       </div>
       <StatusBar />
       {/* spacer — reserves room for the fixed mobile nav + symbol-key bar
-          (and the iOS home indicator) so the StatusBar stays visible. */}
+          (and the iOS home indicator) so the StatusBar stays visible. When
+          the symbol bar is collapsed only the nav height is reserved, giving
+          the editor the extra 40px back. */}
       <div
         aria-hidden
         className="flex-none md:hidden"
-        style={{ height: "calc(88px + env(safe-area-inset-bottom, 0px))" }}
+        style={{
+          height: s.mbarCollapsed
+            ? "calc(48px + env(safe-area-inset-bottom, 0px))"
+            : "calc(88px + env(safe-area-inset-bottom, 0px))",
+        }}
       />
       <MobileNav />
     </div>

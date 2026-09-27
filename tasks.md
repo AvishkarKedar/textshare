@@ -84,6 +84,15 @@
 |               |                   | (2 peers, content kept, post-failover       |                             |
 |               |                   | edits sync); ownerless-room race documented. |                             |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-21          | Failover Race     | Ownerless-room promotion: create=1&o=<tok>  | relay/server.js,            |
+|               | Fix + Collab UX   | + valid room auth claims ownership (relay   | worker/src/index.js,        |
+|               |                   | + Worker, /exists reports ownerless;        | relay.ts, session.ts,       |
+|               |                   | owner client auto-claims on reconnect);     | store.ts, EditorStage.tsx,  |
+|               |                   | remote peer selections tinted in each       | MobileNav.tsx,              |
+|               |                   | peer's color (Yjs rel-position anchored);   | AppShell.tsx,               |
+|               |                   | mobile symbol bar collapse toggle (+40px    | AGENTS.md,                  |
+|               |                   | editor); overlay scroll sync fix.           | pending.md                  |
++---------------+-------------------+---------------------------------------------+-----------------------------+
 ```
 
 ---

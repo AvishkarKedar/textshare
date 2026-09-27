@@ -36,6 +36,9 @@ export interface Participant {
   name: string;
   color: string;
   cursorLine?: number;
+  /** live remote selection range (awareness) — rendered tinted in the
+   *  peer's color over the editor */
+  sel?: { file: string; from: number; to: number } | null;
   isOwner?: boolean;
   /** live typing indicator (encrypted awareness) */
   typing?: boolean;
@@ -301,6 +304,8 @@ interface AnonState {
   // ui panels
   chatOpen: boolean;
   filesOpen: boolean;
+  /** mobile symbol-key bar minimized — frees 40px of editor viewport */
+  mbarCollapsed: boolean;
   settingsOpen: boolean;
   inviteOpen: boolean;
   paletteOpen: boolean;
@@ -492,6 +497,8 @@ interface AnonState {
 
   toggleChat: () => void;
   toggleFiles: () => void;
+  /** collapse/expand the mobile symbol-key accessory bar */
+  toggleMbar: () => void;
   toggleZen: () => void;
   togglePreview: () => void;
   toggleSettings: () => void;
@@ -773,6 +780,7 @@ export const useAnon = create<AnonState>()(
 
       chatOpen: true,
       filesOpen: false,
+      mbarCollapsed: false,
       settingsOpen: false,
       inviteOpen: false,
       paletteOpen: false,
@@ -1152,6 +1160,7 @@ export const useAnon = create<AnonState>()(
 
       toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
       toggleFiles: () => set((s) => ({ filesOpen: !s.filesOpen })),
+      toggleMbar: () => set((s) => ({ mbarCollapsed: !s.mbarCollapsed })),
       toggleZen: () => set((s) => ({ zenMode: !s.zenMode, showPreview: false })),
       togglePreview: () => set((s) => ({ showPreview: !s.showPreview })),
       toggleSettings: () => set((s) => ({ settingsOpen: !s.settingsOpen, paletteOpen: false })),

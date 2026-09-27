@@ -162,6 +162,9 @@ export interface RoomExistsInfo {
   auth: boolean;
   suspended: boolean;
   locked: boolean;
+  /** Room exists but has no owner (failover race) — an owner client should
+   *  reconnect with create=1&o=<token> to claim it. Absent on older relays. */
+  ownerless?: boolean;
 }
 
 export async function roomInfo(host: string, code: string): Promise<RoomExistsInfo | null> {
@@ -334,7 +337,10 @@ export interface RelayClientOpts {
    * restart wipes in-memory rooms), the reconnect carries create=1 so the
    * room springs back and the onopen doc-state push restores the content.
    * Only sessions that already proved the room real (create/join ok) pass
-   * this — the auth token still gates who may resurrect a room.
+   * this — the auth token still gates who may resurrect a room. Owners also
+   * carry create=1 when the room exists but is ownerless (a joiner's
+   * self-heal re-created it first during failover): the server then promotes
+   * them back to owner so delete/lock/suspend keep working.
    */
   recreate?: { ttl: string; hasPassword: boolean };
   /** Extra hosts to try when the initial one is unreachable. */
@@ -397,7 +403,8 @@ export class RelayClient {
     if (recreate) {
       // Room vanished server-side (relay restart) — bring it back with the
       // same auth gate; the servers treat create=1 on an existing room as a
-      // no-op, so this is safe even in races.
+      // no-op, so this is safe even in races. For an owner, create=1 on an
+      // ownerless room (failover race) additionally claims ownership back.
       p.set("create", "1");
       if (this.opts.recreate?.hasPassword) p.set("p", "1");
       if (this.opts.recreate?.ttl) p.set("ttl", this.opts.recreate.ttl);
@@ -441,7 +448,7 @@ export class RelayClient {
       }
     }
 
-    const recreate = !!this.opts.recreate && !info.exists;
+    const recreate = !!this.opts.recreate && (!info.exists || (!!this.owner && !!info.ownerless));
     this.openSocket(recreate);
   }
 

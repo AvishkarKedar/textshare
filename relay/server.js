@@ -1296,6 +1296,11 @@ async function handleHttp(req, res) {
       auth: room ? !!room.meta.a : false,
       suspended: room ? !!room.meta.s : false,
       locked: room ? !!room.meta.r : false,
+      // Ownerless rooms can only arise from a failover race (a joiner's
+      // self-heal re-created the room before the owner returned). Exposed so
+      // the OWNER's client knows to re-present create=1&o=<token> and claim
+      // ownership (see the promotion below).
+      ownerless: room ? !room.meta.o : false,
     })
   }
 
@@ -1496,6 +1501,20 @@ async function handleHttp(req, res) {
         ttl: TTLS[url.searchParams.get('ttl')] || DEFAULT_TTL,
       }
       rooms.set(code, new RoomState(code, meta))
+    } else if (!room.meta.o) {
+      // Ownerless-room promotion (failover race fix): a joiner's self-heal
+      // can re-create a room before the owner reconnects, leaving it with no
+      // owner hash — every later owner action (delete/lock/suspend) would
+      // fail with no_owner. A client presenting create=1&o=<owner_token>
+      // AND valid room authentication (the same a=<auth> gate every joiner
+      // passes) may claim/upgrade ownership. First claim wins: once meta.o
+      // is set it never changes, and claims without the room auth are
+      // rejected so outsiders cannot hijack the room.
+      const claimOwner = url.searchParams.get('o')
+      const claimAuth = url.searchParams.get('a')
+      if (claimOwner && claimAuth && room.meta.a && constEq(sha256(claimAuth), room.meta.a)) {
+        room.meta.o = sha256(claimOwner)
+      }
     }
   }
 
@@ -1575,6 +1594,19 @@ server.on('upgrade', (req, socket, head) => {
   if (!room) {
     socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
     return socket.destroy()
+  }
+
+  // Ownerless-room promotion (failover race fix) — see the matching block in
+  // the HTTP join preflight above for the full rationale. The claim must
+  // carry valid room auth (a=<auth> matching the stored hash) BEFORE it can
+  // set meta.o, otherwise the isOwner shortcut below would let an uninvited
+  // client take over an ownerless room without knowing the room key.
+  if (url.searchParams.get('create') === '1' && !room.meta.o) {
+    const claimOwner = url.searchParams.get('o')
+    const claimAuth = url.searchParams.get('a')
+    if (claimOwner && claimAuth && room.meta.a && constEq(sha256(claimAuth), room.meta.a)) {
+      room.meta.o = sha256(claimOwner)
+    }
   }
 
   const rawOwner = url.searchParams.get('o')

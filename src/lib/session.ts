@@ -343,6 +343,69 @@ export function startSession(args: StartSessionArgs): SessionInfo {
     useAnon.setState({ sharedFiles: mirrored });
   };
 
+  /* ---------------- remote selection ranges (awareness) ----------------
+   *
+   * Peers broadcast their live selection as { f, from, to } inside their
+   * awareness "user" state. from/to are absolute char offsets in the
+   * sender's doc — the receiving side re-anchors them as Yjs relative
+   * positions at arrival time so concurrent edits (text inserted or deleted
+   * around the selection) keep the highlight glued to the right characters
+   * instead of letting it drift.
+   */
+  const selAnchor = new Map<
+    string,
+    { file: string; rawFrom: number; rawTo: number; from: Y.RelativePosition; to: Y.RelativePosition }
+  >();
+
+  const readRemoteSelection = (
+    key: string,
+    state: Record<string, unknown>,
+  ): Participant["sel"] => {
+    const u = state.user as
+      | { sel?: { f?: string; from?: number; to?: number } | null }
+      | undefined;
+    const raw = u?.sel;
+    if (!raw || !raw.f || typeof raw.from !== "number" || typeof raw.to !== "number" || raw.to <= raw.from) {
+      selAnchor.delete(key);
+      return null;
+    }
+    let anchor = selAnchor.get(key);
+    if (!anchor || anchor.file !== raw.f || anchor.rawFrom !== raw.from || anchor.rawTo !== raw.to) {
+      const ytext = texts.get(raw.f);
+      if (!ytext) {
+        selAnchor.delete(key);
+        return null;
+      }
+      const a0 = Math.max(0, Math.min(raw.from, ytext.length));
+      const b0 = Math.max(a0, Math.min(raw.to, ytext.length));
+      if (b0 <= a0) {
+        selAnchor.delete(key);
+        return null;
+      }
+      anchor = {
+        file: raw.f,
+        rawFrom: raw.from,
+        rawTo: raw.to,
+        from: Y.createRelativePositionFromTypeIndex(ytext, a0),
+        to: Y.createRelativePositionFromTypeIndex(ytext, b0),
+      };
+      selAnchor.set(key, anchor);
+    }
+    // Map through the CURRENT doc state — this is what keeps the highlight
+    // tracking the text while peers edit around it.
+    const from = Y.createAbsolutePositionFromRelativePosition(anchor.from, doc);
+    const to = Y.createAbsolutePositionFromRelativePosition(anchor.to, doc);
+    if (!from || !to) {
+      selAnchor.delete(key);
+      return null;
+    }
+    const ytext = texts.get(anchor.file);
+    const len = ytext ? ytext.length : 0;
+    const a = Math.max(0, Math.min(from.index, len));
+    const b = Math.max(a, Math.min(to.index, len));
+    return b > a ? { file: anchor.file, from: a, to: b } : null;
+  };
+
   const mirrorParticipants = () => {
     const states = relay.awareness.getStates() as Map<number, Record<string, unknown>>;
     const now = Date.now();
@@ -379,10 +442,16 @@ export function startSession(args: StartSessionArgs): SessionInfo {
         color: u.color || "#6d6d6d",
         isOwner: !!u.own,
         cursorLine: u.cursorLine,
+        sel: readRemoteSelection(String(clientId), state),
         typing: freshTyping,
         typingIn: freshTyping ? u.typingIn || "editor" : undefined,
         online: true,
       });
+    }
+    // Drop selection anchors for peers that left the awareness map so the
+    // cache cannot leak entries for disconnected clients.
+    for (const key of [...selAnchor.keys()]) {
+      if (!states.has(Number(key))) selAnchor.delete(key);
     }
     useAnon.setState({ participants: [me, ...others] });
   };
@@ -395,6 +464,10 @@ export function startSession(args: StartSessionArgs): SessionInfo {
   texts.observeDeep(() => {
     mirrorFiles();
     historyHandler();
+    // Remote selection highlights are anchored as Yjs relative positions;
+    // re-map them through the new doc state so edits around a selection
+    // shift the highlight instead of desyncing it.
+    mirrorParticipants();
   });
   chat.observe(() => mirrorChat());
   shared.observe(() => mirrorShared());
@@ -469,6 +542,51 @@ export function sendCursor(line: number): void {
   const user = (active.relay.awareness.getLocalState()?.user || {}) as { name?: string; color?: string; own?: boolean; cursorLine?: number };
   active.relay.awareness.setLocalStateField("user", { ...user, cursorLine: line });
   active.relay.awareness.setLocalStateField("act", Date.now());
+}
+
+/* ------------------------------------------------ remote selection ranges */
+
+let selThrottleAt = 0;
+let selPending: { f: string; from: number; to: number } | null = null;
+let selTimer: ReturnType<typeof setTimeout> | null = null;
+let selLastSent = "";
+
+function flushSelection(): void {
+  if (selTimer) {
+    clearTimeout(selTimer);
+    selTimer = null;
+  }
+  if (!active) return;
+  selThrottleAt = Date.now();
+  const next = selPending;
+  const key = next ? `${next.f}:${next.from}:${next.to}` : "none";
+  if (key === selLastSent) return;
+  selLastSent = key;
+  const user = (active.relay.awareness.getLocalState()?.user || {}) as Record<string, unknown>;
+  active.relay.awareness.setLocalStateField("user", { ...user, sel: next });
+  active.relay.awareness.setLocalStateField("act", Date.now());
+}
+
+/**
+ * Broadcast the local selection range (from, to) for one file over the
+ * encrypted awareness channel so peers see it tinted in this user's color.
+ * Pass fileId=null (or from >= to) to clear the highlight. Throttled to one
+ * frame per 200 ms so dragging a selection across a long file doesn't flood
+ * the relay; the trailing edge always lands the final range.
+ */
+export function sendSelection(fileId: string | null, from = 0, to = 0): void {
+  if (!active) return;
+  const next = fileId && to > from ? { f: fileId, from, to } : null;
+  const key = next ? `${next.f}:${next.from}:${next.to}` : "none";
+  if (key === selLastSent) return;
+  selPending = next;
+  const wait = Math.max(0, 200 - (Date.now() - selThrottleAt));
+  if (selTimer) clearTimeout(selTimer);
+  if (wait === 0) {
+    flushSelection();
+  } else {
+    selTimer = setTimeout(flushSelection, wait);
+  }
 }
 
 /**

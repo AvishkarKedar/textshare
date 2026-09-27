@@ -77,7 +77,7 @@ Renamed-file and generated-file behavior verified end-to-end in a two-session lo
 
 ## Open (small, optional)
 
-- **Failover ownerless-room race** (found in M-20 live test): when the home relay dies, a joiner's self-heal reconnect can land before the owner's, re-creating the room on the backup relay without an owner → owner delete/lock/suspend then fails with `no_owner` until the room TTL-expires. Fix suggestion (relay-side, both `relay/server.js` + `worker/src/index.js`): a `create=1` reconnect carrying a valid owner token for an ownerless room should upgrade the room's owner.
+- _Nothing open._ The failover ownerless-room race below was **fixed and live-verified on 2026-09-27 (M-21)**: a `create=1&o=<owner_token>` reconnect carrying valid room auth (`a=<auth>` hash-match) now claims/updates ownership of an ownerless room on both `relay/server.js` (HTTP preflight + WS upgrade) and `worker/src/index.js` (persisted to DO storage); `/room/:code/exists` reports `ownerless` and the owner client auto-sends the claim when it sees the flag. Verified: 18/18 protocol assertions + full browser flow (joiner self-heal → ownerless room → owner rejoin → promotion → owner delete succeeds → both peers killed). **Deploy note:** needs `relay/server.js` re-deployed on the VPS AND `worker/` re-deployed to Cloudflare before production picks it up (app-side changes ship via CF Pages on push).
 
 ---
 

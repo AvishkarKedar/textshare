@@ -462,6 +462,11 @@ export class Room {
         auth: meta ? !!meta.a : false,
         suspended: meta ? !!meta.s : false,
         locked: meta ? !!meta.r : false,
+        // Ownerless rooms can only arise from a failover race (a joiner's
+        // self-heal re-created the room before the owner returned). Exposed
+        // so the owner's client knows to re-present create=1&o=<token> and
+        // claim ownership (see the promotion below).
+        ownerless: meta ? !meta.o : false,
       })
     }
 
@@ -559,6 +564,22 @@ export class Room {
               body: JSON.stringify({ code, created: meta.c, ttl: meta.ttl, hasPassword: !!meta.p }),
             })
           } catch (e) {}
+        }
+      } else if (!meta.o) {
+        // Ownerless-room promotion (failover race fix): a joiner's self-heal
+        // can re-create this room (on the backup relay) before the owner
+        // reconnects, leaving it with no owner hash — every later owner
+        // action (delete/lock/suspend) would fail with no_owner. A client
+        // presenting create=1&o=<owner_token> AND valid room authentication
+        // (the same a=<auth> gate every joiner passes) may claim/upgrade
+        // ownership. First claim wins; claims without the room auth are
+        // rejected so outsiders cannot hijack the room. meta is persisted so
+        // the claim survives DO restarts.
+        const claimOwner = q.get('o')
+        const claimAuth = q.get('a')
+        if (claimOwner && claimAuth && meta.a && constEq(await sha256(claimAuth), meta.a)) {
+          meta.o = await sha256(claimOwner)
+          await st.put('meta', meta)
         }
       }
     }

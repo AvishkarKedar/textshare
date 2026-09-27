@@ -8,7 +8,7 @@ import { SlashCommandPopup } from "@/components/palette/SlashCommandPopup";
 import type { SlashCommand } from "@/lib/store";
 import { tokenizeLine, TOKEN_COLORS } from "@/lib/highlight";
 import { detectLanguage, langToExt } from "@/lib/detect";
-import { sendCursor, setTyping } from "@/lib/session";
+import { sendCursor, setTyping, sendSelection } from "@/lib/session";
 import { toast } from "sonner";
 
 function highlightLine(line: string, language: string) {
@@ -18,6 +18,51 @@ function highlightLine(line: string, language: string) {
       {t.value}
     </span>
   ));
+}
+
+/** Tint for remote selection highlights: ~22% alpha over the peer color so
+ *  the covered text stays readable (syntax colors show through). */
+function selTint(color: string): string {
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? color + "38" : color;
+}
+
+/** Selection overlay renderer: split each line at every selection boundary
+ *  and tint covered segments in the selecting peer's color. The text itself
+ *  renders transparent so the syntax layer beneath stays visible; wrapping
+ *  matches the textarea (pre-wrap + break-word, same font/padding). */
+function renderSelectionLines(
+  content: string,
+  sels: { from: number; to: number; color: string }[],
+) {
+  let offset = 0;
+  return content.split("\n").map((line, li) => {
+    const lineStart = offset;
+    offset += line.length + 1;
+    const hits: { start: number; end: number; color: string }[] = [];
+    for (const p of sels) {
+      const a = Math.max(lineStart, p.from) - lineStart;
+      const b = Math.min(lineStart + line.length, p.to) - lineStart;
+      if (b > a) hits.push({ start: a, end: b, color: p.color });
+    }
+    if (!hits.length) return <div key={li} className="min-h-[1.6em]" />;
+    const points = [0, line.length];
+    for (const h of hits) points.push(h.start, h.end);
+    const cuts = [...new Set(points)].sort((x, y) => x - y);
+    const parts: React.ReactNode[] = [];
+    for (let i = 0; i < cuts.length - 1; i++) {
+      const st = cuts[i];
+      const en = cuts[i + 1];
+      if (en <= st) continue;
+      // overlapping selections: the first peer's tint wins
+      const hit = hits.find((h) => st >= h.start && st < h.end);
+      parts.push(
+        <span key={i} style={hit ? { background: selTint(hit.color) } : undefined}>
+          {line.slice(st, en)}
+        </span>,
+      );
+    }
+    return <div key={li} className="min-h-[1.6em]">{parts}</div>;
+  });
 }
 
 /* ------------------------------------------- editor keyboard intelligence */
@@ -46,6 +91,8 @@ export function EditorStage() {
   const file = s.files.find((f) => f.id === s.activeFileId) || s.files[0] || { id: "f1", name: "main.js", language: "javascript", content: "" };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
+  const syntaxRef = useRef<HTMLDivElement>(null);
+  const selOverlayRef = useRef<HTMLDivElement>(null);
   const [cursorLine, setCursorLine] = useState(5);
   const [slashRect, setSlashRect] = useState<DOMRect | null>(null);
   const [slashQ, setSlashQ] = useState("");
@@ -78,6 +125,16 @@ export function EditorStage() {
 
   // derived: show placeholder only when file is empty
   const showPlaceholder = (file?.content || "").trim() === "";
+
+  // remote selections on THIS file → tinted ranges in each peer's color
+  const remoteSels = s.participants.filter(
+    (p) => p.id !== "me" && p.online !== false && p.sel && p.sel.file === file.id,
+  );
+  const remoteSelRanges = remoteSels.map((p) => ({
+    from: p.sel!.from,
+    to: p.sel!.to,
+    color: p.color,
+  }));
 
   function openSlash(q: string) {
     setSlashQ(q);
@@ -251,6 +308,12 @@ export function EditorStage() {
     s.setCursorPos({ line, col, sel: Math.abs(ta.selectionEnd - ta.selectionStart) });
     // broadcast cursor via encrypted awareness presence
     sendCursor(line);
+    // broadcast the live selection range so peers see it tinted in our color
+    sendSelection(
+      ta.selectionEnd > ta.selectionStart ? file.id : null,
+      ta.selectionStart,
+      ta.selectionEnd,
+    );
     // close slash popup on selection change if not actively typing a command
     const lineStart = upto.lastIndexOf("\n") + 1;
     const lineText = upto.substring(lineStart);
@@ -480,6 +543,7 @@ export function EditorStage() {
             {/* syntax-highlighted overlay (under the transparent textarea) */}
             {s.syntaxHighlight && !showPlaceholder && (
               <div
+                ref={syntaxRef}
                 aria-hidden
                 className="anon-mono pointer-events-none absolute inset-0 overflow-hidden p-3 text-[length:var(--anon-edfont)] leading-[1.6]"
                 style={{ fontFamily: "var(--anon-mono)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}
@@ -492,6 +556,18 @@ export function EditorStage() {
                 ))}
               </div>
             )}
+            {/* remote peer selections — tinted ranges in each peer's unique
+                color (text transparent so the syntax layer shows through) */}
+            {remoteSels.length > 0 && !showPlaceholder && (
+              <div
+                ref={selOverlayRef}
+                aria-hidden
+                className="anon-mono pointer-events-none absolute inset-0 overflow-hidden p-3 text-[length:var(--anon-edfont)] leading-[1.6] text-transparent"
+                style={{ fontFamily: "var(--anon-mono)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+              >
+                {renderSelectionLines(file.content, remoteSelRanges)}
+              </div>
+            )}
             <textarea
               ref={textareaRef}
               value={file.content}
@@ -501,8 +577,13 @@ export function EditorStage() {
               onClick={handleSelect}
               onKeyDown={handleKeyDown}
               onScroll={(e) => {
-                // keep line numbers glued to the code while scrolling
-                if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop;
+                // keep line numbers + overlays glued to the code while the
+                // textarea scrolls (overlays are overflow-hidden; their
+                // scrollTop still moves programmatically)
+                const top = e.currentTarget.scrollTop;
+                if (gutterRef.current) gutterRef.current.scrollTop = top;
+                if (syntaxRef.current) syntaxRef.current.scrollTop = top;
+                if (selOverlayRef.current) selOverlayRef.current.scrollTop = top;
               }}
               onPaste={(e) => {
                 const pasted = e.clipboardData.getData("text");
