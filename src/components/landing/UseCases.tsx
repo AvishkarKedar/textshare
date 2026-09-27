@@ -13,7 +13,7 @@ const USE_CASES = [
   {
     icon: Code2,
     title: "Interview practice",
-    body: "Share a 6-character code over the call. Run Python, JS, C++, Rust — fifteen languages, in-browser, no install.",
+    body: "Share a 6-character code over the call. Run Python, JS, C++, Rust — eight languages, in-browser, no install.",
     accent: "var(--anon-ok)",
   },
   {

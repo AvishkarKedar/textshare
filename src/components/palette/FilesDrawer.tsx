@@ -66,7 +66,7 @@ export function FilesDrawer() {
         await uploadSharedFile(file, (p) => setProgress(p));
       }
       toast.success(`${files.length} file${files.length > 1 ? "s" : ""} encrypted & uploaded`, {
-        description: `AES-GCM-256 · ${FILE_LIMITS.CHUNK_SIZE / 1024}KB chunks · the relay stores ciphertext only`,
+        description: "end-to-end encrypted · relay stores ciphertext only",
       });
     } catch (err) {
       toast.error("Upload failed", { description: err instanceof Error ? err.message : String(err) });
@@ -191,7 +191,7 @@ export function FilesDrawer() {
                 <span className="anon-mono text-xs anon-fg">
                   {dragging ? "drop to upload" : "drop files here or click to browse"}
                 </span>
-                <span className="anon-mono text-[10px] anon-dim">max 10 files · 25MB each · AES-GCM-256, zero-knowledge relay</span>
+                <span className="anon-mono text-[10px] anon-dim">max 10 files · 25MB each · end-to-end encrypted</span>
               </>
             )}
             <input
@@ -273,7 +273,7 @@ export function FilesDrawer() {
           </div>
 
           <div className="hairline-t px-3 py-1.5 anon-mono text-[10px] anon-dim flex items-center justify-between">
-            <span>AES-GCM-256 in-browser · {FILE_LIMITS.CHUNK_SIZE / 1024}KB chunks · relay stores ciphertext only</span>
+            <span>end-to-end encrypted · relay stores ciphertext only</span>
             <span>{s.sharedFiles.length} file{s.sharedFiles.length === 1 ? "" : "s"}</span>
           </div>
 

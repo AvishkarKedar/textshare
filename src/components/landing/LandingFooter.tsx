@@ -24,8 +24,8 @@ export function LandingFooter() {
   return (
     <footer className="mt-auto hairline-t anon-raise">
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
-          <div className="col-span-2 sm:col-span-1">
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
+          <div>
             <div className="anon-mono mb-3 text-sm anon-fg">
               <span className="anon-accent">{'>'}</span> anonshare
             </div>
@@ -63,18 +63,6 @@ export function LandingFooter() {
               <li><button onClick={() => toggleSecurity()} className="hover:anon-fg inline-flex items-center gap-1 cursor-pointer"><Shield className="h-3 w-3" /> Security & Threat Model</button></li>
               <li><button onClick={() => togglePrivacy()} className="hover:anon-fg inline-flex items-center gap-1 cursor-pointer"><FileText className="h-3 w-3" /> Privacy Policy</button></li>
               <li><button onClick={() => toggleTerms()} className="hover:anon-fg inline-flex items-center gap-1 cursor-pointer"><FileText className="h-3 w-3" /> Terms of Service</button></li>
-            </ul>
-          </div>
-
-          <div>
-            <div className="anon-mono mb-3 text-xs uppercase tracking-wider anon-dim">
-              build
-            </div>
-            <ul className="space-y-2 anon-mono text-xs anon-mut">
-              <li>v5.5.0</li>
-              <li>relay: relay.avishkark.in</li>
-              <li>sw: anonshare-v24</li>
-              <li>region: auto</li>
             </ul>
           </div>
         </div>

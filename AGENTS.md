@@ -19,9 +19,10 @@ Whenever you make any change to this repository, you **MUST** synchronize the co
 - **Tasks / Roadmap / Bug Fixes / Changelogs** → Update [`tasks.md`](tasks.md)
 - **Incidents / Debugging / Post-Mortems / Lessons** → Update [`memory.md`](memory.md)
 
-## Current System Snapshot (2026-09-27, M-21)
-- **Version**: 5.5.0 (`package.json`, landing UI, `/api/status` in sync).
+## Current System Snapshot (2026-09-27, M-22)
+- **Version**: 5.5.1 (`package.json`, landing UI, `/api/status` in sync).
 - **Production endpoints**: `code.avishkark.in` (CF Pages, static export + `functions/api/*`) · `relay.avishkark.in` (VPS Node relay, bwrap-hardened runner) · `textshare-sync.avishkarkedar.workers.dev` (backup CF Worker relay) · `admincode.avishkark.in` (admin panel). All four verified live; relay runner confirmed working for python/js/bash (real exit codes, ms-level timings).
+- **UI De-Jargon & Cleanup (M-22)**: 48 unused `shadcn/ui` components and dead `Testimonials.tsx` removed; technical crypto jargon removed from Hero, StatsStrip, RoomEntryDialog, and FilesDrawer (retained in FAQ / Security modals); TopBar touch target height raised to `h-8 sm:h-7` with larger invite button; footer converted to 3 columns; supported language count aligned to 8.
 - **Failover (live-verified M-20)**: client walks relay candidates automatically (`relayCandidates()` in `src/lib/relay.ts`); rooms self-heal with `create=1` re-connects; Worker WS 101 responses pass through `applyCors` untouched. Verified end-to-end: killing the home relay mid-session keeps the room + local doc, switches both peers to the backup Worker in <7s, restores `synced`, and post-failover edits propagate.
 - **Ownerless-room promotion (M-21, live-verified)**: if a joiner's self-heal re-creates a room before the owner returns (failover race), the owner's `create=1&o=<token>` reconnect — gated by valid room auth (`a=<auth>` must hash-match) — claims/updates ownership on BOTH `relay/server.js` and `worker/src/index.js` (Worker persists the claim). `/room/:code/exists` now reports `ownerless`; the owner client auto-sends the claim when it sees that flag. First-claim-wins; wrong-auth claims are rejected at the socket.
 - **Remote selection sharing (M-21)**: live selection ranges (`from,to` + fileId) broadcast inside the awareness `user.sel` field (throttled 200 ms, E2EE); receivers render them as tinted overlays in each peer's color. Ranges are re-anchored as Yjs relative positions on arrival so concurrent edits shift the highlight instead of desyncing it.

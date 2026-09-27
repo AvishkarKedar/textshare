@@ -93,6 +93,13 @@
 |               |                   | mobile symbol bar collapse toggle (+40px    | AGENTS.md,                  |
 |               |                   | editor); overlay scroll sync fix.           | pending.md                  |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-22          | UI De-Jargon &    | Purged 48 unused shadcn UI files + dead     | src/components/ui/*,        |
+|               | Dead Code Cleanup | Testimonials.tsx; de-jargoned landing copy  | src/components/landing/*,   |
+|               |                   | (PBKDF2/AES technical specs isolated in     | FilesDrawer.tsx,            |
+|               |                   | FAQ/Security modals); enlarged TopBar touch | RoomEntryDialog.tsx,        |
+|               |                   | targets (h-8 sm:h-7); simplified footer to  | TopBar.tsx, status.ts,      |
+|               |                   | 3 cols; bumped version to 5.5.1.            | package.json                |
++---------------+-------------------+---------------------------------------------+-----------------------------+
 ```
 
 ---

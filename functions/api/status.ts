@@ -76,7 +76,7 @@ export async function onRequestGet(): Promise<Response> {
     {
       ok: true,
       service: "anonshare",
-      version: "5.5.0",
+      version: "5.5.1",
       environment: "production",
       timestamp: new Date().toISOString(),
       relay: {

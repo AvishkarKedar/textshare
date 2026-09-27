@@ -66,24 +66,7 @@ export function Hero() {
       />
       <div className="relative mx-auto grid max-w-7xl grid-cols-1 gap-10 px-6 pt-16 pb-12 lg:grid-cols-[1.1fr_1fr] lg:gap-14 lg:pt-24">
         {/* left: copy + actions */}
-        <div className="relative flex flex-col gap-6">
-          {/* what's new pill */}
-          <button
-            onClick={() => {
-              import("sonner").then(({ toast }) => {
-                toast("What's new in v5.5", {
-                  description: "Names in rooms — type your name when you create or join, or get a friendly guest handle like “raven-otter-42”. See who is typing and who did what · mid-session renames apply live · mobile status bar no longer overflows.",
-                  duration: 8000,
-                });
-              });
-            }}
-            className="anon-mono group inline-flex w-fit items-center gap-2 hairline anon-raise px-2.5 py-1 text-[10px] anon-mut transition-colors hover:bg-[var(--anon-panel)]"
-          >
-            <span className="inline-flex h-1.5 w-1.5 rounded-full anim-beat" style={{ background: "var(--anon-ok)" }} />
-            <span className="anon-fg">v5.5</span> · names & presence, who-is-typing, mobile polish
-            <span className="anon-accent transition-transform group-hover:translate-x-0.5">→</span>
-          </button>
-
+        <div className="flex flex-col gap-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="anon-mono text-sm anon-accent hero-caret">{'>'}</span>
@@ -127,7 +110,7 @@ export function Hero() {
             >
               {booting ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Deriving your key…
+                  <Loader2 className="h-4 w-4 animate-spin" /> Creating room…
                 </>
               ) : (
                 <>

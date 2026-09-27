@@ -173,7 +173,7 @@ export function RoomEntryDialog() {
             {s.booting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                deriving key · PBKDF2 {Math.round(PBKDF2_ROUNDS / 1000)}k…
+                {isCreate ? "creating room…" : "joining room…"}
               </>
             ) : isCreate ? (
               "create room →"
@@ -181,10 +181,6 @@ export function RoomEntryDialog() {
               "join room →"
             )}
           </button>
-
-          <p className="anon-mono text-center text-[9.5px] anon-dim">
-            PBKDF2-SHA256 · {(PBKDF2_ROUNDS / 1000).toFixed(0)}k rounds · AES-GCM-256 · zero-knowledge relay
-          </p>
         </form>
       </div>
     </div>

@@ -62,17 +62,18 @@ export function TopBar() {
         <span className="hidden sm:inline">anonshare</span>
       </button>
 
-      <div className="anon-mono flex h-7 items-center gap-1.5 hairline bg-[var(--anon-panel)] px-2 text-xs">
+      <div className="anon-mono flex h-8 sm:h-7 items-center gap-1.5 hairline bg-[var(--anon-panel)] px-2 text-xs">
         <span>{s.roomEmoji}</span>
         <span className="hidden max-w-[140px] truncate sm:inline">{s.roomTitle}</span>
         <span className="anon-dim">·</span>
         <span className="anon-accent">{s.roomCode || "ABC123"}</span>
         <button
           onClick={() => s.toggleInvite()}
-          className="ml-1 inline-flex items-center gap-1 anon-mut hover:anon-fg"
+          className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded-sm anon-mut hover:anon-fg hover:bg-[var(--anon-raise)] cursor-pointer"
           title="Invite others"
+          aria-label="Invite others"
         >
-          <Link2 className="h-3 w-3" />
+          <Link2 className="h-3.5 w-3.5" />
         </button>
       </div>
 
@@ -122,7 +123,7 @@ export function TopBar() {
         <button
           onClick={() => s.runCode()}
           disabled={s.running}
-          className="anon-mono inline-flex h-7 items-center gap-1.5 bg-[var(--anon-accent)] px-3 text-xs font-medium text-[var(--anon-accent-fg)] transition-transform hover:brightness-110 active:translate-y-px disabled:opacity-60"
+          className="anon-mono inline-flex h-8 sm:h-7 items-center gap-1.5 bg-[var(--anon-accent)] px-3 text-xs font-medium text-[var(--anon-accent-fg)] transition-transform hover:brightness-110 active:translate-y-px disabled:opacity-60"
           title="Run code · ⌘↵"
         >
           {s.running ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />} Run
@@ -153,7 +154,7 @@ export function TopBar() {
 
         <button
           onClick={() => s.toggleChat()}
-          className={`anon-mono relative inline-flex h-7 items-center gap-1.5 px-2 text-xs hairline hover:bg-[var(--anon-panel)] ${
+          className={`anon-mono relative inline-flex h-8 sm:h-7 items-center gap-1.5 px-2.5 sm:px-2 text-xs hairline hover:bg-[var(--anon-panel)] ${
             s.chatOpen ? "bg-[var(--anon-panel)]" : ""
           }`}
           title="Toggle chat · ⌘J"
@@ -171,7 +172,7 @@ export function TopBar() {
         {/* notifications bell */}
         <button
           onClick={() => s.toggleNotifications()}
-          className={`anon-mono relative inline-flex h-7 w-7 items-center justify-center hairline hover:bg-[var(--anon-panel)] ${
+          className={`anon-mono relative inline-flex h-8 w-8 sm:h-7 sm:w-7 items-center justify-center hairline hover:bg-[var(--anon-panel)] ${
             s.notificationsOpen ? "bg-[var(--anon-panel)]" : ""
           }`}
           title="Notifications"
@@ -189,7 +190,7 @@ export function TopBar() {
         <div className="relative" ref={overflowRef}>
           <button
             onClick={() => setOverflow((v) => !v)}
-            className={`anon-mono inline-flex h-7 w-7 items-center justify-center hairline hover:bg-[var(--anon-panel)] ${
+            className={`anon-mono inline-flex h-8 w-8 sm:h-7 sm:w-7 items-center justify-center hairline hover:bg-[var(--anon-panel)] ${
               overflow ? "bg-[var(--anon-panel)]" : ""
             }`}
             title="More options"

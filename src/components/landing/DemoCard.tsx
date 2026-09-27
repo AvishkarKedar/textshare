@@ -215,7 +215,7 @@ export function DemoCard() {
         ) : (
           <>
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--anon-ok)" }} />
-            <span>synced · 3 peers · e2ee</span>
+            <span>synced · 3 peers</span>
           </>
         )}
         <span className="anon-dim ml-auto hidden sm:inline">no account · erased on exit</span>
