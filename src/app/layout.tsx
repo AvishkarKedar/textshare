@@ -37,11 +37,11 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL("https://code.avishkark.in"),
   title: {
-    default: "AnonShare — Real-Time Encrypted Code & Text Sharing",
+    default: "AnonShare — Live Code & Text Sharing, End-to-End Encrypted",
     template: "%s | AnonShare",
   },
   description:
-    "AnonShare is an ultra-fast, zero-knowledge, end-to-end encrypted (E2EE) real-time collaborative code editor and scratchpad. Share 6-character room codes instantly with live cursors, code execution in 8 languages, sandboxed HTML preview, and zero registration.",
+    "Share code and text live with anyone in an end-to-end-encrypted room. 6-character codes, live cursors, code execution in 8 languages, HTML preview, zero registration.",
   applicationName: "AnonShare",
   authors: [{ name: "Avishkar Kedar", url: "https://avishkark.in" }],
   generator: "Next.js",
@@ -51,6 +51,15 @@ export const metadata: Metadata = {
     "Anon Share",
     "anon share",
     "anonshare code",
+    "live code share",
+    "live code sharing",
+    "live code",
+    "code share",
+    "share code online",
+    "live text share",
+    "live text sharing",
+    "live text",
+    "share text online",
     "anonymous code share",
     "encrypted code editor",
     "collaborative code editor",
@@ -60,6 +69,7 @@ export const metadata: Metadata = {
     "zero knowledge pastebin",
     "encrypted scratchpad",
     "live code execution",
+    "live code editor",
     "online IDE",
     "Avishkar Kedar",
   ],
@@ -86,9 +96,9 @@ export const metadata: Metadata = {
   },
   manifest: "/manifest.webmanifest",
   openGraph: {
-    title: "AnonShare — Real-Time Encrypted Code & Text Sharing",
+    title: "AnonShare — Live Code & Text Sharing, End-to-End Encrypted",
     description:
-      "Zero-knowledge, end-to-end encrypted collaborative code editor. Create a 6-character room and pair program in real-time with live cursors and sandboxed execution.",
+      "Share code and text live in an end-to-end-encrypted room. 6-character codes, live cursors, sandboxed code execution, zero registration.",
     url: "https://code.avishkark.in",
     siteName: "AnonShare",
     images: [
@@ -104,9 +114,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "AnonShare — Real-Time Encrypted Code & Text Sharing",
+    title: "AnonShare — Live Code & Text Sharing, End-to-End Encrypted",
     description:
-      "Zero-knowledge, end-to-end encrypted collaborative code editor. 6-character rooms with live cursors, sandboxed code runner, and zero registration.",
+      "Share code and text live in an end-to-end-encrypted room. 6-character codes, live cursors, sandboxed code runner, zero registration.",
     images: ["/og.png"],
     creator: "@avishkarkedar",
   },
@@ -128,9 +138,9 @@ const jsonLd = [
     "@context": "https://schema.org",
     "@type": "WebApplication",
     "name": "AnonShare",
-    "alternateName": ["anonshare", "Anon Share", "AnonShare IDE", "anonshare code"],
+    "alternateName": ["anonshare", "Anon Share", "AnonShare IDE", "anonshare code", "AnonShare live code sharing"],
     "url": "https://code.avishkark.in",
-    "description": "AnonShare is an ultra-fast, zero-knowledge, end-to-end encrypted collaborative code editor and scratchpad. Share 6-character room codes instantly with live multi-cursor CRDT sync, in-browser code execution, HTML preview, and zero registration.",
+    "description": "AnonShare is a live code and text sharing platform — an ultra-fast, zero-knowledge, end-to-end encrypted collaborative code editor and scratchpad. Share 6-character room codes instantly with live multi-cursor CRDT sync, in-browser code execution, HTML preview, and zero registration.",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Any (Web Browser)",
     "browserRequirements": "Requires JavaScript. Requires HTML5.",

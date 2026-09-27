@@ -83,3 +83,39 @@ Renamed-file and generated-file behavior verified end-to-end in a two-session lo
 
 - v5.3 live on code.avishkark.in and previously verified end-to-end in production (CI #79 green): stdin UX (python `input()` ×2 verified), editor keyboard intelligence, `.c`→C++ auto-routing, real room delete, mobile 390 px clean.
 - Voice/whiteboard removed cleanly in v5.2; typing indicators + color attribution restored.
+
+---
+
+## P4 (owner, ~10 min): Google indexing — the one step the agent cannot do
+
+On-page SEO is complete and deployed (M-23 + keyword patch: title, description, keywords,
+JSON-LD WebApplication/WebSite/FAQPage, sitemap.xml, robots.txt, OG/Twitter cards, IndexNow
+key for Bing/Yandex). The site is **not yet in Google's index** (verified 2026-09-27 via web
+search — zero results). Indexing is the remaining blocker; ranking follows after.
+
+**Do this once (10 minutes):**
+
+1. Open https://search.google.com/search-console → "Add property".
+2. Choose **URL prefix** → `https://code.avishkark.in` (simplest) — or **Domain** `avishkark.in`
+   (covers all subdomains, needs a DNS TXT record at your registrar/Cloudflare).
+3. Verify ownership:
+   - URL-prefix method "HTML tag" gives a meta tag like
+     `<meta name="google-site-verification" content="XXXX" />` — **paste that content value
+     into the chat and the agent will embed it + push** (Next.js `verification.google` field).
+   - (Alternative: upload the HTML verification file — send it and the agent adds it to `public/`.)
+4. In Search Console: **Sitemaps → submit `sitemap.xml` → Submit.**
+5. **URL Inspection** (top search bar) → paste `https://code.avishkark.in/` → **Request indexing.**
+6. Google typically indexes within 1–7 days after a request. Check progress: URL Inspection →
+   "Page indexing" report (also shows crawl errors if any).
+
+**Optional but compounds ranking (backlinks — the honest lever for generic keywords):**
+- Post the site once on Reddit (r/webdev, r/programming tools threads), Hacker News Show HN,
+  or Product Hunt launch. The GitHub README already links the site (do-follow from a strong domain).
+- Bing Webmaster Tools (https://www.bing.com/webmasters) — can import straight from Search
+  Console; Bing/DuckDuckGo/Yandex are already pinged via IndexNow (key
+  `public/1e3f60e998e276d63c5f3711f3651cb9.txt`).
+
+**Expectations (honest):** "Anonshare" → top result within days of indexing (unique brand,
+all signals aligned). "live code" / "code share" / "live text share" — competitive generic
+terms owned by Microsoft Live Share, GitHub et al.; a 1-day-old site with no backlinks will
+not outrank them immediately. Rankings grow with usage signals + backlinks over weeks/months.
