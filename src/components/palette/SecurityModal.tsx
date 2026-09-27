@@ -95,7 +95,7 @@ export function SecurityModal() {
               </h3>
               <div className="space-y-2">
                 <LimitRow body="Traffic analysis: the relay can see message timing and sizes. It cannot read content, but metadata reveals patterns. Use a password to at least prevent trivial correlation." />
-                <LimitRow body="Weak room codes: 6 characters from a 32-char alphabet = ~31 bits of entropy. Bruteforce is rate-limited (20 creates/min, 8 auth/min per IP) but not impossible. Use a password for anything sensitive." />
+                <LimitRow body="Weak room codes: 6 characters from a 32-char alphabet = ~31 bits of entropy. Bruteforce is rate-limited (8 failed-auth attempts/min per IP on both relays) but not impossible. Use a password for anything sensitive." />
                 <LimitRow body="Code runner: executes only on the operator's self-hosted relay inside a real Bubblewrap sandbox (--unshare-all --unshare-net, prlimit caps). No external code-execution API is used. Don't paste secrets regardless." />
                 <LimitRow body="X-Frame-Options: some sites (Google, MDN) block embedding, so the in-app browser can't load them. Click the open-in-new-tab icon instead." />
                 <LimitRow body="No forward secrecy: if your room code + password are ever compromised, all historical messages (within the TTL) can be decrypted. Rotate by creating a new room." />

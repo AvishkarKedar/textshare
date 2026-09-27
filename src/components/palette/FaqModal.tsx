@@ -72,7 +72,7 @@ export const FAQ_DATA: FaqItem[] = [
     id: "rejoin",
     category: "rooms",
     q: "Can I rejoin a room after closing my tab?",
-    a: "Yes, as long as the room's TTL hasn't expired and the room still has at least one connected peer or is within its grace window. Re-enter the same code (and password) from the landing page. Your encryption keys are re-derived locally from the code, so the full document history replays to you — but after the TTL passes, the room is gone for everyone, permanently.",
+    a: "Yes, as long as the room's TTL hasn't expired and the room still has at least one connected peer or is within its grace window. Re-enter the same code (and password) from the landing page. Your encryption keys are re-derived locally from the code, so the full document history replays to you. If the relay itself went down, clients reconnect automatically and can fail over to a backup relay — the room re-creates itself from the first peer to return, and ownership is re-claimed automatically by the original owner. After the TTL passes, the room is gone for everyone, permanently.",
   },
 
   /* ------------------------------- runner ------------------------------- */
@@ -80,7 +80,7 @@ export const FAQ_DATA: FaqItem[] = [
     id: "runner",
     category: "runner",
     q: "How does the live code runner work, and is it sandboxed?",
-    a: "Code executes on the operator's self-hosted relay inside a Bubblewrap-hardened Linux namespace: no network access, a 256 MB memory cap, an 8-second CPU timeout, read-only root filesystem, and a tmpfs scratchpad that is destroyed after each run. Eight languages run natively — JavaScript, Python, C, C++, Java, Rust, Go, and Bash. No third-party execution API is involved at any point.",
+    a: "Code executes on the operator's self-hosted relay inside a Bubblewrap-hardened Linux namespace: no network access, a 256 MB memory cap (VA-hungry runtimes like Node, Go, and the JVM get higher data-segment caps so they can start at all), an 8-second wall-clock timeout (6-second CPU cap, 12 for compiles), read-only root filesystem, and a tmpfs scratchpad destroyed after each run. Four runs execute in parallel with a 25-deep queue; beyond that you get an honest \"server busy\" instead of a hang. Eight languages run natively — JavaScript, Python, C, C++, Java, Rust, Go, and Bash. No third-party execution API is involved at any point.",
   },
   {
     id: "stdin",
@@ -112,7 +112,7 @@ export const FAQ_DATA: FaqItem[] = [
     id: "identity",
     category: "account",
     q: "Why does the room ask for my name? What do others see?",
-    a: "A name is the only way collaborators can tell who is typing, who sent each chat message, and who made which edit — without it, everyone would show up as an anonymous blob. The field is optional: leave it empty and you get a random handle like “raven-otter-42” instead. Whatever you pick is stored only in your own browser, travels inside the end-to-end-encrypted awareness channel (the relay sees ciphertext, not your name), and never leaves the room. Change it any time in Settings → Identity; the update applies live.",
+    a: "A name is the only way collaborators can tell who is typing, who sent each chat message, and who made which edit — without it, everyone would show up as an anonymous blob. The field is optional: leave it empty and you get a random handle like “raven-otter-42” instead. Whatever you pick is stored only in your own browser, travels inside the end-to-end-encrypted awareness channel (the relay sees ciphertext, not your name), and never leaves the room — the same encrypted channel that carries your color, cursor, typing state, and live selection highlight. Change it any time in Settings → Identity; the update applies live.",
   },
   {
     id: "who",
@@ -126,19 +126,19 @@ export const FAQ_DATA: FaqItem[] = [
     id: "limits",
     category: "general",
     q: "What are the rate limits and room capacity?",
-    a: "Each IP is throttled to 300 requests/minute by default, 20 room creations/minute, and 8 password attempts/minute. A single room supports up to 60 concurrent collaborators; beyond that, new joins receive a 429. Runs are capped at 20 per minute per IP. These limits exist to keep the free relay abuse-resistant, not to meter you.",
+    a: "On the primary (self-hosted) relay: 600 requests/minute per IP, 60 room creations/minute per IP, up to 120 concurrent collaborators per room, and 24 simultaneous WebSocket connections per IP. If traffic fails over to the backup relay on Cloudflare Workers, the caps tighten to 300 requests/minute, 20 creates/minute, and 60 peers per room — new joins beyond a cap receive a 429. Code runs are capped at 20 per minute per IP, with 4 executing in parallel and a 25-deep queue. These limits exist to keep the free service abuse-resistant, not to meter you.",
   },
   {
     id: "p2p",
     category: "general",
     q: "How does real-time collaboration actually sync?",
-    a: "Edits sync over a binary WebSocket protocol using CRDTs (Yjs) inside an end-to-end-encrypted envelope, so concurrent edits from many peers converge deterministically without a central authority. Presence, cursors, typing indicators, and chat ride the same encrypted channel. The relay is a dumb, blind forwarder of sealed bytes.",
+    a: "Edits sync over a binary WebSocket protocol using CRDTs (Yjs) inside an end-to-end-encrypted envelope, so concurrent edits from many peers converge deterministically without a central authority. Presence, display names, cursors, typing indicators, live selection highlights, and chat ride the same encrypted channel. The relay is a dumb, blind forwarder of sealed bytes — and if it goes down, the client reconnects automatically (including failover to a backup relay) with your document intact in-browser.",
   },
   {
     id: "browser-support",
     category: "general",
     q: "Which browsers work best?",
-    a: "Any modern browser with WebCrypto (Chrome, Edge, Firefox, Safari — including mobile Safari and Chrome on Android). The encryption, cursor sync, and code execution all run on standard web APIs with no plugins. For best results on desktop, keep the browser updated; on mobile, the layout is touch-optimized with a run button in the bottom bar.",
+    a: "Any modern browser with WebCrypto (Chrome, Edge, Firefox, Safari — including mobile Safari and Chrome on Android). The encryption, cursor sync, and code execution all run on standard web APIs with no plugins. For best results on desktop, keep the browser updated; on mobile, the layout is touch-optimized — Run lives in the top bar, and the symbol-key bar collapses with one tap when you want the full editor height.",
   },
   {
     id: "selfhost",

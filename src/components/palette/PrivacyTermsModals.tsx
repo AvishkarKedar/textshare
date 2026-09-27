@@ -55,7 +55,7 @@ const PRIVACY_SECTIONS: { title: string; body: React.ReactNode }[] = [
           <li><b>IP address</b> — for per-IP rate limiting (throttling counters, kept in memory only).</li>
           <li><b>Room code</b> — the 6-character identifier, so peers can find the same room.</li>
           <li><b>SHA-256(auth)</b> — a one-way hash of your derived authentication token, used to verify you without knowing the token itself.</li>
-          <li><b>Encrypted payload bytes</b> — sealed AES-GCM-256 ciphertext. The relay stores and forwards these but cannot decrypt them; the key never leaves your browser.</li>
+          <li><b>Encrypted payload bytes</b> — sealed AES-GCM-256 ciphertext. The relay stores and forwards these but cannot decrypt them; the key never leaves your browser. This includes presence updates (display names, colors, cursor lines, typing indicators, and live selection ranges), which ride the same sealed channel.</li>
           <li><b>Encrypted file chunks</b> — up to 25 MB per file, sealed with the same room key.</li>
           <li><b>Room metadata</b> — creation time, chosen TTL, peer count, and connection timestamps.</li>
         </ul>
@@ -122,7 +122,10 @@ const PRIVACY_SECTIONS: { title: string; body: React.ReactNode }[] = [
       <p>
         When you press Run, your active file is sent — inside the same encrypted session — to the
         relay&apos;s sandbox, where it executes in a Bubblewrap-sealed Linux namespace with no
-        network access, a 256 MB memory cap, and an 8-second timeout. The scratchpad used for
+        network access, a 256 MB memory cap (runtimes that need more address space, like Node, Go,
+        and the JVM, run with higher data-segment caps instead), and an 8-second timeout. Four
+        runs execute in parallel behind a 25-job queue; heavier bursts receive an explicit
+        &quot;server busy&quot; response rather than silently hanging. The scratchpad used for
         execution is destroyed after each run. Run outputs return to every room participant over
         the encrypted channel. The relay keeps a short-lived rate-limit counter (runs per IP per
         minute) but does not log the code that was executed.
@@ -134,10 +137,13 @@ const PRIVACY_SECTIONS: { title: string; body: React.ReactNode }[] = [
     body: (
       <p>
         The hosted service at code.avishkark.in is served through Cloudflare Pages (static asset
-        delivery) and the operator&apos;s own relay server. Cloudflare processes standard request
-        metadata (IP, TLS handshake) as part of CDN delivery. No other third party receives your
-        data — there are no external APIs in the request path for collaboration, chat, or
-        execution. The project is open source, so every component can be audited or self-hosted.
+        delivery) and the operator&apos;s own relay server. If the primary relay becomes
+        unreachable, clients automatically fail over to a backup relay hosted on Cloudflare
+        Workers — that path carries the same end-to-end-encrypted payloads, so Cloudflare sees
+        only TLS metadata and ciphertext, exactly as with CDN delivery. No other third party
+        receives your data — there are no external APIs in the request path for collaboration,
+        chat, or execution. The project is open source, so every component can be audited or
+        self-hosted.
       </p>
     ),
   },
