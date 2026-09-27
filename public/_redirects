@@ -1,0 +1,5 @@
+# Cloudflare Pages redirects
+# Consolidate www → canonical host so Google indexes one version of every URL.
+# Host-scoped rule: only fires on requests to www.code.avishkark.in; the
+# canonical host (code.avishkark.in) is untouched.
+www.code.avishkark.in/* https://code.avishkark.in/:splat 301
