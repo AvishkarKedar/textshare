@@ -1,25 +1,37 @@
 {
-  "name": "anonshare",
-  "short_name": "anonshare",
-  "description": "Live, end-to-end encrypted text and code sharing. No account, erased when everyone leaves.",
+  "name": "AnonShare — Real-Time Encrypted Code & Text Sharing",
+  "short_name": "AnonShare",
+  "description": "Live, zero-knowledge, end-to-end encrypted code and text sharing in your browser. 6-character room codes with live cursors, code runner, and zero registration.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#090a0f",
+  "theme_color": "#090a0f",
   "orientation": "any",
-  "categories": ["productivity", "utilities"],
+  "categories": ["developer", "productivity", "utilities"],
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='black'/><text x='50' y='56' font-size='64' font-family='monospace' fill='%234c8dff' text-anchor='middle' dominant-baseline='middle'>&gt;</text></svg>",
+      "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='black'/><text x='50' y='56' font-size='64' font-family='monospace' fill='%234c8dff' text-anchor='middle' dominant-baseline='middle'>&gt;</text></svg>",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/favicon.png",
+      "sizes": "32x32 48x48 64x64",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ]

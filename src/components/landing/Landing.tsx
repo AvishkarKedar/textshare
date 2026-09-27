@@ -11,7 +11,7 @@ import { Reveal } from "./Reveal";
 
 export function Landing() {
   return (
-    <div className="flex min-h-screen flex-col">
+    <main className="flex min-h-screen flex-col" role="main">
       <Hero />
       <Reveal>
         <StatsStrip />
@@ -29,6 +29,6 @@ export function Landing() {
         <CtaBanner />
       </Reveal>
       <LandingFooter />
-    </div>
+    </main>
   );
 }

@@ -10,5 +10,17 @@ Allow: /
 User-agent: facebookexternalhit
 Allow: /
 
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+User-agent: YandexBot
+Allow: /
+
 User-agent: *
 Allow: /
+
+Sitemap: https://code.avishkark.in/sitemap.xml
+Host: https://code.avishkark.in

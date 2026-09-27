@@ -100,6 +100,12 @@
 |               |                   | targets (h-8 sm:h-7); simplified footer to  | TopBar.tsx, status.ts,      |
 |               |                   | 3 cols; bumped version to 5.5.1.            | package.json                |
 +---------------+-------------------+---------------------------------------------+-----------------------------+
+| M-23          | SEO & Google Rank | Built comprehensive Google search dominance | src/app/layout.tsx,         |
+|               | Optimization      | suite: Schema.org JSON-LD (WebApplication,  | src/components/landing/*,   |
+|               |                   | WebSite, FAQPage rich snippets), canonical  | public/robots.txt,          |
+|               |                   | meta, OpenGraph 1200x630, Twitter cards,    | public/sitemap.xml,         |
+|               |                   | robots.txt sitemap directive, PWA manifest. | public/manifest.webmanifest |
++---------------+-------------------+---------------------------------------------+-----------------------------+
 ```
 
 ---
