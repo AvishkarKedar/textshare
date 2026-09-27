@@ -154,6 +154,32 @@
 - [ ] **AI Pair Programmer (`/ai`)**: Introduce optional client-side API key configuration for LLM inline code completion.
 - [ ] **Additional Compilers**: Expand `/api/run` sandbox to support Zig, Kotlin, Swift, and PHP.
 
+### 4.3 UX Improvement Backlog (audit 2026-09-27 — 16 suggestions, grounded in the audit findings; none implemented, all optional)
+
+**Collaboration visibility**
+1. **Remote caret rendering**: extend the M-21 selection overlay to draw the actual caret (from == to) as a 2px vertical bar in the peer's color — peers' cursors become visible while typing, not only while selecting.
+2. **Name chip on remote selections**: render the peer's display name floating at the start of their selection highlight (Google-Docs style) so you instantly know whose selection the tint belongs to.
+3. **Peer join/leave toasts + optional sound**: presence-strip changes are easy to miss; a brief "raven-otter-42 joined" toast (with an opt-in chime in Settings) makes multi-user rooms feel alive.
+4. **Unread badge on the mobile chat drawer handle**: chat is closed by default on phones; a red unread count on the chat nav button would stop missed messages.
+5. **aria-live announcements** for peer join/leave/typing and sync-state changes (screen-reader accessibility for the collaboration layer).
+
+**Reliability & connection UX**
+6. **Persistent reconnect banner**: during relay failover, show a slim top banner ("reconnecting via backup relay… attempt 3") in addition to the status-button text — failover currently works but is nearly invisible.
+7. **Room-full / rate-limit friendly errors**: verify each relay error string maps to a human sentence in `describeRoomError` so "room is full" never surfaces as a generic failure.
+8. **Clipboard-paste button in the join dialog**: one tap to paste a copied code; the 6-char manual entry is the last error-prone step (entry field already auto-uppercases).
+
+**Editor & content**
+9. **Line-wrap toggle**: a zen-mode-adjacent setting for horizontal-scroll (no-wrap) editing; long lines currently always pre-wrap.
+10. **Chat code-block rendering**: light syntax coloring for ``` blocks in chat (reuse `tokenizeLine`) — currently monochrome.
+11. **Terminal output copy button**: one-tap copy of stdout/stderr blocks in the terminal drawer.
+12. **Snapshot diff view**: in History/time-machine, a side-by-side or inline diff when scrubbing to a snapshot, instead of full-content replace preview.
+13. **Drag-and-drop file open**: dropping a .py/.js/.md file onto the editor stage creates a tab with its content (files drawer currently the only path).
+
+**Mobile**
+14. **Invite QR code**: `qrcode.react` is already a dependency — render the invite URL as a QR in the invite modal for phone-to-phone handoff.
+15. **Mobile font-size stepper**: the editor font-size setting exists but is buried in Settings; a quick stepper (A− / A+) in the mobile More menu would surface it.
+16. **PWA install shell**: manifest + icons + offline shell for the static export so phones can install anonshare as an app.
+
 ---
 
 ## 5. Production Release & Deployment Runbook
