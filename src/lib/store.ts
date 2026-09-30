@@ -569,6 +569,19 @@ function sessionActive(): boolean {
 const CPP_SOURCE_RE =
   /#\s*include\s*<(?:iostream|bits\/stdc\+\+\.h|string|vector|map|unordered_map|multimap|set|unordered_set|queue|priority_queue|stack|deque|list|array|forward_list|memory|functional|algorithm|utility|numeric|random|regex|sstream|fstream|iomanip|chrono|thread|mutex|future|atomic|optional|variant|tuple|bitset)>|(?:\busing\s+namespace\s+std\b|\bstd\s*::)/;
 
+/** Shape of the /api/run POST response. The GET variant of the same path
+ *  returns a service info object instead — discriminated by the absence of
+ *  stdout/stderr/exitCode, which the runCode handler treats as an error. */
+interface RunResponse {
+  ok?: boolean;
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
+  durationMs?: number;
+  language?: string;
+  error?: string;
+}
+
 function describeRoomError(res: { ok: false; reason: string; status?: number; detail?: string }): string {
   switch (res.reason) {
     case "network": return "Could not reach the relay. Check your connection and retry.";
@@ -1370,12 +1383,47 @@ export const useAnon = create<AnonState>()(
               stdin: cleanStdin,
             }),
           });
-          const data = await res.json();
+          // A proxy, redirect, or error page can hand back HTML instead of a
+          // run result. Parse defensively: res.json() would otherwise throw a
+          // bare "SyntaxError: Unexpected token" and surface as a cryptic
+          // "fetch failed" line. Validate the payload shape too — the GET
+          // variant of /api/run returns a service info object (no
+          // stdout/stderr/exitCode), which used to render as a silent
+          // "[exit 0] · undefinedms" non-run.
+          let data: RunResponse | null = null;
+          try {
+            data = (await res.json()) as RunResponse | null;
+          } catch {
+            data = null;
+          }
+          const isRunResult =
+            !!data &&
+            (typeof data.stdout === "string" ||
+              typeof data.stderr === "string" ||
+              typeof data.exitCode === "number");
+          if (!isRunResult) {
+            const ts = Date.now();
+            const why =
+              data && typeof (data as { error?: string }).error === "string"
+                ? (data as { error: string }).error
+                : `HTTP ${res.status} ${res.statusText || ""}`.trim() +
+                  " — unexpected response from the run endpoint (not a run result)";
+            set((st) => ({
+              terminalLines: [
+                ...st.terminalLines,
+                { id: `err${ts}`, kind: "error" as const, text: `run failed: ${why}`, ts },
+              ],
+            }));
+            return;
+          }
           const ts = Date.now();
           const newLines: TerminalLine[] = [];
-          const outText = typeof data.stdout === "string" ? data.stdout : "";
-          const errText = typeof data.stderr === "string" ? data.stderr : "";
-          const exitCode = typeof data.exitCode === "number" ? data.exitCode : data.ok ? 0 : 1;
+          const outText = typeof data!.stdout === "string" ? data!.stdout : "";
+          const errText = typeof data!.stderr === "string" ? data!.stderr : "";
+          const exitCode =
+            typeof data!.exitCode === "number" ? data!.exitCode : data!.ok ? 0 : 1;
+          const durMs =
+            typeof data!.durationMs === "number" ? data!.durationMs : Date.now() - startTs;
           if (outText) {
             outText.split("\n").forEach((l: string, i: number) => {
               newLines.push({ id: `o${ts}-${i}`, kind: "stdout" as const, text: l, ts });
@@ -1389,7 +1437,7 @@ export const useAnon = create<AnonState>()(
           newLines.push({
             id: `m${ts}`,
             kind: "meta" as const,
-            text: `[exit ${exitCode}] · ${data.durationMs}ms`,
+            text: `[exit ${exitCode}] · ${durMs}ms`,
             ts,
             exit: exitCode,
           });
