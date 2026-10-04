@@ -26,19 +26,17 @@ const USE_CASES = [
 
 export function UseCases() {
   return (
-    <section className="mx-auto max-w-7xl px-6 py-16">
-      <div className="mb-8 flex items-end justify-between">
-        <div>
-          <div className="anon-mono mb-2 text-xs uppercase tracking-wider anon-dim">
+    <section className="hairline-t">
+      <div className="mx-auto max-w-7xl px-6 py-16">
+        <div className="mb-8">
+          <div className="anon-mono mb-2 text-xs uppercase tracking-wider anon-mut">
             what people use it for
           </div>
           <h2 className="anon-sans text-2xl font-semibold tracking-tight sm:text-3xl">
             Three rooms, three reasons.
           </h2>
         </div>
-        <div className="anon-mono hidden text-xs anon-mut sm:block">/use-cases</div>
-      </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {USE_CASES.map((u, i) => {
           const Icon = u.icon;
           return (
@@ -52,11 +50,11 @@ export function UseCases() {
             >
               <div
                 className="mb-4 inline-flex h-10 w-10 items-center justify-center hairline transition-transform group-hover:scale-110"
-                style={{ color: u.accent, borderColor: u.accent + "40" }}
+                style={{ color: u.accent, borderColor: `color-mix(in srgb, ${u.accent} 25%, transparent)` }}
               >
                 <Icon className="h-5 w-5" />
               </div>
-              <h3 className="anon-sans mb-2 text-lg font-medium">{u.title}</h3>
+              <h3 className="anon-sans mb-2 text-base font-medium">{u.title}</h3>
               <p className="anon-sans text-sm leading-relaxed anon-mut">{u.body}</p>
               <div
                 className="absolute inset-x-0 bottom-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
@@ -65,6 +63,7 @@ export function UseCases() {
             </motion.div>
           );
         })}
+        </div>
       </div>
     </section>
   );

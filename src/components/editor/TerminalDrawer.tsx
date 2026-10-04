@@ -40,11 +40,16 @@ export function TerminalDrawer() {
   const inputHint = LANG_INPUT_HINTS[lang] ?? "one line per read";
   const stdinLines = s.stdin.trim() ? s.stdin.split("\n").length : 0;
 
+  // Key the auto-scroll to the id of the newest line, not the array length:
+  // the store caps terminalLines at a fixed size, and once the cap is reached
+  // the length stops changing while new lines keep arriving.
+  const lastLine = s.terminalLines[s.terminalLines.length - 1];
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [s.terminalLines.length, s.running]);
+  }, [lastLine?.id, s.running]);
 
   /* ---- drag-to-resize (desktop pointer only) ---- */
   function onDragStart(e: React.PointerEvent) {
@@ -223,7 +228,8 @@ export function TerminalDrawer() {
               autoCapitalize="off"
               autoComplete="off"
               aria-label="Program input (stdin)"
-              className="anon-mono anon-scroll ed-font h-16 resize-none bg-[var(--anon-bg)] hairline-b text-[length:var(--anon-edfont)] leading-snug px-2 py-1.5 outline-none focus:border-[var(--anon-accent)] mx-0"
+              disabled={s.running}
+              className="anon-mono anon-scroll ed-font h-16 resize-none bg-[var(--anon-bg)] hairline-b text-[length:var(--anon-edfont)] leading-snug px-2 py-1.5 outline-none focus:border-[var(--anon-accent)] mx-0 disabled:opacity-60"
             />
             <div className="anon-mono px-3 py-1 text-[10px] anon-mut">
               {inputHint}

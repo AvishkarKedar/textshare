@@ -96,6 +96,11 @@ export function EditorStage() {
   const [cursorLine, setCursorLine] = useState(5);
   const [slashRect, setSlashRect] = useState<DOMRect | null>(null);
   const [slashQ, setSlashQ] = useState("");
+  // inline text prompt (/goal, /snap) — anchored where the command was
+  // typed. The non-blocking replacement for window.prompt dialogs.
+  const [prompt, setPrompt] = useState<
+    { kind: "goal" | "snapshot"; rect: DOMRect; initial: string } | null
+  >(null);
 
   // Coarse-pointer (touch) detection — the editor font must be ≥ 16px there
   // or iOS Safari auto-zooms the page on every focus. Respects the user's
@@ -136,6 +141,33 @@ export function EditorStage() {
     color: p.color,
   }));
 
+  /** Anchor rect for the inline /goal and /snap prompts — the caret where
+   *  the command was typed, or the top of the editor as a fallback. */
+  function promptRect(): DOMRect {
+    if (slashRect) return slashRect;
+    const ta = textareaRef.current;
+    if (ta) {
+      const r = ta.getBoundingClientRect();
+      return new DOMRect(r.left + 60, r.top + 16, 0, 20);
+    }
+    return new DOMRect(64, 96, 0, 20);
+  }
+
+  /** Save the inline prompt (/goal pins the session goal, /snap bookmarks a
+   *  history snapshot) and hand focus back to the editor. */
+  function submitPrompt(value: string) {
+    const kind = prompt?.kind;
+    setPrompt(null);
+    if (kind === "goal") {
+      s.setGoal(value);
+      toast.success("Goal pinned", { description: value });
+    } else if (kind === "snapshot") {
+      s.addSnapshot(value);
+      toast.success("Snapshot bookmarked", { description: value });
+    }
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
   function openSlash(q: string) {
     setSlashQ(q);
     const ta = textareaRef.current;
@@ -161,6 +193,10 @@ export function EditorStage() {
   function handleSlashPick(cmd: SlashCommand) {
     // remove the /trigger text from the editor (everything from the slash to caret)
     const ta = textareaRef.current;
+    // /goal and /snap open the anchored inline prompt, which focuses ITS OWN
+    // input on mount. Refocusing the textarea here (rAF) would fire the
+    // textarea's onFocus → setPrompt(null) and kill the prompt instantly.
+    const opensPrompt = cmd.id === "goal" || cmd.id === "snap";
     if (ta) {
       const upto = ta.value.substring(0, ta.selectionStart);
       const slashIdx = upto.lastIndexOf("/");
@@ -171,7 +207,7 @@ export function EditorStage() {
         // restore caret
         requestAnimationFrame(() => {
           ta.selectionStart = ta.selectionEnd = before.length;
-          ta.focus();
+          if (!opensPrompt) ta.focus();
         });
       }
     }
@@ -184,19 +220,15 @@ export function EditorStage() {
         s.runCode();
         break;
       case "generative":
+        if (!s.generativeOpen) s.closePanels();
         s.toggleGenerative();
         break;
       case "snap":
         s.toggleHistory();
-        setTimeout(() => {
-          const label = prompt("Name this snapshot:", "v2 — after refactor");
-          if (label && label.trim()) {
-            s.addSnapshot(label);
-            toast.success("Snapshot bookmarked", { description: label.trim() });
-          }
-        }, 250);
+        setPrompt({ kind: "snapshot", rect: promptRect(), initial: "" });
         break;
       case "browser":
+        if (!s.browserOpen) s.closePanels();
         s.toggleBrowser();
         break;
       case "files":
@@ -232,21 +264,39 @@ export function EditorStage() {
         s.toggleZen();
         break;
       case "clear":
-        if (confirm("Clear the active file?")) {
-          s.updateFileContent(file.id, "");
-          toast.success("Editor cleared");
-        }
+        // non-blocking confirmation — an explicit action click, same pattern
+        // as the language-detection prompt in onPaste below
+        toast("Clear the active file?", {
+          description: "only the open file's content is removed",
+          action: {
+            label: "clear file",
+            onClick: () => {
+              s.updateFileContent(file.id, "");
+              toast.success("Editor cleared");
+            },
+          },
+          duration: 6000,
+        });
         break;
       case "goal":
-        {
-          const text = prompt("Set a session goal:", "ship the deriveKey split by EOD");
-          if (text && text.trim()) {
-            s.setGoal(text);
-            toast.success("Goal pinned", { description: text.trim() });
-          }
-        }
+        // opens the inline goal input (pre-filled when a goal is already
+        // pinned) — no blocking window.prompt
+        setPrompt({ kind: "goal", rect: promptRect(), initial: s.goalText });
+        break;
+      case "teamwork":
+        if (!s.teamworkOpen) s.closePanels();
+        s.toggleTeamwork();
+        break;
+      case "learn":
+        if (!s.learnOpen) s.closePanels();
+        s.toggleLearn();
+        break;
+      case "council":
+        if (!s.councilOpen) s.closePanels();
+        s.toggleCouncil();
         break;
       case "history":
+        if (!s.historyOpen) s.closePanels();
         s.toggleHistory();
         break;
       case "help":
@@ -575,6 +625,7 @@ export function EditorStage() {
               onSelect={handleSelect}
               onKeyUp={handleSelect}
               onClick={handleSelect}
+              onFocus={() => setPrompt(null)}
               onKeyDown={handleKeyDown}
               onScroll={(e) => {
                 // keep line numbers + overlays glued to the code while the
@@ -644,8 +695,117 @@ export function EditorStage() {
           }}
         />
       )}
+
+      {/* inline text prompt (/goal, /snap) — anchored where the slash
+          command was typed; Enter submits, Esc cancels */}
+      {prompt && (
+        <InlineTextPrompt
+          anchorRect={prompt.rect}
+          title={prompt.kind === "goal" ? "session goal" : "name this snapshot"}
+          initial={prompt.initial}
+          placeholder={
+            prompt.kind === "goal"
+              ? "ship the deriveKey split by EOD"
+              : "v2 — after refactor"
+          }
+          submitLabel={prompt.kind === "goal" ? "pin goal" : "bookmark"}
+          onSubmit={submitPrompt}
+          onCancel={() => {
+            setPrompt(null);
+            requestAnimationFrame(() => textareaRef.current?.focus());
+          }}
+        />
+      )}
       {/* keep slashQ referenced so the filter hook works if needed later */}
       <span className="sr-only">{slashQ}</span>
+    </div>
+  );
+}
+
+/** Anchored single-line text prompt — the non-blocking replacement for
+ *  window.prompt() in slash commands (/goal, /snap). Enter submits, Esc
+ *  cancels, focus returns to the editor afterwards. Styled like the
+ *  slash-command popup (hairline panel, uppercase dim label, mono). */
+function InlineTextPrompt(props: {
+  anchorRect: DOMRect;
+  title: string;
+  initial: string;
+  placeholder: string;
+  submitLabel: string;
+  onSubmit: (value: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(props.initial);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  // clamp the panel inside the viewport
+  const left = Math.min(
+    Math.max(8, props.anchorRect.left),
+    (typeof window !== "undefined" ? window.innerWidth : 1024) - 296,
+  );
+  const top = props.anchorRect.bottom + 4;
+
+  return (
+    <div
+      className="fixed z-50 w-72 hairline anon-panel shadow-2xl shadow-black/40 anim-rise"
+      style={{ top, left }}
+      role="dialog"
+      aria-label={props.title}
+    >
+      <div className="flex h-7 items-center px-3 hairline-b">
+        <span className="anon-mono text-[10px] uppercase tracking-wider anon-dim">
+          {props.title}
+        </span>
+      </div>
+      <div className="p-2">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          maxLength={200}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              if (value.trim()) props.onSubmit(value.trim());
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              props.onCancel();
+            }
+          }}
+          placeholder={props.placeholder}
+          aria-label={props.title}
+          className="anon-mono h-9 w-full bg-[var(--anon-bg)] hairline px-3 text-sm anon-fg outline-none focus:border-[var(--anon-accent)]"
+        />
+      </div>
+      <div className="hairline-t flex items-center justify-between px-3 py-1.5">
+        <span className="anon-mono text-[9px] anon-dim">
+          ↵ {props.submitLabel} · esc cancel
+        </span>
+        <span className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={props.onCancel}
+            className="anon-mono hairline px-2 py-1 text-[10px] anon-mut hover:anon-fg"
+          >
+            cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => value.trim() && props.onSubmit(value.trim())}
+            disabled={!value.trim()}
+            className="anon-mono bg-[var(--anon-accent)] px-2 py-1 text-[10px] text-[var(--anon-accent-fg)] transition-transform hover:brightness-110 active:translate-y-px disabled:opacity-50"
+          >
+            {props.submitLabel}
+          </button>
+        </span>
+      </div>
     </div>
   );
 }

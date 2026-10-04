@@ -19,8 +19,8 @@ Whenever you make any change to this repository, you **MUST** synchronize the co
 - **Tasks / Roadmap / Bug Fixes / Changelogs** → Update [`tasks.md`](tasks.md)
 - **Incidents / Debugging / Post-Mortems / Lessons** → Update [`memory.md`](memory.md)
 
-## Current System Snapshot (2026-09-27, M-23)
-- **Version**: 5.5.1 (`package.json`, landing UI, `/api/status` in sync).
+## Current System Snapshot (2026-10-04, v5.6.0)
+- **Version**: 5.6.0 (`package.json`, `/api/status`, `/api`, JSON-LD `softwareVersion` in sync).
 - **Production endpoints**: `code.avishkark.in` (CF Pages, static export + `functions/api/*`) · `relay.avishkark.in` (VPS Node relay, bwrap-hardened runner) · `textshare-sync.avishkarkedar.workers.dev` (backup CF Worker relay) · `admincode.avishkark.in` (admin panel). All four verified live; relay runner confirmed working for python/js/bash (real exit codes, ms-level timings).
 - **Search Engine Optimization (M-23)**: Complete Google search dominance metadata suite: canonical link, target keywords (`AnonShare`, `anonshare`, `Anon Share`, `encrypted code editor`, `pair programming`), OpenGraph 1200x630 card, Twitter summary_large_image card, crawler `robots.txt` directives with sitemap reference, `sitemap.xml` with `<lastmod>`, high-res PWA manifest, semantic `<main>` tag, and comprehensive Schema.org JSON-LD structured data (`WebApplication`, `WebSite`, `FAQPage` rich snippet schemas).
 - **UI De-Jargon & Cleanup (M-22)**: 48 unused `shadcn/ui` components and dead `Testimonials.tsx` removed; technical crypto jargon removed from Hero, StatsStrip, RoomEntryDialog, and FilesDrawer (retained in FAQ / Security modals); TopBar touch target height raised to `h-8 sm:h-7` with larger invite button; footer converted to 3 columns; supported language count aligned to 8.

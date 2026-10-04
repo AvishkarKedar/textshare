@@ -44,34 +44,35 @@ export function LandingFooter() {
           </div>
 
           <div>
-            <div className="anon-mono mb-3 text-xs uppercase tracking-wider anon-dim">
+            <div className="anon-mono mb-3 text-xs uppercase tracking-wider anon-mut">
               help
             </div>
             <ul className="space-y-2 anon-sans text-sm anon-mut">
-              <li><button onClick={() => toggleFaq()} className="hover:anon-fg text-left cursor-pointer">Frequently Asked Questions (FAQ)</button></li>
-              <li><button onClick={() => toggleShortcuts()} className="hover:anon-fg text-left cursor-pointer">Keyboard shortcuts</button></li>
-              <li><button onClick={() => toast("Slash commands in editor", { description: "Type / in any line: /run /clear /history /crypto /faq /export …" })} className="hover:anon-fg text-left cursor-pointer">Slash commands</button></li>
-              <li><button onClick={() => toggleStatus()} className="hover:anon-fg text-left cursor-pointer">System status</button></li>
+              {/* py-2 + space-y-2 puts each link's tap center 44px apart on touch */}
+              <li><button onClick={() => toggleFaq()} className="hover:anon-fg py-2 text-left cursor-pointer">FAQ</button></li>
+              <li><button onClick={() => toggleShortcuts()} className="hover:anon-fg py-2 text-left cursor-pointer">Keyboard shortcuts</button></li>
+              <li><button onClick={() => toast("Slash commands in editor", { description: "Type / in any line: /run /clear /history /crypto /faq /export …" })} className="hover:anon-fg py-2 text-left cursor-pointer">Slash commands</button></li>
+              <li><button onClick={() => toggleStatus()} className="hover:anon-fg py-2 text-left cursor-pointer">System status</button></li>
             </ul>
           </div>
 
           <div>
-            <div className="anon-mono mb-3 text-xs uppercase tracking-wider anon-dim">
+            <div className="anon-mono mb-3 text-xs uppercase tracking-wider anon-mut">
               legal
             </div>
             <ul className="space-y-2 anon-sans text-sm anon-mut">
-              <li><button onClick={() => toggleSecurity()} className="hover:anon-fg inline-flex items-center gap-1 cursor-pointer"><Shield className="h-3 w-3" /> Security & Threat Model</button></li>
-              <li><button onClick={() => togglePrivacy()} className="hover:anon-fg inline-flex items-center gap-1 cursor-pointer"><FileText className="h-3 w-3" /> Privacy Policy</button></li>
-              <li><button onClick={() => toggleTerms()} className="hover:anon-fg inline-flex items-center gap-1 cursor-pointer"><FileText className="h-3 w-3" /> Terms of Service</button></li>
+              <li><button onClick={() => toggleSecurity()} className="hover:anon-fg inline-flex items-center gap-1 py-2 cursor-pointer"><Shield className="h-3 w-3" /> Security & Threat Model</button></li>
+              <li><button onClick={() => togglePrivacy()} className="hover:anon-fg inline-flex items-center gap-1 py-2 cursor-pointer"><FileText className="h-3 w-3" /> Privacy Policy</button></li>
+              <li><button onClick={() => toggleTerms()} className="hover:anon-fg inline-flex items-center gap-1 py-2 cursor-pointer"><FileText className="h-3 w-3" /> Terms of Service</button></li>
             </ul>
           </div>
         </div>
 
         <div className="hairline-t mt-8 flex flex-col items-start justify-between gap-2 pt-6 sm:flex-row sm:items-center">
-          <p className="anon-mono text-[11px] anon-dim">
+          <p className="anon-mono text-[11px] anon-mut">
             © {new Date().getFullYear()} anonshare · MIT · built by <a href="https://avishkark.in" target="_blank" rel="noopener" className="anon-accent hover:underline">Avishkar Kedar</a>
           </p>
-          <p className="anon-mono text-[11px] anon-dim">
+          <p className="anon-mono text-[11px] anon-mut">
             <a href="mailto:avishkarkedar+text@gmail.com" className="hover:anon-fg">avishkarkedar+text@gmail.com</a>
           </p>
         </div>

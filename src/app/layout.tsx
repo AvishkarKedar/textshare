@@ -144,7 +144,7 @@ const jsonLd = [
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Any (Web Browser)",
     "browserRequirements": "Requires JavaScript. Requires HTML5.",
-    "softwareVersion": "5.5.1",
+    "softwareVersion": "5.6.0",
     "inLanguage": "en",
     "isAccessibleForFree": true,
     "offers": {

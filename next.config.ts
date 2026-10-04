@@ -31,6 +31,7 @@ const nextConfig: NextConfig = {
           return [
             { source: "/api/run", destination: "http://127.0.0.1:8788/run" },
             { source: "/api/status", destination: "http://127.0.0.1:8788/status" },
+            { source: "/api/council", destination: "http://127.0.0.1:8788/council" },
             { source: "/api/crypto", destination: "http://127.0.0.1:8788/crypto" },
             { source: "/api/generate", destination: "http://127.0.0.1:8788/generate" },
           ];

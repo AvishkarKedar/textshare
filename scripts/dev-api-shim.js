@@ -56,6 +56,23 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // /council — mirrors functions/api/council.ts honest no-binding fallback:
+  // local dev has no Workers AI binding, so the modal shows the real
+  // "no model bound" notice instead of a 404.
+  if (url.pathname === "/council" && (req.method === "POST" || req.method === "GET")) {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        configured: false,
+        model: "",
+        verdicts: [],
+        notice: "dev shim: no Workers AI binding locally — the deployment needs the AI binding for real reviews.",
+      }),
+    );
+    return;
+  }
+
   if (url.pathname === "/crypto" && req.method === "POST") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, rounds: 600000 }));

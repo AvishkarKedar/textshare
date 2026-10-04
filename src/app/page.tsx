@@ -21,6 +21,9 @@ import { SecurityModal } from "@/components/palette/SecurityModal";
 import { PrivacyTermsModals } from "@/components/palette/PrivacyTermsModals";
 import { FaqModal } from "@/components/palette/FaqModal";
 import { RoomEntryDialog } from "@/components/palette/RoomEntryDialog";
+import { TeamworkPanel } from "@/components/palette/TeamworkPanel";
+import { LearnPanel } from "@/components/palette/LearnPanel";
+import { CouncilModal } from "@/components/palette/CouncilModal";
 
 export default function Home() {
   const view = useAnon((s) => s.view);
@@ -171,6 +174,9 @@ export default function Home() {
 
       {/* global overlays — mounted at root so they float above everything */}
       <RoomEntryDialog />
+      <TeamworkPanel />
+      <LearnPanel />
+      <CouncilModal />
       <CommandPalette />
       <ShortcutsOverlay />
       <InviteModal />

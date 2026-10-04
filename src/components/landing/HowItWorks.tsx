@@ -20,10 +20,12 @@ const STEPS = [
 
 export function HowItWorks() {
   return (
-    <section className="hairline-t">
+    <section>
+      {/* no hairline-t: the StatsStrip above already closes with hairline-b,
+          so adding one here would double the border */}
       <div className="mx-auto max-w-7xl px-6 py-16">
-        <div className="mb-10">
-          <div className="anon-mono mb-2 text-xs uppercase tracking-wider anon-dim">
+        <div className="mb-8">
+          <div className="anon-mono mb-2 text-xs uppercase tracking-wider anon-mut">
             how it works
           </div>
           <h2 className="anon-sans text-2xl font-semibold tracking-tight sm:text-3xl">

@@ -656,6 +656,20 @@ async function runSandboxedProcess({ cmd, args = [], input = '', workspaceDir = 
     '--ro-bind', '/bin', '/bin',
     '--ro-bind-try', '/etc', '/etc',
     '--ro-bind-try', USER_SITE_DIR, USER_SITE_DIR, // pip --user bundle (numpy etc.)
+    ...(
+      // JVM config: Debian/Ubuntu split the JDK's conf/ into /etc/java-* and
+      // symlink $JAVA_HOME/conf to it. If a deployment binds only selected
+      // /etc paths, java.security dangles and javac dies with
+      // "InternalError: Error loading java.security file". Bind the split
+      // configs explicitly so JVM runs work regardless of /etc strategy.
+      isJvm
+        ? [
+            '--ro-bind-try', '/etc/java-21-openjdk', '/etc/java-21-openjdk',
+            '--ro-bind-try', '/etc/java-17-openjdk', '/etc/java-17-openjdk',
+            '--ro-bind-try', '/etc/java-11-openjdk', '/etc/java-11-openjdk'
+          ]
+        : []
+    ),
     '--proc', '/proc',
     '--dev', '/dev',
     '--tmpfs', '/tmp',

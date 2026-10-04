@@ -31,6 +31,11 @@ import { detectLanguage, extToLang } from "./detect";
 export type View = "landing" | "editor";
 export type { RoomExistsInfo, RoomStateFrame, ConnState };
 
+export interface CouncilVerdict {
+  persona: string;
+  text: string;
+}
+
 export interface Participant {
   id: string;
   name: string;
@@ -195,6 +200,9 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { id: "zen", trigger: "/zen", label: "Toggle zen mode", hint: "distraction-free editor", icon: "◗" },
   { id: "clear", trigger: "/clear", label: "Clear editor", hint: "wipe the active file", icon: "✕" },
   { id: "goal", trigger: "/goal", label: "Set a goal", hint: "pin a session objective", icon: "◎" },
+  { id: "teamwork", trigger: "/teamwork", label: "Teamwork panel", hint: "who's in · invite · room facts", icon: "◈" },
+  { id: "learn", trigger: "/learn", label: "Learn by example", hint: "runnable starter files", icon: "◇" },
+  { id: "council", trigger: "/llm-council", label: "LLM council", hint: "AI agents review the active file", icon: "✧" },
   { id: "help", trigger: "/help", label: "Show help", hint: "list all slash commands", icon: "?" },
   { id: "generative", trigger: "/generative", label: "Generative UI", hint: "build UI from a prompt", icon: "✦" },
   { id: "snap", trigger: "/snap", label: "Name a snapshot", hint: "bookmark this moment", icon: "🔖" },
@@ -280,6 +288,8 @@ interface AnonState {
   entryTtl: "10m" | "1h" | "24h";
   /** Name typed into the room-entry dialog (scratch, not persisted). */
   entryName: string;
+  /** Room name typed into the create dialog — required; becomes the room title everyone sees. */
+  entryRoomName: string;
   booting: boolean;
   bootError: string;
 
@@ -315,6 +325,16 @@ interface AnonState {
   slashOpen: boolean;
   notificationsOpen: boolean;
   generativeOpen: boolean;
+  teamworkOpen: boolean;
+  learnOpen: boolean;
+  councilOpen: boolean;
+
+  // llm council (/llm-council)
+  councilQuestion: string;
+  councilRunning: boolean;
+  councilModel: string;
+  councilConfigured: boolean;
+  councilVerdicts: CouncilVerdict[];
 
   // settings
   theme: ThemeId;
@@ -468,6 +488,7 @@ interface AnonState {
   closeEntry: () => void;
   setEntryPassword: (p: string) => void;
   setEntryTtl: (t: "10m" | "1h" | "24h") => void;
+  setEntryRoomName: (n: string) => void;
   setEntryName: (n: string) => void;
   submitEntry: () => Promise<void>;
 
@@ -509,6 +530,15 @@ interface AnonState {
   toggleTerminal: () => void;
   toggleNotifications: () => void;
   toggleGenerative: () => void;
+  /** Right-side drawers / full-screen overlays are mutually exclusive —
+   *  opening one closes the others. The palette and slash commands route
+   *  through this so two panels can never fight for the same screen region. */
+  closePanels: () => void;
+  toggleTeamwork: () => void;
+  toggleLearn: () => void;
+  toggleCouncil: () => void;
+  setCouncilQuestion: (q: string) => void;
+  runCouncil: () => Promise<void>;
   setSlashOpen: (b: boolean) => void;
 
   addMessage: (m: Omit<ChatMessage, "id" | "ts">) => void;
@@ -581,6 +611,16 @@ interface RunResponse {
   language?: string;
   error?: string;
 }
+
+/** Terminal retention cap. Every run appends its full output (stdout is
+ *  split per line), so a long session would grow the DOM without bound and
+ *  the terminal would eventually jank. Oldest lines drop off first. */
+const MAX_TERM_LINES = 500;
+
+/** Client-side run watchdog. The Pages proxy aborts after 20s, but a stalled
+ *  connection (flaky mobile network, captive portal) can leave fetch pending
+ *  for minutes — pinning `running` true and locking the Run button. */
+const RUN_TIMEOUT_MS = 45_000;
 
 function describeRoomError(res: { ok: false; reason: string; status?: number; detail?: string }): string {
   switch (res.reason) {
@@ -772,11 +812,12 @@ export const useAnon = create<AnonState>()(
       entryPassword: "",
       entryTtl: "1h",
       entryName: "",
+      entryRoomName: "",
       booting: false,
       bootError: "",
 
       roomCode: "",
-      roomTitle: "Untitled session",
+      roomTitle: "",
       roomEmoji: "✦",
       ttl: "24h",
       hasPassword: false,
@@ -803,6 +844,14 @@ export const useAnon = create<AnonState>()(
       slashOpen: false,
       notificationsOpen: false,
       generativeOpen: false,
+      teamworkOpen: false,
+      learnOpen: false,
+      councilOpen: false,
+      councilQuestion: "",
+      councilRunning: false,
+      councilModel: "",
+      councilConfigured: true,
+      councilVerdicts: [],
 
       theme: "dark",
       fontSize: 13,
@@ -887,6 +936,7 @@ export const useAnon = create<AnonState>()(
           entryPassword: "",
           entryTtl: "1h",
           entryName: isNamed(get().displayName) ? get().displayName : "",
+          entryRoomName: "",
           bootError: "",
         }),
 
@@ -898,6 +948,7 @@ export const useAnon = create<AnonState>()(
           entryInfo: null,
           entryPassword: "",
           entryName: isNamed(get().displayName) ? get().displayName : "",
+          entryRoomName: "",
           bootError: "",
           booting: true,
         });
@@ -934,11 +985,12 @@ export const useAnon = create<AnonState>()(
       },
 
       closeEntry: () =>
-        set({ entryMode: null, entryInfo: null, entryPassword: "", bootError: "", booting: false }),
+        set({ entryMode: null, entryInfo: null, entryPassword: "", entryRoomName: "", bootError: "", booting: false }),
 
       setEntryPassword: (p) => set({ entryPassword: p }),
       setEntryTtl: (t) => set({ entryTtl: t }),
       setEntryName: (n) => set({ entryName: n }),
+      setEntryRoomName: (n) => set({ entryRoomName: n }),
 
       submitEntry: async () => {
         const s = get();
@@ -955,6 +1007,14 @@ export const useAnon = create<AnonState>()(
 
         try {
           if (mode === "create") {
+            // Room names are compulsory: an unnamed room shows up as
+            // "Untitled session" in every peer's header and in recent rooms,
+            // which reads like a bug rather than a choice.
+            const roomName = s.entryRoomName.trim().slice(0, 60);
+            if (!roomName) {
+              set({ booting: false, bootError: "Name your room — everyone in it sees the name in the header." });
+              return;
+            }
             const res = await relayCreateRoomFO({
               password: s.entryPassword,
               ttl: s.entryTtl,
@@ -974,15 +1034,16 @@ export const useAnon = create<AnonState>()(
               ttl: s.entryTtl,
               displayName: resolvedName,
               color: s.color,
+              roomTitle: roomName,
             });
             get().enterRoom({
               code: res.code,
-              title: "Untitled session",
+              title: roomName,
               ttl: s.entryTtl,
               hasPassword: !!s.entryPassword,
               isOwner: true,
             });
-            set({ entryMode: null, entryPassword: "", booting: false });
+            set({ entryMode: null, entryPassword: "", entryRoomName: "", booting: false });
             return;
           }
 
@@ -1068,6 +1129,11 @@ export const useAnon = create<AnonState>()(
           slashOpen: false,
           notificationsOpen: false,
           generativeOpen: false,
+          teamworkOpen: false,
+          learnOpen: false,
+          councilOpen: false,
+          councilRunning: false,
+          councilVerdicts: [],
           browserOpen: false,
           cryptoOpen: false,
           mdPreviewOpen: false,
@@ -1081,6 +1147,11 @@ export const useAnon = create<AnonState>()(
           findOpen: false,
           docHistory: [],
           undoDepth: 0,
+          // room-scoped scratch: a stale title/question from the previous
+          // room must never leak into the next one
+          roomTitle: "",
+          councilQuestion: "",
+          entryRoomName: "",
           syncState: "dead",
           roomState: null,
           canEdit: true,
@@ -1197,6 +1268,76 @@ export const useAnon = create<AnonState>()(
             : s.notifications,
         })),
       toggleGenerative: () => set((s) => ({ generativeOpen: !s.generativeOpen })),
+      closePanels: () =>
+        set({
+          teamworkOpen: false,
+          learnOpen: false,
+          councilOpen: false,
+          historyOpen: false,
+          browserOpen: false,
+          generativeOpen: false,
+        }),
+      toggleTeamwork: () => set((s) => ({ teamworkOpen: !s.teamworkOpen })),
+      toggleLearn: () => set((s) => ({ learnOpen: !s.learnOpen })),
+      toggleCouncil: () => set((s) => ({ councilOpen: !s.councilOpen })),
+      setCouncilQuestion: (q) => set({ councilQuestion: q }),
+
+      /**
+       * /llm-council — three reviewer personas analyse the ACTIVE FILE and
+       * answer the question. Server contract (functions/api/council.ts):
+       *   POST /api/council { question, code, language }
+       *   → { ok, model, configured, verdicts: [{ persona, text }] }
+       * When the deployment has no Workers AI binding the server answers
+       * honestly with configured:false and we surface that instead of
+       * inventing reviews.
+       */
+      runCouncil: async () => {
+        const s = get();
+        const file = s.files.find((f) => f.id === s.activeFileId);
+        if (!file || s.councilRunning) return;
+        set({ councilRunning: true, councilVerdicts: [], councilModel: "" });
+        try {
+          const res = await fetch("/api/council", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              question: (s.councilQuestion || "review this file for bugs").slice(0, 500),
+              code: file.content.slice(0, 8000),
+              language: file.language,
+            }),
+          });
+          if (!res.ok) throw new Error(`council endpoint returned HTTP ${res.status}`);
+          const data = (await res.json()) as {
+            ok?: boolean;
+            model?: string;
+            configured?: boolean;
+            verdicts?: CouncilVerdict[];
+            error?: string;
+          };
+          if (!data.configured) {
+            set({
+              councilRunning: false,
+              councilConfigured: false,
+              councilModel: data.model || "",
+              councilVerdicts: [],
+            });
+            return;
+          }
+          set({
+            councilRunning: false,
+            councilConfigured: true,
+            councilModel: data.model || "",
+            councilVerdicts: (data.verdicts || []).slice(0, 3),
+          });
+        } catch (e) {
+          set({ councilRunning: false });
+          get().pushNotification({
+            kind: "warning",
+            title: "Council could not meet",
+            body: e instanceof Error ? e.message : String(e),
+          });
+        }
+      },
       toggleBrowser: () => set((s) => ({ browserOpen: !s.browserOpen })),
       setBrowserUrl: (url) => set({ browserUrl: url }),
       toggleCrypto: () => set((s) => ({ cryptoOpen: !s.cryptoOpen })),
@@ -1274,7 +1415,11 @@ export const useAnon = create<AnonState>()(
           set({ activeFileId: id });
           return;
         }
-        const nextId = "f" + (get().files.length + 1);
+        // ids must survive removeFile: "f" + length re-issues a deleted id
+        // (f1..f4, remove f2, add → duplicate "f4"). Dedupe like addYFile.
+        const existing = new Set(get().files.map((f) => f.id));
+        let nextId = "f" + (get().files.length + 1);
+        while (existing.has(nextId)) nextId = "f" + (Number(nextId.slice(1)) + 1);
         set((s) => ({
           files: [...s.files, { id: nextId, name, language: inferredLang, content: "" }],
           activeFileId: nextId,
@@ -1331,18 +1476,18 @@ export const useAnon = create<AnonState>()(
               ...st.terminalLines,
               {
                 id: "t" + ts,
-                kind: "meta",
+                kind: "meta" as const,
                 text: `$ render ${file.name} (${sendLang}) · live interactive preview mounted`,
                 ts,
               },
               {
                 id: "m" + ts,
-                kind: "meta",
+                kind: "meta" as const,
                 text: `[exit 0] · 0ms`,
                 ts,
                 exit: 0,
               },
-            ],
+            ].slice(-MAX_TERM_LINES),
           }));
           return;
         }
@@ -1356,7 +1501,7 @@ export const useAnon = create<AnonState>()(
             ...st.terminalLines,
             {
               id: "t" + startTs,
-              kind: "meta",
+              kind: "meta" as const,
               text: `$ run ${file.name} (${sendLang}) · ${new Date().toLocaleTimeString()}`,
               ts: startTs,
             },
@@ -1370,9 +1515,11 @@ export const useAnon = create<AnonState>()(
                   },
                 ]
               : []),
-          ],
+          ].slice(-MAX_TERM_LINES),
         }));
 
+        const abort = new AbortController();
+        const watchdog = setTimeout(() => abort.abort(), RUN_TIMEOUT_MS);
         try {
           const res = await fetch("/api/run", {
             method: "POST",
@@ -1382,6 +1529,7 @@ export const useAnon = create<AnonState>()(
               source: file.content,
               stdin: cleanStdin,
             }),
+            signal: abort.signal,
           });
           // A proxy, redirect, or error page can hand back HTML instead of a
           // run result. Parse defensively: res.json() would otherwise throw a
@@ -1412,7 +1560,7 @@ export const useAnon = create<AnonState>()(
               terminalLines: [
                 ...st.terminalLines,
                 { id: `err${ts}`, kind: "error" as const, text: `run failed: ${why}`, ts },
-              ],
+              ].slice(-MAX_TERM_LINES),
             }));
             return;
           }
@@ -1421,9 +1569,15 @@ export const useAnon = create<AnonState>()(
           const outText = typeof data!.stdout === "string" ? data!.stdout : "";
           const errText = typeof data!.stderr === "string" ? data!.stderr : "";
           const exitCode =
-            typeof data!.exitCode === "number" ? data!.exitCode : data!.ok ? 0 : 1;
+            typeof data!.exitCode === "number" && Number.isFinite(data!.exitCode)
+              ? data!.exitCode
+              : data!.ok
+                ? 0
+                : 1;
           const durMs =
-            typeof data!.durationMs === "number" ? data!.durationMs : Date.now() - startTs;
+            typeof data!.durationMs === "number" && Number.isFinite(data!.durationMs)
+              ? data!.durationMs
+              : Date.now() - startTs;
           if (outText) {
             outText.split("\n").forEach((l: string, i: number) => {
               newLines.push({ id: `o${ts}-${i}`, kind: "stdout" as const, text: l, ts });
@@ -1452,6 +1606,22 @@ export const useAnon = create<AnonState>()(
           if (missingModule) {
             hints.push(
               `python module "${missingModule[1]}" is not installed on the runner. Pre-bundled: numpy, pandas, sympy, matplotlib, requests, bs4, pillow — anything else needs the relay owner to add it.`,
+            );
+          }
+          // The classic no-stdin failure: the program blocks on a read, the
+          // relay EOFs stdin, and python raises EOFError. Name it explicitly
+          // so the fix (type values in the input box) is obvious.
+          if (/\bEOFError\b/.test(errText)) {
+            hints.push(
+              "the program asked for more input than was provided (stdin hit end-of-file) — put the values, one per line, in the input box and run again.",
+            );
+          }
+          // Known relay-side Java failure: bwrap binds /etc selectively on
+          // some deployments, so java.security dangles and the JVM dies at
+          // startup. Not the user's code — say so.
+          if (/Error loading java\.security file|java\.lang\.InternalError/.test(errText)) {
+            hints.push(
+              "java is failing on the runner itself (sandbox profile issue on the relay server) — other languages still run; the relay owner must redeploy the relay with the java fix.",
             );
           }
           if (
@@ -1483,16 +1653,27 @@ export const useAnon = create<AnonState>()(
             newLines.push({ id: `h${ts}-${i}`, kind: "hint" as const, text: h, ts });
           });
 
-          set((st) => ({ terminalLines: [...st.terminalLines, ...newLines] }));
+          set((st) => ({
+            terminalLines: [...st.terminalLines, ...newLines].slice(-MAX_TERM_LINES),
+            // stdin is one-shot, like a real pipe: the run consumed the
+            // values, so a later run can't silently reuse stale input.
+            // (Kept on transport failure below — that run never executed.)
+            stdin: "",
+          }));
         } catch (e) {
           const ts = Date.now();
+          const aborted = e instanceof Error && e.name === "AbortError";
+          const text = aborted
+            ? `run failed: no response within ${Math.round(RUN_TIMEOUT_MS / 1000)}s — the runner or your connection stalled. Try again.`
+            : `fetch failed: ${e instanceof Error ? e.message : String(e)}`;
           set((st) => ({
             terminalLines: [
               ...st.terminalLines,
-              { id: `err${ts}`, kind: "error" as const, text: `fetch failed: ${e instanceof Error ? e.message : String(e)}`, ts },
-            ],
+              { id: `err${ts}`, kind: "error" as const, text, ts },
+            ].slice(-MAX_TERM_LINES),
           }));
         } finally {
+          clearTimeout(watchdog);
           set({ running: false });
         }
       },

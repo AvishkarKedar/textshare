@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 import { useAnon } from "@/lib/store";
 import { toast } from "sonner";
 import { FAQ_DATA } from "@/components/palette/FaqModal";
@@ -20,7 +20,7 @@ export function FAQ() {
       <div className="mx-auto max-w-7xl px-6 py-16">
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_2fr]">
           <div>
-            <div className="anon-mono mb-2 text-xs uppercase tracking-wider anon-dim">
+            <div className="anon-mono mb-2 text-xs uppercase tracking-wider anon-mut">
               faq
             </div>
             <h2 className="anon-sans text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -29,17 +29,16 @@ export function FAQ() {
               honestly answered.
             </h2>
             <p className="anon-sans mt-4 text-sm leading-relaxed anon-mut">
-              Including the ones most products dodge. Every answer below is the
-              same one you&apos;ll get from the code — no marketing layer. See
+              Every answer below matches what the code actually does. See
               all {FAQ_DATA.length} questions with search and category filters
-              in the interactive modal, or the full security write-up.
+              in the interactive modal, or read the full security write-up.
             </p>
             <div className="mt-4 flex flex-col gap-2 items-start">
               <button
                 onClick={() => toggleFaq()}
-                className="anon-mono inline-flex items-center gap-1.5 text-xs bg-[var(--anon-panel)] hairline px-3 py-1.5 hover:bg-[var(--anon-raise)] hover:text-[var(--anon-fg)] transition-colors cursor-pointer"
+                className="anon-mono inline-flex items-center gap-1.5 text-xs bg-[var(--anon-panel)] hairline px-3 py-2 hover:bg-[var(--anon-raise)] hover:text-[var(--anon-fg)] transition-colors cursor-pointer"
               >
-                <span>🔍</span> Search all {FAQ_DATA.length} questions (⌘⇧F) →
+                <Search className="h-3.5 w-3.5" /> Search all {FAQ_DATA.length} questions (⌘⇧F) →
               </button>
               <button
                 onClick={() => {

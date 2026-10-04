@@ -18,6 +18,8 @@ import {
   Eye,
   LogOut,
   Bell,
+  Users,
+  BookOpen,
   Activity,
   Shield,
   HelpCircle,
@@ -44,13 +46,16 @@ export function CommandPalette() {
     const close = () => s.togglePalette();
     return [
       { id: "run", label: "Run code", kbd: "⌘↵", icon: Play, group: "editor", run: () => { s.runCode(); close(); } },
-      { id: "generative", label: "Generative UI builder", kbd: "⌘⇧G", icon: Sparkles, group: "tools", run: () => { s.toggleGenerative(); close(); } },
+      { id: "teamwork", label: "Teamwork panel (who's in · invite)", icon: Users, group: "view", run: () => { if (!s.teamworkOpen) s.closePanels(); s.toggleTeamwork(); close(); } },
+      { id: "learn", label: "Learn by example (runnable starters)", icon: BookOpen, group: "tools", run: () => { if (!s.learnOpen) s.closePanels(); s.toggleLearn(); close(); } },
+      { id: "council", label: "LLM council (AI code review)", icon: Sparkles, group: "tools", run: () => { if (!s.councilOpen) s.closePanels(); s.toggleCouncil(); close(); } },
+      { id: "generative", label: "Generative UI builder", kbd: "⌘⇧G", icon: Sparkles, group: "tools", run: () => { if (!s.generativeOpen) s.closePanels(); s.toggleGenerative(); close(); } },
       { id: "chat", label: s.chatOpen ? "Close chat" : "Open chat", kbd: "⌘J", icon: MessageSquare, group: "view", run: () => { s.toggleChat(); close(); } },
       { id: "files", label: s.filesOpen ? "Close files" : "Open files", kbd: "⌘B", icon: Files, group: "view", run: () => { s.toggleFiles(); close(); } },
       { id: "preview", label: "Toggle markdown preview", kbd: "⌘⇧P", icon: Eye, group: "view", run: () => { s.toggleMdPreview(); close(); } },
       { id: "tour", label: "Restart onboarding tour", kbd: "⌘⇧O", icon: Sparkles, group: "config", run: () => { s.startTour(); close(); } },
-      { id: "history", label: "Open history (time machine)", kbd: "⌘⇧H", icon: History, group: "view", run: () => { s.toggleHistory(); close(); } },
-      { id: "browser", label: "Open in-app browser", kbd: "⌘⇧B", icon: Globe, group: "tools", run: () => { s.toggleBrowser(); close(); } },
+      { id: "history", label: "Open history (time machine)", kbd: "⌘⇧H", icon: History, group: "view", run: () => { if (!s.historyOpen) s.closePanels(); s.toggleHistory(); close(); } },
+      { id: "browser", label: "Open in-app browser", kbd: "⌘⇧B", icon: Globe, group: "tools", run: () => { if (!s.browserOpen) s.closePanels(); s.toggleBrowser(); close(); } },
       { id: "terminal", label: "Toggle terminal", kbd: "⌘\\", icon: Terminal, group: "tools", run: () => { s.toggleTerminal(); close(); } },
       { id: "notifications", label: "Open notifications", kbd: "⌘N", icon: Bell, group: "view", run: () => { s.toggleNotifications(); close(); } },
       { id: "invite", label: "Invite others (copy link / QR)", kbd: "⌘I", icon: Link2, group: "share", run: () => { s.toggleInvite(); close(); } },
@@ -129,7 +134,7 @@ export function CommandPalette() {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.12 }}
-        className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 backdrop-blur-sm pt-[12vh] px-4"
+        className="fixed inset-0 z-[70] flex items-start justify-center bg-black/50 backdrop-blur-sm pt-[12vh] px-4"
         onClick={() => s.togglePalette()}
       >
         <motion.div

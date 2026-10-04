@@ -178,6 +178,9 @@ export interface StartSessionArgs {
   ttl?: string;
   displayName: string;
   color: string;
+  /** Room name chosen at create time — replicated through the encrypted meta
+   *  map so every joiner's header shows the same title. */
+  roomTitle?: string;
 }
 
 export function startSession(args: StartSessionArgs): SessionInfo {
@@ -197,6 +200,7 @@ export function startSession(args: StartSessionArgs): SessionInfo {
     doc.transact(() => {
       files.push([{ id: "f1", name: "main.js", language: "javascript" }]);
       texts.set("f1", new Y.Text("// End-to-end encrypted collaborative session\n// Share your room code to invite collaborators in real-time.\n"));
+      if (args.roomTitle) meta.set("roomTitle", args.roomTitle);
     });
   }
 
@@ -479,6 +483,12 @@ export function startSession(args: StartSessionArgs): SessionInfo {
       goalColor: (m.goalColor as string) || "",
       goalSetAt: (m.goalSetAt as number) || null,
     });
+    // Room title replicates through the encrypted meta map: joiners adopt
+    // the creator's name instead of a local "Untitled session".
+    const remoteTitle = (m.roomTitle as string) || "";
+    if (remoteTitle && useAnon.getState().roomTitle !== remoteTitle) {
+      useAnon.setState({ roomTitle: remoteTitle });
+    }
   });
   relay.awareness.on("update", () => mirrorParticipants());
 

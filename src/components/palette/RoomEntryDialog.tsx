@@ -10,7 +10,7 @@
  */
 
 import { useEffect } from "react";
-import { Loader2, X, Lock, Timer, Shield, User } from "lucide-react";
+import { Loader2, X, Lock, Timer, Shield, User, Tag } from "lucide-react";
 import { useAnon } from "@/lib/store";
 import { PBKDF2_ROUNDS } from "@/lib/relay";
 import { NAME_MAX } from "@/lib/identity";
@@ -32,13 +32,20 @@ export function RoomEntryDialog() {
   if (!open || !mode) return null;
 
   const isCreate = mode === "create";
+  // Name-required validation failure: an empty room-name field plus a pending
+  // error means the error belongs to the name field (the relay is never
+  // contacted until the name passes) — render it inline under the field
+  // instead of at the dialog bottom where it is easy to miss. Relay/transport
+  // errors (name already typed) stay at the bottom, next to the submit button.
+  const nameError =
+    isCreate && !s.booting && s.bootError !== "" && !s.entryRoomName.trim();
   // Joining a code-only room (no password)? Then the only question left is
   // the visitor's name — the password field is hidden for those rooms.
   const joinNeedsPassword = !isCreate && !!s.entryInfo?.hasPassword;
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4"
+      className="fixed inset-0 z-[80] flex justify-center overflow-y-auto bg-black/70 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
       role="dialog"
       aria-modal="true"
       aria-label={isCreate ? "Create encrypted room" : "Join encrypted room"}
@@ -46,7 +53,13 @@ export function RoomEntryDialog() {
         if (e.target === e.currentTarget && !s.booting) s.closeEntry();
       }}
     >
-      <div className="w-full max-w-sm hairline bg-[var(--anon-panel)] shadow-2xl">
+      {/* my-auto centers when it fits and scrolls from the top when the
+          mobile virtual keyboard shrinks the viewport — the submit button
+          must never sit under the keyboard. */}
+      <div
+        className="my-auto w-full max-w-sm hairline bg-[var(--anon-panel)] shadow-2xl"
+        style={{ maxHeight: "calc(100dvh - 2rem)", overflowY: "auto" }}
+      >
         {/* header */}
         <div className="flex h-10 items-center justify-between hairline-b px-3">
           <div className="anon-mono inline-flex items-center gap-1.5 text-xs anon-fg">
@@ -79,6 +92,45 @@ export function RoomEntryDialog() {
             void s.submitEntry();
           }}
         >
+          {/* room name — required on create. The title lands in every peer's
+              header and in recent rooms; an unnamed room reads like a bug. */}
+          {isCreate && (
+            <label className="flex flex-col gap-1.5">
+              <span className="anon-mono inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider anon-dim">
+                <Tag className="h-3 w-3" />
+                room name (required)
+              </span>
+              <input
+                type="text"
+                value={s.entryRoomName}
+                onChange={(e) => s.setEntryRoomName(e.target.value)}
+                placeholder="e.g. algorithm review · sprint demo · homework help"
+                maxLength={60}
+                autoComplete="off"
+                autoCapitalize="sentences"
+                spellCheck={false}
+                disabled={s.booting}
+                autoFocus
+                aria-required="true"
+                aria-invalid={nameError ? true : undefined}
+                enterKeyHint="go"
+                className="anon-mono h-10 bg-[var(--anon-bg)] hairline px-3 text-sm outline-none focus:border-[var(--anon-accent)] disabled:opacity-50"
+              />
+              <span className="anon-mono text-[9.5px] anon-dim">
+                everyone in the room sees this name in the header — it syncs to peers
+              </span>
+              {nameError && (
+                <p
+                  role="alert"
+                  className="anon-mono anim-shake text-[11px] px-2 py-1.5 hairline"
+                  style={{ color: "var(--anon-danger)", background: "var(--anon-raise)" }}
+                >
+                  {s.bootError}
+                </p>
+              )}
+            </label>
+          )}
+
           {/* your name — the one field that makes “who is typing / who did
               what” readable. Optional: blank still gets a guest handle. */}
           <label className="flex flex-col gap-1.5">
@@ -157,8 +209,9 @@ export function RoomEntryDialog() {
             </label>
           )}
 
-          {/* error */}
-          {s.bootError && (
+          {/* error — join/relay failures land here; create-mode name errors
+              render inline under the room-name field above instead */}
+          {s.bootError && !nameError && (
             <p role="alert" className="anon-mono anim-shake text-[11px] px-2 py-1.5 hairline" style={{ color: "var(--anon-danger)", background: "var(--anon-raise)" }}>
               {s.bootError}
             </p>

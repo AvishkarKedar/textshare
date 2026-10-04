@@ -11,16 +11,19 @@ import { Reveal } from "./Reveal";
 
 export function Landing() {
   return (
-    <main className="flex min-h-screen flex-col" role="main">
+    // overflow-x-clip: hard guard against any 1px horizontal drift from
+    // decorative glows/wide grids on small viewports (clip, not hidden —
+    // no scroll container is created).
+    <main className="flex min-h-screen flex-col overflow-x-clip">
       <Hero />
       <Reveal>
         <StatsStrip />
       </Reveal>
       <Reveal delay={0.05}>
-        <UseCases />
+        <HowItWorks />
       </Reveal>
       <Reveal>
-        <HowItWorks />
+        <UseCases />
       </Reveal>
       <Reveal delay={0.05}>
         <FAQ />

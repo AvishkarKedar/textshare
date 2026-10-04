@@ -269,13 +269,24 @@ html[data-theme] {
   /* hide scrollbar but keep scroll */
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-  /* thin monospace scrollbar */
-  .anon-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
-  .anon-scroll::-webkit-scrollbar-track { background: transparent; }
-  .anon-scroll::-webkit-scrollbar-thumb { background: var(--anon-line2); border-radius: 0; }
-  .anon-scroll::-webkit-scrollbar-thumb:hover { background: var(--anon-mut); }
 }
+
+/* ---------- variant-enabled utility registrations ----------
+ * The classes above are plain CSS — Tailwind v4 only emits variant rules
+ * (hover:, md:, …) for utilities registered with @utility. Before this
+ * block, every `hover:anon-fg` / `hover:anon-accent` and `md:hairline-l`
+ * in the codebase compiled to nothing (dead classes, no hover feedback).
+ * Base selectors are byte-identical to the @layer definitions above, so
+ * this only ADDS the missing variant rules — nothing existing changes. */
+@utility anon-fg { color: var(--anon-fg); }
+@utility anon-mut { color: var(--anon-mut); }
+@utility anon-dim { color: var(--anon-dim); }
+@utility anon-accent { color: var(--anon-accent); }
+@utility hairline { border: 1px solid var(--anon-line); }
+@utility hairline-b { border-bottom: 1px solid var(--anon-line); }
+@utility hairline-t { border-top: 1px solid var(--anon-line); }
+@utility hairline-r { border-right: 1px solid var(--anon-line); }
+@utility hairline-l { border-left: 1px solid var(--anon-line); }
 
 /* ---------- animations ---------- */
 @keyframes anon-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
@@ -334,7 +345,9 @@ html[data-theme] {
   -webkit-text-fill-color: transparent;
 }
 
-/* smooth scrollbar for main scroll containers */
+/* smooth scrollbar for main scroll containers (single source of truth:
+   the old duplicate 8px copy inside @layer utilities was always beaten
+   by this unlayered 6px one and only caused confusion) */
 .anon-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--anon-line2) transparent;

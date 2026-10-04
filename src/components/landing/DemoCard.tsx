@@ -19,7 +19,7 @@ interface Line {
 }
 
 const SCRIPT: Line[] = [
-  { text: "// three strangers, one room, zero servers", author: "mz" },
+  { text: "// three strangers, one room, zero plaintext", author: "mz" },
   { text: "const room = await anonshare.join('XK42QM')", author: "you" },
   { text: "", author: "you" },
   { text: "const seal = (msg) => room.encrypt(msg)", author: "av" },
@@ -218,7 +218,7 @@ export function DemoCard() {
             <span>synced · 3 peers</span>
           </>
         )}
-        <span className="anon-dim ml-auto hidden sm:inline">no account · erased on exit</span>
+        <span className="ml-auto hidden sm:inline">no account · erased on exit</span>
       </div>
     </div>
   );

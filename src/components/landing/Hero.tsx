@@ -61,12 +61,12 @@ export function Hero() {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute top-20 right-1/4 h-72 w-72 rounded-full opacity-10 blur-3xl anim-glow"
+        className="pointer-events-none absolute top-10 right-1/4 h-72 w-72 rounded-full opacity-10 blur-3xl anim-glow"
         style={{ background: "radial-gradient(circle, var(--anon-ok) 0%, transparent 70%)", animationDelay: "2s" }}
       />
-      <div className="relative mx-auto grid max-w-7xl grid-cols-1 gap-10 px-6 pt-16 pb-12 lg:grid-cols-[1.1fr_1fr] lg:gap-14 lg:pt-24">
+      <div className="relative mx-auto grid max-w-7xl grid-cols-1 gap-8 px-6 pt-4 pb-10 sm:pt-6 lg:grid-cols-[1.1fr_1fr] lg:gap-12 lg:pt-8 lg:pb-12">
         {/* left: copy + actions */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="anon-mono text-sm anon-accent hero-caret">{'>'}</span>
@@ -76,14 +76,14 @@ export function Hero() {
               <button
                 type="button"
                 onClick={() => toggleFaq()}
-                className="anon-mono anon-mut hover:anon-fg text-xs hover:underline transition-colors cursor-pointer"
+                className="anon-mono anon-mut hover:anon-fg px-2.5 py-2 text-xs hover:underline transition-colors cursor-pointer"
               >
                 FAQ
               </button>
               <button
                 type="button"
                 onClick={() => toggleSecurity()}
-                className="anon-mono anon-mut hover:anon-fg text-xs hover:underline transition-colors cursor-pointer"
+                className="anon-mono anon-mut hover:anon-fg px-2.5 py-2 text-xs hover:underline transition-colors cursor-pointer"
               >
                 Security
               </button>
@@ -122,7 +122,7 @@ export function Hero() {
           </div>
 
           <div className="hairline-t pt-5">
-            <div className="anon-mono mb-3 text-xs uppercase tracking-wider anon-dim">
+            <div className="anon-mono mb-3 text-xs uppercase tracking-wider anon-mut">
               or join with a code
             </div>
             <form onSubmit={handleJoin} className="flex items-stretch gap-2">

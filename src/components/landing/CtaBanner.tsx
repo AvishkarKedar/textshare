@@ -18,7 +18,7 @@ export function CtaBanner() {
           <div className="relative flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="anon-sans text-2xl font-semibold tracking-tight sm:text-3xl">
-                Open a room. It disappears in an hour.
+                Open a room. It erases itself when you leave.
               </h2>
               <p className="anon-sans mt-2 max-w-xl text-sm anon-mut">
                 No account. No email. No trace. Six characters between you and a
