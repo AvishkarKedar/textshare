@@ -221,15 +221,21 @@ async function runOnWandbox(
   }
 }
 
+// Runner failures reach the client as HTTP 200 + ok:false. NEVER return 5xx
+// here: Cloudflare's edge intercepts 502 (and friends) from Pages Functions
+// and replaces the JSON body with its own "error code: 502" page — the
+// browser terminal would then show a parse failure instead of the honest
+// message (this is exactly what the old VPS-era "502 non-JSON" health
+// reports were). ok:false + stderr is the client's designed failure path —
+// the same shape a compile error produces.
 const runError = (
   stderr: string,
   language: string,
   durationMs: number,
-  status = 502,
 ) =>
   Response.json(
     { ok: false, stdout: "", stderr, exitCode: 1, durationMs, language },
-    { status, headers: NO_STORE },
+    { status: 200, headers: NO_STORE },
   );
 
 export async function onRequestPost(context: { request: Request }): Promise<Response> {
