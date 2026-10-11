@@ -8,12 +8,21 @@ export function ShortcutsOverlay() {
   const s = useAnon();
   if (!s.shortcutsOpen) return null;
 
-  const groups: Record<string, typeof SHORTCUTS> = {
-    global: [],
-    navigation: [],
-    editor: [],
-  };
-  SHORTCUTS.forEach((sc) => groups[sc.group].push(sc));
+  // Defensive grouping: SHORTCUTS entries may declare any group id
+  // (global / navigation / editor / tools / future ones) — a group missing
+  // from the map below must never crash the overlay (v5.6 regression: the
+  // "tools" entries were added to SHORTCUTS but not to the map, so
+  // groups[sc.group].push threw and took the whole app down).
+  const groups: Record<string, typeof SHORTCUTS> = {};
+  SHORTCUTS.forEach((sc) => {
+    (groups[sc.group] ??= []).push(sc);
+  });
+  const groupOrder = ["global", "navigation", "editor", "tools"];
+  const shownGroups = groupOrder.filter((g) => (groups[g]?.length ?? 0) > 0);
+  // any group not in the canonical order still gets rendered (never dropped)
+  const extraGroups = Object.keys(groups).filter(
+    (g) => !groupOrder.includes(g) && groups[g].length > 0
+  );
 
   return (
     <AnimatePresence>
@@ -40,8 +49,8 @@ export function ShortcutsOverlay() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-x-8 gap-y-4 p-4 sm:grid-cols-3">
-            {(["global", "navigation", "editor"] as const).map((g) => (
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[...shownGroups, ...extraGroups].map((g) => (
               <div key={g}>
                 <div className="anon-mono mb-2 text-[10px] uppercase tracking-wider anon-dim">
                   {g}
@@ -70,7 +79,7 @@ export function ShortcutsOverlay() {
 
           <div className="hairline-t px-4 py-2 anon-mono text-[10px] anon-dim flex items-center justify-between">
             <span>Tip: hold ⌘ and tap a few keys — muscle memory builds fast.</span>
-            <span>remap in Settings (⌘,)</span>
+            <span>remap in Settings (⌘,) · double-click a tab to rename it</span>
           </div>
         </motion.div>
       </motion.div>
