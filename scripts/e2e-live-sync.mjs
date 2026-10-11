@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Full E2E test of the anonshare sync protocol against the LIVE relay
- * (relay.avishkark.in), replicating exactly what the browser client does:
+ * (default: textshare-sync.avishkarkedar.workers.dev — override with
+ * RELAY=https://relay.avishkark.in), replicating exactly what the browser client does:
  *   - PBKDF2(600k) key derivation  (key + auth)
  *   - room create via POST ?create=1
  *   - 2 WebSocket peers join with ?a=&o=&cid=
@@ -13,8 +14,8 @@
 import crypto from 'node:crypto'
 import { WebSocket } from 'ws'
 
-const RELAY = 'https://relay.avishkark.in'
-const WSS = 'wss://relay.avishkark.in'
+const RELAY = process.env.RELAY || 'https://textshare-sync.avishkarkedar.workers.dev'
+const WSS = RELAY.replace(/^http/, 'ws')
 const T_UPDATE = 0, T_AWARE = 1, T_SNAPSHOT = 2, T_SYNCED = 3, T_ERROR = 4,
       T_COMPACT = 5, T_STATE = 6, T_KILLED = 7, T_GRANT = 8, T_P2P = 9
 
@@ -107,7 +108,11 @@ async function main() {
     const p = new URLSearchParams({ create: '1', excl: '1', a: keys.auth, o: ownerToken, ttl: '10m', p: '1' })
     const r = await fetch(`${RELAY}/room/${code}?${p}`, { method: 'POST' })
     const j = await r.json().catch(() => ({}))
-    report('create-room', r.status === 426 && j.ok, `HTTP ${r.status}`)
+    // Client contract (relay.ts createRoom): 426 = create accepted — the body
+    // is advisory only. The VPS relay replies {ok:true,error:'expected_websocket'};
+    // the Worker replies {error:'expected_websocket'} without the ok field.
+    // Accept either shape; the join below proves the room really exists.
+    report('create-room', r.status === 426, `HTTP ${r.status} bodyOk=${!!j.ok}`)
   }
 
   // 2. peer A (owner) connects
