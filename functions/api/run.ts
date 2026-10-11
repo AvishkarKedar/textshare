@@ -28,6 +28,11 @@ const LANGS = new Set([
 const MAX_RUNS_PER_MIN = 20;
 const WINDOW_MS = 60_000;
 
+// Wandbox ceiling for one compile+run. Rust routinely takes ~24s; anything
+// past 28s is a queued/stalled upstream, not a real compile. The client's
+// own watchdog (45s) and this ceiling keep the drawer honest.
+const WANDBOX_TIMEOUT_MS = 28_000;
+
 /**
  * C++ code pasted into a .c file is extremely common (tutorials, snippets).
  * gcc then dies with `fatal error: iostream: No such file or directory`.
@@ -101,10 +106,12 @@ async function wandboxCompilerList(): Promise<Map<string, string[]>> {
   if (compilerCache && Date.now() - compilerCache.at < 6 * 3600_000) {
     return compilerCache.byLang;
   }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8_000);
   try {
     const res = await fetch("https://wandbox.org/api/list.json", {
       cache: "no-store",
-      signal: AbortSignal.timeout(8000),
+      signal: ctrl.signal,
     });
     if (res.ok) {
       const list = (await res.json()) as WandboxListEntry[];
@@ -119,6 +126,8 @@ async function wandboxCompilerList(): Promise<Map<string, string[]>> {
     }
   } catch {
     // Keep the previous cache if the refresh fails; pinned names still work.
+  } finally {
+    clearTimeout(timer);
   }
   return compilerCache?.byLang ?? new Map();
 }
@@ -127,6 +136,23 @@ async function wandboxCompilerList(): Promise<Map<string, string[]>> {
 function versionKey(name: string): number {
   const nums = (name.match(/\d+/g) || []).slice(0, 4).map(Number);
   return nums.reduce((acc, n) => acc * 1000 + n, 0);
+}
+
+/**
+ * Wandbox compiles Java as `prog.java`, so a `public class Main` fails with
+ * "class Main is public, should be declared in a file named Main.java".
+ * Every standard Java template uses exactly that shape. Fix: rename the
+ * public class identifier to `prog` throughout the source — Java identifiers
+ * are consistent, so every reference follows; renames inside string
+ * literals/comments are cosmetic at worst. Non-public classes compile as-is.
+ */
+function adaptJavaForWandbox(source: string): string {
+  const m = source.match(/\bpublic\s+class\s+([A-Za-z_$][\w$]*)/);
+  if (!m) return source;
+  const name = m[1];
+  if (name === "prog") return source;
+  const re = new RegExp(`\\b${name.replace(/\$/g, "\\$")}\\b`, "g");
+  return source.replace(re, "prog");
 }
 
 async function resolveCompiler(language: string): Promise<string | null> {
@@ -152,7 +178,15 @@ interface WandboxResult {
   program_error?: unknown;
 }
 
-/** One Wandbox execution. Returns the relay-style contract the terminal reads. */
+/** One Wandbox execution. Returns the relay-style contract the terminal reads.
+ *
+ * NOTE: timeouts use a manual AbortController + timer. `AbortSignal.timeout()`
+ * is NOT used because on the Cloudflare Workers runtime it can tear down the
+ * whole request context (an abort surfaces as a runtime-level 502 error page
+ * instead of the JS rejection we catch here) — verified live 2026-10-12 when
+ * a slow Go compile returned Cloudflare's "error code: 502" page at exactly
+ * the timeout instant instead of this handler's honest JSON.
+ */
 async function runOnWandbox(
   language: string,
   code: string,
@@ -160,12 +194,15 @@ async function runOnWandbox(
 ): Promise<{ ok: boolean; stdout: string; stderr: string; exitCode: number } | null> {
   const compiler = await resolveCompiler(language);
   if (!compiler) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), WANDBOX_TIMEOUT_MS);
+  const payload = language === "java" ? adaptJavaForWandbox(code) : code;
   try {
     const res = await fetch("https://wandbox.org/api/compile.json", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, compiler, stdin, save: false }),
-      signal: AbortSignal.timeout(25_000),
+      body: JSON.stringify({ code: payload, compiler, stdin, save: false }),
+      signal: ctrl.signal,
     });
     if (!res.ok) return null; // upstream outage — surfaced as the generic 502
     const data = (await res.json().catch(() => null)) as WandboxResult | null;
@@ -179,6 +216,8 @@ async function runOnWandbox(
     return { ok: exitCode === 0 && !compileErr, stdout: progOut, stderr, exitCode };
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

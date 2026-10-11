@@ -90,11 +90,16 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     if (value) headers.set(name, value);
   }
 
+  // Manual AbortController (not AbortSignal.timeout — on the Cloudflare
+  // Workers runtime that variant can surface a runtime-level 502 page
+  // instead of a catchable rejection; see functions/api/run.ts).
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15_000);
   const init: RequestInit = {
     method: req.method,
     headers,
     cache: "no-store",
-    signal: AbortSignal.timeout(15_000),
+    signal: ctrl.signal,
   };
   if (req.method !== "GET" && req.method !== "HEAD") {
     init.body = await req.arrayBuffer();
@@ -109,5 +114,7 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   } catch {
     // Timeout / network failure upstream — generic, no internals echoed.
     return bad(502, "relay_unreachable");
+  } finally {
+    clearTimeout(timer);
   }
 }
