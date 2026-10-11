@@ -38,6 +38,16 @@ if you skip it; the signaling Worker already in production is healthy either way
 
 ---
 
+## P3 (owner, optional, ~1 min): add a `www` DNS record for canonical redirects
+
+`www.code.avishkark.in` is NXDOMAIN (no record). The app already ships the
+301 www->canonical redirect middleware (safe GET/HEAD only, APIs untouched) —
+it just never sees traffic because the record doesn't exist. If you want the
+www variant to resolve (old links, SEO canonicalization), add in CF DNS:
+**CNAME · www · textshare.pages.dev · Proxied**. Purely optional — the site
+is fully functional at the bare domain.
+
+---
 ## P0 — ~~URGENT~~ ✅ RESOLVED 2026-09-27 (owner redeployed the VPS relay)
 
 Probed live on 2026-09-23 — every run on `relay.avishkark.in/run` fails:
