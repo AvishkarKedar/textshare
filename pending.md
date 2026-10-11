@@ -3,8 +3,55 @@
 Shared task list for **Avishkar (owner)** and **the agent (Super Z)**.
 Anything done gets moved to the bottom "Completed" section (or deleted) — never silently.
 
-**Last updated:** 2026-09-27 (after audit round 2 — mobile Run-FAB removal, failover live-verified, P3 closed)
-**Live state at last check:** all four endpoints healthy — code.avishkark.in v5.5.0 · relay.avishkark.in redeployed (Run verified: python/js/bash/go) · backup Worker healthy (failover + room self-heal live-tested) · admincode 200 OK
+**Last updated:** 2026-10-12 (after v5.6.0 fixes: shortcuts crash, file rename, Worker-first relay topology)
+**Live state at last check:** `textshare.pages.dev` healthy · **`code.avishkark.in` NXDOMAIN (DNS record deleted — see P0)** · Worker relay healthy (10/10 protocol assertions) · old VPS relay 530 (VPS terminated)
+
+---
+
+## P0 (owner, ~2 min): restore the `code` DNS record — the site is DOWN at its normal URL
+
+`code.avishkark.in` no longer resolves (NXDOMAIN confirmed via 1.1.1.1 and 8.8.8.8 on 2026-10-12).
+The Pages deployment itself is fine and still serves at `https://textshare.pages.dev` — only the
+custom-domain DNS record is gone (most likely deleted by accident during the VPS/relay DNS cleanup).
+
+**Do this in the Cloudflare dashboard (zone `avishkark.in` → DNS → Records):**
+
+1. Add record: **Type `CNAME` · Name `code` · Target `textshare.pages.dev` · Proxy status: Proxied (orange cloud)**.
+2. Wait ~1 min, then verify: `https://code.avishkark.in` loads (and `curl -sI https://code.avishkark.in/api/status` returns 200).
+3. If Cloudflare Pages shows the custom domain as "not attached", re-add it under the Pages project
+   (`textshare` → Custom domains → `code.avishkark.in`) — it will re-create/claim the record itself.
+
+Everything else (SEO, invite links, JSON-LD canonical) keys off this hostname, so this one record
+restores the whole public surface.
+
+---
+
+## P1 (owner): paste a fresh PAT so the agent can push
+
+The agent's PAT is lost on every sandbox restart (it was never stored on disk by design).
+Four commits are **sitting on local main** waiting to push:
+
+```
+a2c292e fix(palette): ShortcutsOverlay crashed on 'tools' group — whole app went white
+d5a8096 feat(tabs): rename files — untitled slots are unique and renames sync to peers
+8a99129 fix(relay): Cloudflare Worker is now the primary — VPS terminated
+99901a5 chore(e2e): parameterize e2e-live-sync.mjs — RELAY env var, Worker default
+```
+
+Create a fine-grained PAT (**repo AvishkarKedar/textshare, Contents: read & write**) and paste it in
+chat — the agent pushes immediately (push to main auto-deploys to Cloudflare Pages in ~2 min).
+A full backup of the branch also sits at `download/textshare-backup-20261012.bundle`
+(`git clone textshare-backup-20261012.bundle -b main` recovers everything, history included).
+
+---
+
+## P2 (owner, optional, cosmetic): Worker create-response body
+
+The VPS relay answered `POST /room/:code?create=1` with `{ok:true,error:'expected_websocket'}`;
+the Worker omits the `ok` field. **The browser client only checks the status (426 = accepted), so
+nothing is broken** — only `scripts/e2e-live-sync.mjs` used to assert the body field (it now accepts
+both shapes). Next time `npx wrangler deploy` runs in `worker/`, feel free to add `ok: true` to the
+426 body for symmetry; zero client impact either way.
 
 ---
 
