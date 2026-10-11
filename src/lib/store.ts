@@ -1514,9 +1514,8 @@ export const useAnon = create<AnonState>()(
         if (sendLang === "c" && CPP_SOURCE_RE.test(file.content)) {
           sendLang = "cpp";
         }
-        if (sendLang === "typescript" || sendLang === "ts") {
-          sendLang = "javascript";
-        }
+        // TypeScript runs natively on the Wandbox runner (tsc + node), so
+        // .ts files keep their language — type annotations execute fine.
 
         // HTML, SVG, and Markdown files mount directly into the interactive Live Web Preview:
         if (sendLang === "html" || sendLang === "htm" || sendLang === "xml" || sendLang === "svg" || sendLang === "markdown" || sendLang === "md") {

@@ -1,10 +1,15 @@
 // Cloudflare Pages Function: /api/run
-// Proxies code execution to hardened Oracle VPS sandbox at relay.avishkark.in/run
+// Executes user code on the public Wandbox sandbox (wandbox.org) — the same
+// class of third-party public runner this app used before the private VPS
+// sandbox existed (the earlier emkc.org Piston API went whitelist-only in
+// Feb 2026; the Oracle VPS sandbox was terminated in Oct 2026).
 //
 // Security: per-IP best-effort edge rate limit (the authoritative limit lives
-// on the relay), server-side validation of language/source/stdin against the
-// supported set, and generic errors — no internal detail (timeouts, DNS,
-// proxy internals) is ever echoed to the client.
+// on Wandbox), server-side validation of language/source/stdin against the
+// supported set, size caps, a 25s hard timeout, and generic errors — no
+// internal detail (timeouts, DNS, proxy internals) is ever echoed to the
+// client. Code sent here is NOT end-to-end encrypted (a runner must read it
+// to execute it — identical to the previous Piston/VPS runners).
 
 interface RunBody {
   language?: unknown;
@@ -13,8 +18,8 @@ interface RunBody {
   stdin?: unknown;
 }
 
-// Languages the VPS sandbox actually executes. Anything else is rejected
-// here — before a single byte is proxied.
+// Supported execution languages, normalized. The run button in the editor
+// only ever offers these; anything else is rejected before any network I/O.
 const LANGS = new Set([
   "python", "py", "javascript", "js", "node", "typescript", "ts", "c", "cpp", "c++",
   "go", "golang", "rust", "rs", "bash", "sh", "java",
@@ -38,8 +43,8 @@ function looksLikeCpp(source: string): boolean {
 
 // Best-effort token bucket local to this Pages isolate. Cloudflare runs many
 // isolates in parallel, so the effective ceiling is approximate — the hard
-// limit is enforced on the relay itself. Sufficient to blunt single-source
-// abuse without any external state.
+// limit is enforced upstream. Sufficient to blunt single-source abuse
+// without any external state.
 const buckets = new Map<string, { t: number; n: number }>();
 
 function rateLimit(ip: string, max: number): boolean {
@@ -65,6 +70,128 @@ function clientIp(request: Request): string {
 }
 
 const NO_STORE = { "Cache-Control": "no-store" };
+
+/* ----------------------------------------------------------- Wandbox map */
+//
+// Pinned compilers are tried first; if Wandbox retires one (version churn),
+// the language list is re-fetched (cached 6h per isolate) and the newest
+// entry matching the family regex is used instead. That keeps runs alive
+// across Wandbox version refreshes without a redeploy.
+
+const WANDBOX: Record<string, { language: string; pinned: string; family: RegExp }> = {
+  python: { language: "Python", pinned: "cpython-3.12.7", family: /^cpython-3\.\d+/ },
+  javascript: { language: "JavaScript", pinned: "nodejs-20.17.0", family: /^nodejs-\d+/ },
+  typescript: { language: "TypeScript", pinned: "typescript-5.6.2", family: /^typescript-\d+/ },
+  c: { language: "C", pinned: "gcc-13.2.0-c", family: /^gcc-\d[\d.]*-c$|^clang-\d[\d.]*-c$/ },
+  cpp: { language: "C++", pinned: "gcc-13.2.0", family: /^gcc-\d[\d.]*$|^clang-\d[\d.]*$/ },
+  go: { language: "Go", pinned: "go-1.23.2", family: /^go-1\.\d+/ },
+  rust: { language: "Rust", pinned: "rust-1.82.0", family: /^rust-1\.\d+/ },
+  java: { language: "Java", pinned: "openjdk-jdk-22+36", family: /^openjdk-jdk-\d+/ },
+  bash: { language: "Bash script", pinned: "bash", family: /^bash/ },
+};
+
+interface WandboxListEntry {
+  name?: unknown;
+  language?: unknown;
+}
+
+let compilerCache: { at: number; byLang: Map<string, string[]> } | null = null;
+
+async function wandboxCompilerList(): Promise<Map<string, string[]>> {
+  if (compilerCache && Date.now() - compilerCache.at < 6 * 3600_000) {
+    return compilerCache.byLang;
+  }
+  try {
+    const res = await fetch("https://wandbox.org/api/list.json", {
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.ok) {
+      const list = (await res.json()) as WandboxListEntry[];
+      const byLang = new Map<string, string[]>();
+      for (const entry of list) {
+        if (typeof entry?.name !== "string" || typeof entry?.language !== "string") continue;
+        const arr = byLang.get(entry.language);
+        if (arr) arr.push(entry.name);
+        else byLang.set(entry.language, [entry.name]);
+      }
+      compilerCache = { at: Date.now(), byLang };
+    }
+  } catch {
+    // Keep the previous cache if the refresh fails; pinned names still work.
+  }
+  return compilerCache?.byLang ?? new Map();
+}
+
+// "gcc-13.2.0" -> 13.2.0 -> 130200000 : comparable version numbers.
+function versionKey(name: string): number {
+  const nums = (name.match(/\d+/g) || []).slice(0, 4).map(Number);
+  return nums.reduce((acc, n) => acc * 1000 + n, 0);
+}
+
+async function resolveCompiler(language: string): Promise<string | null> {
+  const spec = WANDBOX[language];
+  if (!spec) return null;
+  const names = (await wandboxCompilerList()).get(spec.language);
+  if (!names || !names.length) return spec.pinned; // list unavailable — pin and hope
+  if (names.includes(spec.pinned)) return spec.pinned;
+  const family = names.filter((n) => spec.family.test(n) && !n.includes("head"));
+  if (family.length) {
+    family.sort((a, b) => versionKey(a) - versionKey(b));
+    return family[family.length - 1];
+  }
+  const head = names.find((n) => n.endsWith("-head") || n === "bash");
+  return head ?? spec.pinned;
+}
+
+interface WandboxResult {
+  status?: unknown;
+  signal?: unknown;
+  compiler_error?: unknown;
+  program_output?: unknown;
+  program_error?: unknown;
+}
+
+/** One Wandbox execution. Returns the relay-style contract the terminal reads. */
+async function runOnWandbox(
+  language: string,
+  code: string,
+  stdin: string,
+): Promise<{ ok: boolean; stdout: string; stderr: string; exitCode: number } | null> {
+  const compiler = await resolveCompiler(language);
+  if (!compiler) return null;
+  try {
+    const res = await fetch("https://wandbox.org/api/compile.json", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, compiler, stdin, save: false }),
+      signal: AbortSignal.timeout(25_000),
+    });
+    if (!res.ok) return null; // upstream outage — surfaced as the generic 502
+    const data = (await res.json().catch(() => null)) as WandboxResult | null;
+    if (!data || typeof data !== "object") return null;
+    const exit = Number.parseInt(String(data.status ?? ""), 10);
+    const exitCode = Number.isFinite(exit) ? exit : data.signal ? 137 : 1;
+    const compileErr = typeof data.compiler_error === "string" ? data.compiler_error : "";
+    const progOut = typeof data.program_output === "string" ? data.program_output : "";
+    const progErr = typeof data.program_error === "string" ? data.program_error : "";
+    const stderr = [compileErr, progErr].filter(Boolean).join("\n");
+    return { ok: exitCode === 0 && !compileErr, stdout: progOut, stderr, exitCode };
+  } catch {
+    return null;
+  }
+}
+
+const runError = (
+  stderr: string,
+  language: string,
+  durationMs: number,
+  status = 502,
+) =>
+  Response.json(
+    { ok: false, stdout: "", stderr, exitCode: 1, durationMs, language },
+    { status, headers: NO_STORE },
+  );
 
 export async function onRequestPost(context: { request: Request }): Promise<Response> {
   const ip = clientIp(context.request);
@@ -99,9 +226,17 @@ export async function onRequestPost(context: { request: Request }): Promise<Resp
   let language = typeof body.language === "string" ? body.language.toLowerCase().trim() : "";
   const stdin = typeof body.stdin === "string" ? body.stdin : "";
 
+  // Normalize aliases before validation (py->python, c++->cpp, …).
+  if (language === "py") language = "python";
+  if (language === "js" || language === "node") language = "javascript";
+  if (language === "ts") language = "typescript";
+  if (language === "golang") language = "go";
+  if (language === "rs") language = "rust";
+  if (language === "sh") language = "bash";
+  if (language === "c++") language = "cpp";
+
   // A .c file containing C++ headers/namespaces compiles with g++, not gcc.
   if (language === "c" && code && looksLikeCpp(code)) language = "cpp";
-  if (language === "typescript" || language === "ts") language = "javascript";
 
   if (!code) {
     return Response.json(
@@ -126,7 +261,7 @@ export async function onRequestPost(context: { request: Request }): Promise<Resp
       {
         ok: false,
         error: "language_not_supported",
-        stderr: `language "${language || "(none)"}" is not supported. Supported: python, javascript, c, cpp, java, rust, go, bash.`,
+        stderr: `language "${language || "(none)"}" is not supported. Supported: python, javascript, typescript, c, cpp, java, rust, go, bash.`,
         stdout: "",
         exitCode: 1,
         durationMs: 0,
@@ -137,74 +272,36 @@ export async function onRequestPost(context: { request: Request }): Promise<Resp
   }
 
   const start = Date.now();
-  try {
-    const proxy = (lang: string) =>
-      fetch("https://relay.avishkark.in/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language: lang, code, stdin }),
-        signal: AbortSignal.timeout(20000),
-      });
+  let result = await runOnWandbox(language, code, stdin);
 
-    let res = await proxy(language);
-    let data: any = await res.json().catch(() => null);
-
-    // Safety net for C++ sources the pre-check above did not catch: a gcc
-    // "fatal error: <cpp-header>: No such file" on a .c run is retried once
-    // as C++ so web-copied snippets still execute.
-    if (
-      language === "c" &&
-      data &&
-      typeof data.stderr === "string" &&
-      /fatal error:\s*(iostream|bits\/stdc\+\+\.h|vector|string|map|memory)\b/i.test(data.stderr)
-    ) {
-      language = "cpp";
-      res = await proxy(language);
-      data = await res.json().catch(() => null);
-    }
-
-    if (!data || typeof data !== "object") {
-      return Response.json(
-        {
-          ok: false,
-          stdout: "",
-          stderr: "The code runner returned an invalid response. Please try again.",
-          exitCode: 1,
-          durationMs: Date.now() - start,
-          language,
-        },
-        { status: 502, headers: NO_STORE },
-      );
-    }
-    // Propagate the upstream status (notably 429 rate limits) instead of
-    // masking everything as 200.
-    const status = res.status === 429 ? 429 : 200;
-    return Response.json(
-      {
-        ok: Boolean(data.ok),
-        stdout: typeof data.stdout === "string" ? data.stdout : "",
-        stderr: typeof data.stderr === "string" ? data.stderr : "",
-        exitCode: typeof data.exitCode === "number" ? data.exitCode : data.ok ? 0 : 1,
-        durationMs: data.executionTime || Date.now() - start,
-        language,
-      },
-      { status, headers: NO_STORE },
-    );
-  } catch {
-    // Generic message only — error internals (timeout vs DNS vs TLS) are
-    // operational detail, not client-facing information.
-    return Response.json(
-      {
-        ok: false,
-        stdout: "",
-        stderr: "The code runner is temporarily unreachable. Please try again shortly.",
-        exitCode: 1,
-        durationMs: Date.now() - start,
-        language,
-      },
-      { status: 502, headers: NO_STORE },
-    );
+  // Safety net for C++ sources the pre-check above did not catch: a gcc
+  // "fatal error: <cpp-header>: No such file" on a .c run is retried once
+  // as C++ so web-copied snippets still execute.
+  if (
+    language === "c" &&
+    result &&
+    typeof result.stderr === "string" &&
+    /fatal error:\s*(iostream|bits\/stdc\+\+\.h|vector|string|map|memory)\b/i.test(result.stderr)
+  ) {
+    language = "cpp";
+    result = await runOnWandbox(language, code, stdin);
   }
+
+  if (!result) {
+    return runError("The code runner is temporarily unavailable. Please try again shortly.", language, Date.now() - start);
+  }
+
+  return Response.json(
+    {
+      ok: result.ok,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.exitCode,
+      durationMs: Date.now() - start,
+      language,
+    },
+    { status: 200, headers: NO_STORE },
+  );
 }
 
 export async function onRequestGet(): Promise<Response> {
@@ -212,12 +309,12 @@ export async function onRequestGet(): Promise<Response> {
     {
       ok: true,
       service: "anonshare-run",
-      relay: "https://relay.avishkark.in/run",
-      languages: ["python", "javascript", "c", "cpp", "java", "rust", "go", "bash"],
-      // Pre-bundled on the runner's sandbox (owner-configurable on the relay
-      // via PY_BOOTSTRAP_PACKAGES). Python stdlib is always included.
-      packages: ["numpy", "pandas", "sympy", "matplotlib", "requests", "bs4", "pillow"],
-      sandbox: "bubblewrap-hardened",
+      runner: "wandbox.org (public sandbox)",
+      languages: ["python", "javascript", "typescript", "c", "cpp", "java", "rust", "go", "bash"],
+      // Python stdlib always included; third-party packages are NOT
+      // preinstalled on the public runner (the previous private runner
+      // bundled numpy/pandas/etc. — do not rely on them here).
+      packages: [],
       stdin: "supported — one line per input() / scanf / cin read",
     },
     { headers: NO_STORE },
