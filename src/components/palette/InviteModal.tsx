@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import { X, Copy, Check, Eye, Pencil, QrCode, Link2, Shield } from "lucide-react";
 import { useAnon } from "@/lib/store";
+import { getSession } from "@/lib/session";
+import { DEFAULT_RELAY } from "@/lib/relay";
 import { toast } from "sonner";
 
 export function InviteModal() {
@@ -16,6 +18,8 @@ export function InviteModal() {
 
   const baseUrl = typeof window !== "undefined" ? `${window.location.origin}/` : "https://code.avishkark.in/";
   const link = `${baseUrl}?join=${s.roomCode}${role === "view" ? "&p=1" : ""}`;
+  // the relay actually serving this room (falls back to the default topology)
+  const relayHostShown = getSession()?.info.host || DEFAULT_RELAY;
 
   function copy(kind: "link" | "code", value: string) {
     navigator.clipboard?.writeText(value);
@@ -148,7 +152,7 @@ export function InviteModal() {
           </div>
 
           <div className="hairline-t flex items-center justify-between px-4 py-2 anon-mono text-[10px] anon-dim">
-            <span>relay: relay.avishkark.in</span>
+            <span>relay: {relayHostShown}</span>
             <button onClick={() => s.toggleInvite()} className="anon-mut hover:anon-fg">done</button>
           </div>
         </motion.div>
