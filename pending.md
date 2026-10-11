@@ -3,55 +3,38 @@
 Shared task list for **Avishkar (owner)** and **the agent (Super Z)**.
 Anything done gets moved to the bottom "Completed" section (or deleted) — never silently.
 
-**Last updated:** 2026-10-12 (after v5.6.0 fixes: shortcuts crash, file rename, Worker-first relay topology)
-**Live state at last check:** `textshare.pages.dev` healthy · **`code.avishkark.in` NXDOMAIN (DNS record deleted — see P0)** · Worker relay healthy (10/10 protocol assertions) · old VPS relay 530 (VPS terminated)
+**Last updated:** 2026-10-12 (after v5.6.1: run-on-Wandbox fix, same-origin relay proxy, 24h-TTL live proof)
+**Live state at last check:** `code.avishkark.in` **back online** (owner restored DNS) · Worker relay healthy · `/api/run` fixed via wandbox.org · 24h zero-peer room persistence **empirically verified** (`scripts/verify-room-ttl.mjs` → PASS)
 
 ---
 
-## P0 (owner, ~2 min): restore the `code` DNS record — the site is DOWN at its normal URL
+## P0 ~~(owner): restore the `code` DNS record~~ ✅ RESOLVED 2026-10-12
 
-`code.avishkark.in` no longer resolves (NXDOMAIN confirmed via 1.1.1.1 and 8.8.8.8 on 2026-10-12).
-The Pages deployment itself is fine and still serves at `https://textshare.pages.dev` — only the
-custom-domain DNS record is gone (most likely deleted by accident during the VPS/relay DNS cleanup).
-
-**Do this in the Cloudflare dashboard (zone `avishkark.in` → DNS → Records):**
-
-1. Add record: **Type `CNAME` · Name `code` · Target `textshare.pages.dev` · Proxy status: Proxied (orange cloud)**.
-2. Wait ~1 min, then verify: `https://code.avishkark.in` loads (and `curl -sI https://code.avishkark.in/api/status` returns 200).
-3. If Cloudflare Pages shows the custom domain as "not attached", re-add it under the Pages project
-   (`textshare` → Custom domains → `code.avishkark.in`) — it will re-create/claim the record itself.
-
-Everything else (SEO, invite links, JSON-LD canonical) keys off this hostname, so this one record
-restores the whole public surface.
+Owner restored the record; `code.avishkark.in` is the default domain again (the temporary
+`data.avishkark.in` window is over). The relay REST proxy below makes any future temporary
+domain swap a zero-code-change event anyway.
 
 ---
 
-## P1 (owner): paste a fresh PAT so the agent can push
+## P1 ~~(owner): paste a fresh PAT so the agent can push~~ ✅ RESOLVED 2026-10-12
 
-The agent's PAT is lost on every sandbox restart (it was never stored on disk by design).
-Four commits are **sitting on local main** waiting to push:
-
-```
-a2c292e fix(palette): ShortcutsOverlay crashed on 'tools' group — whole app went white
-d5a8096 feat(tabs): rename files — untitled slots are unique and renames sync to peers
-8a99129 fix(relay): Cloudflare Worker is now the primary — VPS terminated
-99901a5 chore(e2e): parameterize e2e-live-sync.mjs — RELAY env var, Worker default
-```
-
-Create a fine-grained PAT (**repo AvishkarKedar/textshare, Contents: read & write**) and paste it in
-chat — the agent pushes immediately (push to main auto-deploys to Cloudflare Pages in ~2 min).
-A full backup of the branch also sits at `download/textshare-backup-20261012.bundle`
-(`git clone textshare-backup-20261012.bundle -b main` recovers everything, history included).
+PAT provided in chat and used to push. > **SECURITY REMINDER:** the classic token
+(`ghp_38UH...`) pasted in chat should be **revoked** now that the work is pushed.
 
 ---
 
-## P2 (owner, optional, cosmetic): Worker create-response body
+## P2 (owner, ~2 min): `npx wrangler deploy` in `worker/` — two source changes are staged
 
-The VPS relay answered `POST /room/:code?create=1` with `{ok:true,error:'expected_websocket'}`;
-the Worker omits the `ok` field. **The browser client only checks the status (426 = accepted), so
-nothing is broken** — only `scripts/e2e-live-sync.mjs` used to assert the body field (it now accepts
-both shapes). Next time `npx wrangler deploy` runs in `worker/`, feel free to add `ok: true` to the
-426 body for symmetry; zero client impact either way.
+The Worker **source** in this repo has two small changes that are NOT live yet (the agent has
+no Cloudflare credentials in its sandbox — `wrangler whoami` = not authenticated):
+
+1. `POST /run` now answers an honest `runner_moved` 503 (execution moved to `/api/run` on
+   Pages, which runs on wandbox.org). The old message pointed at the terminated VPS.
+2. The `426 expected_websocket` body now includes `ok: true` (VPS-relay symmetry, purely
+   cosmetic — the client checks only the status).
+
+Both are deployed with one command: `cd worker && npx wrangler deploy`. Zero client impact
+if you skip it; the signaling Worker already in production is healthy either way.
 
 ---
 
