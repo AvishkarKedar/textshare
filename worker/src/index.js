@@ -612,7 +612,10 @@ export class Room {
     }
 
     if (meta.s && !owner) return json({ error: 'suspended' }, 423)
-    if (request.headers.get('Upgrade') !== 'websocket') return json({ error: 'expected_websocket' }, 426)
+    // 426 = the room exists and auth passed; the client is expected to
+    // upgrade to WebSocket next. `ok: true` matches the VPS relay's body so
+    // tooling can assert either shape (client only checks the status).
+    if (request.headers.get('Upgrade') !== 'websocket') return json({ ok: true, error: 'expected_websocket' }, 426)
 
     const cfg = await getConfig(this.env)
     const maxConns = cfg.MAX_CONNS || MAX_CONNS
@@ -908,18 +911,17 @@ async function routeRequest(request, env) {
   }
 
   /* ---------------------------------------------------- Code Execution */
-  // This fallback relay does NOT execute code. It used to proxy the public
-  // emkc.org Piston API, which became whitelist-only in Feb 2026 and has
-  // returned 403 for every request since — the endpoint was effectively
-  // dead. An honest error beats a silently broken proxy. Real execution
-  // happens on the primary VPS relay (relay.avishkark.in, bubblewrap
-  // sandbox), which is what /api/run on Pages uses.
+  // This relay does NOT execute code — signaling only. Execution moved to
+  // the Pages Function /api/run (wandbox.org public sandbox) in 2026-10
+  // after the VPS runner was terminated. An honest error beats a silently
+  // broken proxy; the old emkc.org Piston API this used to proxy went
+  // whitelist-only in Feb 2026 anyway.
   if (url.pathname === '/run' && request.method === 'POST') {
     return json({
       ok: false,
-      error: 'runner_unavailable',
+      error: 'runner_moved',
       stdout: '',
-      stderr: 'Code execution is disabled on this fallback relay. Use the primary relay (relay.avishkark.in).',
+      stderr: 'Code execution is not available on the relay. Use /api/run on the site.',
       exitCode: 503,
     }, 503)
   }
