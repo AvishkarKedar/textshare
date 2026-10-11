@@ -1,17 +1,29 @@
 "use client";
 
-import { X, Plus, FileCode2, Sparkles, History as HistoryIcon, FolderOpen, Eye } from "lucide-react";
-import { useAnon } from "@/lib/store";
+import { useState } from "react";
+import { X, Plus, FileCode2, Sparkles, History as HistoryIcon, FolderOpen, Eye, Pencil } from "lucide-react";
+import { useAnon, type EditorFile } from "@/lib/store";
 
 export function TabBar() {
   const s = useAnon();
+  const [renaming, setRenaming] = useState<{ id: string; draft: string } | null>((null));
   if (s.zenMode) return null;
+
+  function startRename(f: EditorFile) {
+    setRenaming({ id: f.id, draft: f.name });
+  }
+  function commitRename() {
+    if (!renaming) return;
+    s.renameFile(renaming.id, renaming.draft);
+    setRenaming(null);
+  }
 
   return (
     <div className="flex h-9 items-stretch hairline-b anon-raise overflow-x-auto no-scrollbar">
       <div className="flex items-stretch">
         {s.files.map((f) => {
           const active = f.id === s.activeFileId;
+          const isRenaming = renaming?.id === f.id;
           return (
             <div
               key={f.id}
@@ -21,35 +33,79 @@ export function TabBar() {
                   : "anon-mut hover:bg-[var(--anon-panel)] hairline-r"
               }`}
             >
-              <button
-                onClick={() => s.setActiveFile(f.id)}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <FileCode2 className="h-3 w-3" />
-                <span className="whitespace-nowrap">{f.name}</span>
-                {active && (
-                  <span className="h-1.5 w-1.5 rounded-full anim-beat" style={{ background: "var(--anon-ok)" }} />
-                )}
-              </button>
-              {s.files.length > 1 && (
+              {isRenaming ? (
+                <span className="flex items-center gap-2">
+                  <FileCode2 className="h-3 w-3 anon-accent" />
+                  <input
+                    autoFocus
+                    value={renaming!.draft}
+                    maxLength={80}
+                    spellCheck={false}
+                    onChange={(e) => setRenaming({ id: f.id, draft: e.target.value })}
+                    onBlur={commitRename}
+                    onFocus={(e) => e.target.select()}
+                    onKeyDown={(e) => {
+                      // shield the global shortcut handler while typing a name
+                      e.stopPropagation();
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitRename();
+                      } else if (e.key === "Escape") {
+                        e.preventDefault();
+                        setRenaming(null);
+                      }
+                    }}
+                    title="Enter to save · Esc to cancel"
+                    className="w-24 sm:w-28 border-b border-[var(--anon-accent)] bg-transparent anon-fg anon-mono text-xs outline-none"
+                  />
+                </span>
+              ) : (
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    s.removeFile(f.id);
-                  }}
-                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-[var(--anon-danger)] ml-1 transition-opacity cursor-pointer p-0.5"
-                  title="Close tab"
+                  onClick={() => s.setActiveFile(f.id)}
+                  onDoubleClick={() => startRename(f)}
+                  className="flex items-center gap-2 cursor-pointer"
+                  title="Double-click to rename"
                 >
-                  <X className="h-3 w-3" />
+                  <FileCode2 className="h-3 w-3" />
+                  <span className="whitespace-nowrap">{f.name}</span>
+                  {active && (
+                    <span className="h-1.5 w-1.5 rounded-full anim-beat" style={{ background: "var(--anon-ok)" }} />
+                  )}
                 </button>
+              )}
+              {!isRenaming && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startRename(f);
+                    }}
+                    className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:anon-accent transition-opacity cursor-pointer p-0.5"
+                    title="Rename file"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  {s.files.length > 1 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        s.removeFile(f.id);
+                      }}
+                      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-[var(--anon-danger)] ml-1 transition-opacity cursor-pointer p-0.5"
+                      title="Close tab"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </>
               )}
             </div>
           );
         })}
         <button
-          onClick={() => s.addFile("untitled.txt", "text")}
+          onClick={() => s.addFile("", "text")}
           className="flex h-9 w-9 items-center justify-center anon-mut hover:bg-[var(--anon-panel)] hairline-r cursor-pointer"
-          title="New file"
+          title="New file (renames to untitled.txt — double-click the tab to rename)"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>

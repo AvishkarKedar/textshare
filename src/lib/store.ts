@@ -548,6 +548,7 @@ interface AnonState {
   setActiveFile: (id: string) => void;
   updateFileContent: (id: string, content: string) => void;
   setFileLanguage: (id: string, language: string, newName?: string) => void;
+  renameFile: (id: string, name: string) => void;
   addFile: (name: string, language: string) => void;
   removeFile: (id: string) => void;
 
@@ -588,6 +589,21 @@ const INITIAL_FILES: EditorFile[] = [
 const INITIAL_PARTICIPANTS: Participant[] = [
   { id: "me", name: "You", color: "#4c8dff", isOwner: true, online: true, cursorLine: 1 },
 ];
+
+/**
+ * Next free "untitled" slot name: untitled.txt, untitled-2.txt, …
+ * Case-insensitive against the live file list (which in session mode mirrors
+ * the shared Yjs doc), so two peers adding files never collide on a name.
+ */
+function nextUntitledName(files: { name: string }[]): string {
+  const names = new Set(files.map((f) => f.name.toLowerCase()));
+  if (!names.has("untitled.txt")) return "untitled.txt";
+  for (let i = 2; i < 500; i++) {
+    const candidate = `untitled-${i}.txt`;
+    if (!names.has(candidate)) return candidate;
+  }
+  return `untitled-${Date.now().toString(36)}.txt`;
+}
 
 function sessionActive(): boolean {
   return getSession() !== null;
@@ -1408,10 +1424,45 @@ export const useAnon = create<AnonState>()(
           ),
         }));
       },
-      addFile: (name, language) => {
-        const inferredLang = language && language !== "text" ? language : extToLang(name);
+      /**
+       * Rename a file (tab double-click / pencil). Synced to peers when a
+       * session is active via updateYFile. Language follows the new
+       * extension when it maps to a known language; renaming without an
+       * extension keeps the current language.
+       */
+      renameFile: (id, rawName) => {
+        const name = rawName.trim().replace(/[\r\n\t]+/g, " ").slice(0, 80);
+        if (!name) return;
+        const s = get();
+        const f = s.files.find((x) => x.id === id);
+        if (!f || name === f.name) return;
+        const dot = name.lastIndexOf(".");
+        const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+        const oldDot = f.name.lastIndexOf(".");
+        const oldExt = oldDot > 0 ? f.name.slice(oldDot + 1).toLowerCase() : "";
+        let nextLang = f.language;
+        if (ext && ext !== oldExt) {
+          const mapped = extToLang(name);
+          if (mapped !== "text" || ext === "txt") nextLang = mapped;
+        }
         if (sessionActive()) {
-          const id = addYFile(name, inferredLang);
+          updateYFile(id, { name, language: nextLang });
+          return;
+        }
+        set((st) => ({
+          files: st.files.map((x) =>
+            x.id === id ? { ...x, name, language: nextLang } : x
+          ),
+        }));
+      },
+      addFile: (name, language) => {
+        // an empty name means "give me the next free untitled slot"
+        const finalName =
+          name && name.trim() ? name : nextUntitledName(get().files);
+        const inferredLang =
+          language && language !== "text" ? language : extToLang(finalName);
+        if (sessionActive()) {
+          const id = addYFile(finalName, inferredLang);
           set({ activeFileId: id });
           return;
         }
