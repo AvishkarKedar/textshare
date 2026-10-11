@@ -14,7 +14,7 @@
  */
 
 import * as Y from "yjs";
-import { RelayClient, relayHost, FALLBACK_RELAY, type RoomStateFrame, type ConnState } from "./relay";
+import { RelayClient, relayHost, restUrl, FALLBACK_RELAY, type RoomStateFrame, type ConnState } from "./relay";
 import { useAnon } from "./store";
 import type { EditorFile, ChatMessage, Participant, SharedFile } from "./store";
 
@@ -741,8 +741,9 @@ export async function uploadSharedFile(
   const fileId = `att_${Date.now().toString(36)}_${crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}`;
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   const fileHash = await sha256Hex(await file.arrayBuffer());
-  const proto = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http:" : "https:";
-  const baseUrl = `${proto}//${host}/room/${encodeURIComponent(code)}/files/${encodeURIComponent(fileId)}`;
+  // Same-origin proxy in the browser (works on every origin, no CORS allowlist
+  // needed on the relay); direct in Node. See restUrl() in relay.ts.
+  const baseUrl = restUrl(host, `/room/${encodeURIComponent(code)}/files/${encodeURIComponent(fileId)}`);
 
   for (let i = 0; i < totalChunks; i++) {
     const start = i * CHUNK_SIZE;
@@ -790,8 +791,7 @@ export async function downloadSharedFile(fileId: string): Promise<Blob> {
   const { code, host } = active.info;
   const key = active.relay.key;
   const auth = active.relay.auth;
-  const proto = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http:" : "https:";
-  const baseUrl = `${proto}//${host}/room/${encodeURIComponent(code)}/files/${encodeURIComponent(fileId)}`;
+  const baseUrl = restUrl(host, `/room/${encodeURIComponent(code)}/files/${encodeURIComponent(fileId)}`);
 
   const chunks: Uint8Array[] = [];
   for (let i = 0; i < fileMeta.totalChunks; i++) {
@@ -808,8 +808,7 @@ export async function deleteSharedFile(fileId: string): Promise<void> {
   if (!active) return;
   const { code, host } = active.info;
   const auth = active.relay.auth;
-  const proto = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http:" : "https:";
-  const base = `${proto}//${host}/room/${encodeURIComponent(code)}/files/${encodeURIComponent(fileId)}`;
+  const base = restUrl(host, `/room/${encodeURIComponent(code)}/files/${encodeURIComponent(fileId)}`);
   const headers = { "x-room-auth": auth, Authorization: `Bearer ${auth}` };
   try {
     // Current relay: DELETE /files/:fileId removes every chunk of the file.

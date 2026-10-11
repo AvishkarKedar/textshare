@@ -3,7 +3,10 @@
 import http from "node:http";
 
 const PORT = 8788;
-const RELAY_HOST = process.env.RELAY_URL || "https://relay.avishkark.in";
+// Default relay is the LOCAL relay (node relay/server.js on :8787), which
+// mirrors the production relay contract and executes code locally. Override
+// with RELAY_URL to point /run at another runner.
+const RELAY_HOST = process.env.RELAY_URL || "http://127.0.0.1:8787";
 
 const server = http.createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -76,6 +79,56 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/crypto" && req.method === "POST") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, rounds: 600000 }));
+    return;
+  }
+
+  // /relay/u/<host>/<path...> — dev mirror of the production same-origin
+  // relay proxy (functions/api/relay/[[path]].ts). next.config.ts rewrites
+  // /api/relay/* here, so `next dev` exercises the exact code path the
+  // deployed Pages Functions serve. Allowlist mirrors prod plus the local
+  // relay hosts (http).
+  if (url.pathname.startsWith("/relay/u/")) {
+    const rest = url.pathname.slice("/relay/u/".length);
+    const slash = rest.indexOf("/");
+    const host = (slash === -1 ? rest : rest.slice(0, slash)).toLowerCase();
+    const path = slash === -1 ? "/" : rest.slice(slash);
+    const allowed =
+      host === "localhost:8787" ||
+      host === "127.0.0.1:8787" ||
+      host === "textshare-sync.avishkarkedar.workers.dev" ||
+      host === "relay.avishkark.in";
+    if (!host || !path.startsWith("/") || !allowed) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "relay_not_allowed" }));
+      return;
+    }
+    const proto = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http:" : "https:";
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", async () => {
+      try {
+        const fwdHeaders = {};
+        for (const h of ["content-type", "x-room-auth", "authorization", "range"]) {
+          const v = req.headers[h];
+          if (v) fwdHeaders[h] = v;
+        }
+        const upstream = await fetch(`${proto}//${host}${path}${url.search}`, {
+          method: req.method,
+          headers: fwdHeaders,
+          body: req.method === "GET" || req.method === "HEAD" ? undefined : Buffer.concat(chunks),
+          signal: AbortSignal.timeout(15000),
+        });
+        const buf = Buffer.from(await upstream.arrayBuffer());
+        const outHeaders = { "Cache-Control": "no-store" };
+        const ct = upstream.headers.get("content-type");
+        if (ct) outHeaders["Content-Type"] = ct;
+        res.writeHead(upstream.status, outHeaders);
+        res.end(buf);
+      } catch {
+        res.writeHead(502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "relay_unreachable" }));
+      }
+    });
     return;
   }
 

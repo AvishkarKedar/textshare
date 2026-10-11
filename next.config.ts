@@ -34,6 +34,9 @@ const nextConfig: NextConfig = {
             { source: "/api/council", destination: "http://127.0.0.1:8788/council" },
             { source: "/api/crypto", destination: "http://127.0.0.1:8788/crypto" },
             { source: "/api/generate", destination: "http://127.0.0.1:8788/generate" },
+            // Same-origin relay REST proxy — mirrors functions/api/relay/[[path]].ts
+            // (the shim forwards to the relay, so dev runs the prod code path).
+            { source: "/api/relay/:path*", destination: "http://127.0.0.1:8788/relay/:path*" },
           ];
         },
       }

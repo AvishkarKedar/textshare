@@ -65,13 +65,35 @@ export function relayCandidates(home?: string): string[] {
   return list;
 }
 
+/**
+ * Resolve the URL for a relay REST call.
+ *
+ * In the BROWSER, relay REST is routed through the same-origin Pages Function
+ * proxy at /api/relay/u/<host><path> (functions/api/relay/[[path]].ts), so the
+ * app never makes a cross-origin REST call: it works on every origin the Pages
+ * project is served from — code.avishkark.in, data.avishkark.in, *.pages.dev
+ * previews, any future custom domain — without the relay having to allow-list
+ * each origin for CORS (which is what broke the temporary data domain).
+ *
+ * WebSockets are NOT subject to CORS and always connect to the relay directly.
+ * In Node (tests, tooling) the direct URL is kept, exactly as before. In
+ * `next dev` the proxy is served by scripts/dev-api-shim.js (next.config.ts
+ * rewrites /api/relay/* to it), so dev exercises the same code path as prod.
+ */
+export function restUrl(host: string, path: string): string {
+  if (typeof window !== "undefined") {
+    return `/api/relay/u/${host}${path}`;
+  }
+  const proto = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http:" : "https:";
+  return `${proto}//${host}${path}`;
+}
+
 /** Cheap liveness probe (GET /health, both relays implement it). */
 export async function probeRelay(host: string, timeoutMs = 4000): Promise<boolean> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const proto = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http:" : "https:";
-    const res = await fetch(`${proto}//${host}/health`, { cache: "no-store", signal: ctrl.signal });
+    const res = await fetch(restUrl(host, "/health"), { cache: "no-store", signal: ctrl.signal });
     return res.ok;
   } catch {
     return false;
@@ -153,8 +175,7 @@ async function http(host: string, path: string, init?: RequestInit): Promise<Res
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 9000);
   try {
-    const proto = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http:" : "https:";
-    return await fetch(`${proto}//${host}${path}`, { cache: "no-store", ...init, signal: ctrl.signal });
+    return await fetch(restUrl(host, path), { cache: "no-store", ...init, signal: ctrl.signal });
   } catch {
     return null;
   } finally {
