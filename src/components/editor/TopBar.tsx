@@ -26,6 +26,7 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { useAnon } from "@/lib/store";
+import { COMPILER_ENABLED } from "@/lib/flags";
 import { initials } from "@/lib/themes";
 
 export function TopBar() {
@@ -120,25 +121,29 @@ export function TopBar() {
 
       {/* right: primary actions (Run + Terminal + Chat + Notifications + overflow) */}
       <div className="ml-auto flex items-center gap-1.5">
-        <button
-          onClick={() => s.runCode()}
-          disabled={s.running}
-          className="anon-mono inline-flex h-8 sm:h-7 items-center gap-1.5 bg-[var(--anon-accent)] px-3 text-xs font-medium text-[var(--anon-accent-fg)] transition-transform hover:brightness-110 active:translate-y-px disabled:opacity-60"
-          title="Run code · ⌘↵"
-        >
-          {s.running ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />} Run
-        </button>
+        {COMPILER_ENABLED && (
+          <button
+            onClick={() => s.runCode()}
+            disabled={s.running}
+            className="anon-mono inline-flex h-8 sm:h-7 items-center gap-1.5 bg-[var(--anon-accent)] px-3 text-xs font-medium text-[var(--anon-accent-fg)] transition-transform hover:brightness-110 active:translate-y-px disabled:opacity-60"
+            title="Run code · ⌘↵"
+          >
+            {s.running ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />} Run
+          </button>
+        )}
 
-        <button
-          onClick={() => s.toggleTerminal()}
-          className={`anon-mono relative hidden h-7 items-center gap-1.5 px-2 text-xs hairline hover:bg-[var(--anon-panel)] sm:inline-flex ${
-            s.terminalOpen ? "bg-[var(--anon-panel)] anon-accent" : ""
-          }`}
-          title="Toggle terminal"
-          aria-label="Toggle terminal"
-        >
-          <TerminalIcon className="h-3.5 w-3.5" />
-        </button>
+        {COMPILER_ENABLED && (
+          <button
+            onClick={() => s.toggleTerminal()}
+            className={`anon-mono relative hidden h-7 items-center gap-1.5 px-2 text-xs hairline hover:bg-[var(--anon-panel)] sm:inline-flex ${
+              s.terminalOpen ? "bg-[var(--anon-panel)] anon-accent" : ""
+            }`}
+            title="Toggle terminal"
+            aria-label="Toggle terminal"
+          >
+            <TerminalIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
 
         <button
           onClick={() => s.toggleMdPreview()}
@@ -208,7 +213,7 @@ export function TopBar() {
               <OverflowItem icon={Globe} label="Browser" k="⌘⇧B" onClick={() => { s.toggleBrowser(); setOverflow(false); }} active={s.browserOpen} />
               <OverflowItem icon={Shield} label="Crypto explainer" k="⌘⇧K" onClick={() => { s.toggleCrypto(); setOverflow(false); }} active={s.cryptoOpen} />
               <OverflowItem icon={Sparkles} label="Restart onboarding tour" k="⌘⇧O" onClick={() => { s.startTour(); setOverflow(false); }} />
-              <OverflowItem icon={TerminalIcon} label="Terminal" k="⌘\\" onClick={() => { s.toggleTerminal(); setOverflow(false); }} active={s.terminalOpen} />
+              {COMPILER_ENABLED && <OverflowItem icon={TerminalIcon} label="Terminal" k="⌘\\" onClick={() => { s.toggleTerminal(); setOverflow(false); }} active={s.terminalOpen} />}
               <OverflowItem icon={Download} label="Export project ZIP" k="⌘⇧E" onClick={() => { s.exportProjectZip(); setOverflow(false); }} />
               <OverflowItem icon={Activity} label="System status" k="⌘⇧Y" onClick={() => { s.toggleStatus(); setOverflow(false); }} active={s.statusOpen} />
               <OverflowItem icon={Shield} label="Threat model" k="⌘⇧X" onClick={() => { s.toggleSecurity(); setOverflow(false); }} active={s.securityOpen} />

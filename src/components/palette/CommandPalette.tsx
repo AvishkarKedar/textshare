@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useAnon } from "@/lib/store";
+import { COMPILER_ENABLED } from "@/lib/flags";
 import {
   Search,
   Play,
@@ -37,6 +38,9 @@ interface CmdItem {
   run: () => void;
 }
 
+/* Compiler-coupled palette entries — hidden while COMPILER_ENABLED is false. */
+const HIDDEN_WHEN_NO_COMPILER = new Set(["run", "learn", "terminal"]);
+
 export function CommandPalette() {
   const s = useAnon();
   const [q, setQ] = useState("");
@@ -67,7 +71,7 @@ export function CommandPalette() {
       { id: "shortcuts", label: "Show keyboard shortcuts", kbd: "?", icon: RotateCcw, group: "config", run: () => { s.toggleShortcuts(); close(); } },
       { id: "leave", label: "Leave room", icon: LogOut, group: "room", run: () => { s.exitRoom(); } },
     ];
-  }, [s]);
+  }, [s]).filter((it) => COMPILER_ENABLED || !HIDDEN_WHEN_NO_COMPILER.has(it.id));
 
   const filtered = useMemo(() => {
     if (!q.trim()) {

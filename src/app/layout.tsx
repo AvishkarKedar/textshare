@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     template: "%s | AnonShare",
   },
   description:
-    "Share code and text live with anyone in an end-to-end-encrypted room. 6-character codes, live cursors, code execution in 8 languages, HTML preview, zero registration.",
+    "Share code and text live with anyone in an end-to-end-encrypted room. 6-character codes, live cursors, multi-file editing, chat, HTML preview, zero registration.",
   applicationName: "AnonShare",
   authors: [{ name: "Avishkar Kedar", url: "https://avishkark.in" }],
   generator: "Next.js",
@@ -68,7 +68,7 @@ export const metadata: Metadata = {
     "ephemeral code editor",
     "zero knowledge pastebin",
     "encrypted scratchpad",
-    "live code execution",
+    "live collaborative editor",
     "live code editor",
     "online IDE",
     "Avishkar Kedar",
@@ -98,7 +98,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "AnonShare — Live Code & Text Sharing, End-to-End Encrypted",
     description:
-      "Share code and text live in an end-to-end-encrypted room. 6-character codes, live cursors, sandboxed code execution, zero registration.",
+      "Share code and text live in an end-to-end-encrypted room. 6-character codes, live cursors, chat and file sharing, zero registration.",
     url: "https://code.avishkark.in",
     siteName: "AnonShare",
     images: [
@@ -116,7 +116,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "AnonShare — Live Code & Text Sharing, End-to-End Encrypted",
     description:
-      "Share code and text live in an end-to-end-encrypted room. 6-character codes, live cursors, sandboxed code runner, zero registration.",
+      "Share code and text live in an end-to-end-encrypted room. 6-character codes, live cursors, chat and file sharing, zero registration.",
     images: ["/og.png"],
     creator: "@avishkarkedar",
   },
@@ -140,7 +140,7 @@ const jsonLd = [
     "name": "AnonShare",
     "alternateName": ["anonshare", "Anon Share", "AnonShare IDE", "anonshare code", "AnonShare live code sharing"],
     "url": "https://code.avishkark.in",
-    "description": "AnonShare is a live code and text sharing platform — an ultra-fast, zero-knowledge, end-to-end encrypted collaborative code editor and scratchpad. Share 6-character room codes instantly with live multi-cursor CRDT sync, in-browser code execution, HTML preview, and zero registration.",
+    "description": "AnonShare is a live code and text sharing platform — an ultra-fast, zero-knowledge, end-to-end encrypted collaborative code editor and scratchpad. Share 6-character room codes instantly with live multi-cursor CRDT sync, encrypted file sharing, chat, and zero registration.",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Any (Web Browser)",
     "browserRequirements": "Requires JavaScript. Requires HTML5.",

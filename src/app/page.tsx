@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useAnon } from "@/lib/store";
+import { COMPILER_ENABLED } from "@/lib/flags";
 import { useSync } from "@/lib/use-sync";
 import { Landing } from "@/components/landing/Landing";
 import { AppShell } from "@/components/editor/AppShell";
@@ -125,11 +126,15 @@ export default function Home() {
         e.preventDefault();
         store.toggleCrypto();
       } else if (mod && e.key === "Enter") {
-        e.preventDefault();
-        store.runCode();
+        if (COMPILER_ENABLED) {
+          e.preventDefault();
+          store.runCode();
+        }
       } else if (mod && e.key === "\\") {
-        e.preventDefault();
-        store.toggleTerminal();
+        if (COMPILER_ENABLED) {
+          e.preventDefault();
+          store.toggleTerminal();
+        }
       } else if (mod && e.key === "n") {
         e.preventDefault();
         store.toggleNotifications();
@@ -159,7 +164,7 @@ export default function Home() {
       if (!seenTip) {
         import("sonner").then(({ toast }) => {
           toast("Press ⌘K to open the command palette", {
-            description: "Type / in the editor for slash commands. ⌘↵ runs code. ⌘⇧O restarts the tour.",
+            description: "Type / in the editor for slash commands. ⌘⇧O restarts the tour.",
             duration: 6000,
           });
         });
@@ -175,7 +180,7 @@ export default function Home() {
       {/* global overlays — mounted at root so they float above everything */}
       <RoomEntryDialog />
       <TeamworkPanel />
-      <LearnPanel />
+      {COMPILER_ENABLED && <LearnPanel />}
       <CouncilModal />
       <CommandPalette />
       <ShortcutsOverlay />

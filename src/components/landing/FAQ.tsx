@@ -8,7 +8,7 @@ import { FAQ_DATA } from "@/components/palette/FaqModal";
 
 /** Curated subset shown inline; the full set lives in the searchable modal. */
 const INLINE_FAQS = FAQ_DATA.filter((f) =>
-  ["e2e", "ttl", "account", "runner", "owner", "limits", "admin", "p2p"].includes(f.id),
+  ["e2e", "ttl", "account", "owner", "limits", "admin", "p2p"].includes(f.id),
 );
 
 export function FAQ() {

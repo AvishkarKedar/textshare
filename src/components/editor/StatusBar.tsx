@@ -16,6 +16,7 @@ import {
   Check,
 } from "lucide-react";
 import { useAnon } from "@/lib/store";
+import { COMPILER_ENABLED } from "@/lib/flags";
 import type { ConnState } from "@/lib/relay";
 
 const SUPPORTED_LANGUAGES = [
@@ -148,7 +149,7 @@ export function StatusBar() {
       </button>
 
       {/* stdin readiness — one glance tells you whether the next Run takes input */}
-      {stdinLines > 0 && (
+      {COMPILER_ENABLED && stdinLines > 0 && (
         <button
           onClick={() => {
             s.setStdinOpen(true);

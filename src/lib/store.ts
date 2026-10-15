@@ -27,6 +27,7 @@ import {
 } from "./session";
 import { guestHandle, sanitizeName, isNamed } from "./identity";
 import { detectLanguage, extToLang } from "./detect";
+import { COMPILER_ENABLED } from "./flags";
 
 export type View = "landing" | "editor";
 export type { RoomExistsInfo, RoomStateFrame, ConnState };
@@ -75,6 +76,8 @@ export interface ShortcutDef {
   keys: string;
   label: string;
   group: "global" | "editor" | "navigation" | "tools";
+  /** Marks entries tied to the code runner — hidden when COMPILER_ENABLED is false. */
+  compiler?: boolean;
 }
 
 export interface TerminalLine {
@@ -92,6 +95,8 @@ export interface SlashCommand {
   label: string;
   hint: string;
   icon: string; // emoji or short text
+  /** Marks commands tied to the code runner — hidden when COMPILER_ENABLED is false. */
+  compiler?: boolean;
 }
 
 export interface AppNotification {
@@ -163,7 +168,7 @@ export interface SyntaxToken {
   value: string;
 }
 
-export const SHORTCUTS: ShortcutDef[] = [
+const ALL_SHORTCUTS: ShortcutDef[] = [
   { keys: "⌘ K", label: "Open command palette", group: "global" },
   { keys: "?", label: "Show keyboard shortcuts", group: "global" },
   { keys: "⌘ J", label: "Toggle chat", group: "navigation" },
@@ -172,8 +177,8 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: "⌘ ,", label: "Open settings", group: "global" },
   { keys: "⌘ I", label: "Invite others (copy link / QR)", group: "global" },
   { keys: "⌘ ⇧ K", label: "Open crypto explainer", group: "tools" },
-  { keys: "⌘ ↵", label: "Run code", group: "editor" },
-  { keys: "⌘ \\", label: "Toggle terminal", group: "navigation" },
+  { keys: "⌘ ↵", label: "Run code", group: "editor", compiler: true },
+  { keys: "⌘ \\", label: "Toggle terminal", group: "navigation", compiler: true },
   { keys: "⌘ ⇧ E", label: "Export project as ZIP", group: "tools" },
   { keys: "⌘ N", label: "Toggle notifications", group: "navigation" },
   { keys: "/", label: "Slash commands in editor", group: "editor" },
@@ -194,14 +199,18 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: "Esc", label: "Close overlay / cancel", group: "global" },
 ];
 
-export const SLASH_COMMANDS: SlashCommand[] = [
+/* Compiler-coupled shortcuts (Run, terminal) hidden while COMPILER_ENABLED is false. */
+export const SHORTCUTS: ShortcutDef[] = ALL_SHORTCUTS.filter((s) => COMPILER_ENABLED || !s.compiler);
+
+
+const ALL_SLASH_COMMANDS: SlashCommand[] = [
   { id: "faq", trigger: "/faq", label: "FAQs & Help", hint: "honest answers to all questions", icon: "❓" },
-  { id: "run", trigger: "/run", label: "Run code", hint: "execute the active file", icon: "▶" },
+  { id: "run", trigger: "/run", label: "Run code", hint: "execute the active file", icon: "▶", compiler: true },
   { id: "zen", trigger: "/zen", label: "Toggle zen mode", hint: "distraction-free editor", icon: "◗" },
   { id: "clear", trigger: "/clear", label: "Clear editor", hint: "wipe the active file", icon: "✕" },
   { id: "goal", trigger: "/goal", label: "Set a goal", hint: "pin a session objective", icon: "◎" },
   { id: "teamwork", trigger: "/teamwork", label: "Teamwork panel", hint: "who's in · invite · room facts", icon: "◈" },
-  { id: "learn", trigger: "/learn", label: "Learn by example", hint: "runnable starter files", icon: "◇" },
+  { id: "learn", trigger: "/learn", label: "Learn by example", hint: "runnable starter files", icon: "◇", compiler: true },
   { id: "council", trigger: "/llm-council", label: "LLM council", hint: "AI agents review the active file", icon: "✧" },
   { id: "help", trigger: "/help", label: "Show help", hint: "list all slash commands", icon: "?" },
   { id: "generative", trigger: "/generative", label: "Generative UI", hint: "build UI from a prompt", icon: "✦" },
@@ -221,6 +230,10 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { id: "share", trigger: "/share", label: "Copy share link", hint: "copy room URL to clipboard", icon: "⤴" },
 ];
 
+/* Compiler-coupled commands (/run, /learn) hidden while COMPILER_ENABLED is false. */
+export const SLASH_COMMANDS: SlashCommand[] = ALL_SLASH_COMMANDS.filter((c) => COMPILER_ENABLED || !c.compiler);
+
+
 export interface TourStep {
   id: string;
   title: string;
@@ -230,7 +243,7 @@ export interface TourStep {
   action?: "palette" | "slash" | "theme" | "run" | "chat";
 }
 
-export const TOUR_STEPS: TourStep[] = [
+const ALL_TOUR_STEPS: TourStep[] = [
   {
     id: "welcome",
     title: "Welcome to anonshare",
@@ -246,7 +259,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: "slash",
     title: "Type / for slash commands",
-    body: "In the editor, type / to get a popup of commands: /run, /clear, /history, /crypto, /export — instant actions without reaching for the mouse.",
+    body: "In the editor, type / to get a popup of commands: /clear, /history, /crypto, /export — instant actions without reaching for the mouse.",
     kbd: "/",
     action: "slash",
   },
@@ -270,6 +283,10 @@ export const TOUR_STEPS: TourStep[] = [
     body: "That's the tour. Share your 6-character room code with someone to collaborate live. Everything erases when the last person leaves. Press ? any time to see all shortcuts.",
   },
 ];
+
+/* The run tour step is compiler-coupled — hidden while COMPILER_ENABLED is false. */
+export const TOUR_STEPS: TourStep[] = ALL_TOUR_STEPS.filter((t) => COMPILER_ENABLED || t.id !== "run");
+
 
 interface AnonState {
   // view + room
@@ -1491,6 +1508,7 @@ export const useAnon = create<AnonState>()(
 
       // ---------- terminal / runner ----------
       runCode: async () => {
+        if (!COMPILER_ENABLED) return; // hidden — see src/lib/flags.ts
         const s = get();
         if (s.running) return;
         const file = s.files.find((f) => f.id === s.activeFileId);

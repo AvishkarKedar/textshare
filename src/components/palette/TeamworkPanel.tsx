@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAnon } from "@/lib/store";
+import { COMPILER_ENABLED } from "@/lib/flags";
 
 export function TeamworkPanel() {
   const s = useAnon();
@@ -197,12 +198,14 @@ export function TeamworkPanel() {
                 >
                   <MessageSquare className="h-3.5 w-3.5" /> chat
                 </button>
-                <button
-                  onClick={() => { s.runCode(); s.toggleTeamwork(); }}
-                  className="anon-mono hairline anon-raise px-2 py-2 text-[11px] anon-mut hover:anon-fg inline-flex items-center justify-center gap-1.5"
-                >
-                  <Play className="h-3.5 w-3.5" /> run
-                </button>
+                {COMPILER_ENABLED && (
+                  <button
+                    onClick={() => { s.runCode(); s.toggleTeamwork(); }}
+                    className="anon-mono hairline anon-raise px-2 py-2 text-[11px] anon-mut hover:anon-fg inline-flex items-center justify-center gap-1.5"
+                  >
+                    <Play className="h-3.5 w-3.5" /> run
+                  </button>
+                )}
                 <button
                   onClick={() => setGoalDraft(goalEditing ? null : s.goalText)}
                   className="anon-mono hairline anon-raise px-2 py-2 text-[11px] anon-mut hover:anon-fg inline-flex items-center justify-center gap-1.5"

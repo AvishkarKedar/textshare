@@ -6,7 +6,7 @@ const PRINCIPLES = [
   { icon: Shield, label: "end-to-end encrypted", sub: "only your room can read it", color: "var(--anon-ok)" },
   { icon: Timer, label: "auto-erased", sub: "10m · 1h · 24h", color: "var(--anon-warn)" },
   { icon: UserX, label: "no account", sub: "no email · no cookies", color: "var(--anon-danger)" },
-  { icon: Wifi, label: "real-time", sub: "live cursors, chat & run", color: "var(--anon-accent)" },
+  { icon: Wifi, label: "real-time", sub: "live cursors & chat", color: "var(--anon-accent)" },
 ];
 
 export function StatsStrip() {

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { COMPILER_ENABLED } from "@/lib/flags";
 
 export interface FaqItem {
   id: string;
@@ -22,7 +23,7 @@ export interface FaqItem {
   a: string;
 }
 
-export const FAQ_DATA: FaqItem[] = [
+const ALL_FAQ_DATA: FaqItem[] = [
   /* ------------------------------ security ------------------------------ */
   {
     id: "e2e",
@@ -126,7 +127,7 @@ export const FAQ_DATA: FaqItem[] = [
     id: "limits",
     category: "general",
     q: "What are the rate limits and room capacity?",
-    a: "On the primary (self-hosted) relay: 600 requests/minute per IP, 60 room creations/minute per IP, up to 120 concurrent collaborators per room, and 24 simultaneous WebSocket connections per IP. If traffic fails over to the backup relay on Cloudflare Workers, the caps tighten to 300 requests/minute, 20 creates/minute, and 60 peers per room — new joins beyond a cap receive a 429. Code runs are capped at 20 per minute per IP, with 4 executing in parallel and a 25-deep queue. These limits exist to keep the free service abuse-resistant, not to meter you.",
+    a: "On the primary (self-hosted) relay: 600 requests/minute per IP, 60 room creations/minute per IP, up to 120 concurrent collaborators per room, and 24 simultaneous WebSocket connections per IP. If traffic fails over to the backup relay on Cloudflare Workers, the caps tighten to 300 requests/minute, 20 creates/minute, and 60 peers per room — new joins beyond a cap receive a 429. These limits exist to keep the free service abuse-resistant, not to meter you.",
   },
   {
     id: "p2p",
@@ -138,13 +139,13 @@ export const FAQ_DATA: FaqItem[] = [
     id: "browser-support",
     category: "general",
     q: "Which browsers work best?",
-    a: "Any modern browser with WebCrypto (Chrome, Edge, Firefox, Safari — including mobile Safari and Chrome on Android). The encryption, cursor sync, and code execution all run on standard web APIs with no plugins. For best results on desktop, keep the browser updated; on mobile, the layout is touch-optimized — Run lives in the top bar, and the symbol-key bar collapses with one tap when you want the full editor height.",
+    a: "Any modern browser with WebCrypto (Chrome, Edge, Firefox, Safari — including mobile Safari and Chrome on Android). The encryption and cursor sync all run on standard web APIs with no plugins. For best results on desktop, keep the browser updated; on mobile, the layout is touch-optimized and the symbol-key bar collapses with one tap when you want the full editor height.",
   },
   {
     id: "selfhost",
     category: "general",
     q: "Can I self-host it?",
-    a: "Yes — everything is open source. The relay (Node.js, including the sandboxed runner) and the static client are both in the repository with deployment guides. Room keys are derived locally from your code, so even a relay you don't trust cannot read your content; the README walks through the full setup.",
+    a: "Yes — everything is open source. The relay (Node.js) and the static client are both in the repository with deployment guides. Room keys are derived locally from your code, so even a relay you don't trust cannot read your content; the README walks through the full setup.",
   },
 ];
 
@@ -152,10 +153,15 @@ const CATEGORIES = [
   { id: "all", label: "All" },
   { id: "security", label: "Security" },
   { id: "rooms", label: "Rooms" },
-  { id: "runner", label: "Runner" },
+  { id: "runner", label: "Runner", compiler: true },
   { id: "account", label: "No account" },
   { id: "general", label: "General" },
-];
+].filter((c) => COMPILER_ENABLED || !c.compiler);
+
+/* Runner questions are hidden while COMPILER_ENABLED is false. */
+export const FAQ_DATA: FaqItem[] = ALL_FAQ_DATA.filter(
+  (item) => COMPILER_ENABLED || item.category !== "runner",
+);
 
 export function FaqModal() {
   const open = useAnon((s) => s.faqOpen);
@@ -213,7 +219,7 @@ export function FaqModal() {
                 Frequently asked questions
               </h2>
               <p className="anon-mono text-[11px] anon-mut">
-                {FAQ_DATA.length} honest answers — encryption, privacy, TTL, and the sandbox.
+                {FAQ_DATA.length} honest answers — encryption, privacy, rooms, and TTL.
               </p>
             </div>
           </div>

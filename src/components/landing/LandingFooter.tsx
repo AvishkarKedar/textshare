@@ -51,7 +51,7 @@ export function LandingFooter() {
               {/* py-2 + space-y-2 puts each link's tap center 44px apart on touch */}
               <li><button onClick={() => toggleFaq()} className="hover:anon-fg py-2 text-left cursor-pointer">FAQ</button></li>
               <li><button onClick={() => toggleShortcuts()} className="hover:anon-fg py-2 text-left cursor-pointer">Keyboard shortcuts</button></li>
-              <li><button onClick={() => toast("Slash commands in editor", { description: "Type / in any line: /run /clear /history /crypto /faq /export …" })} className="hover:anon-fg py-2 text-left cursor-pointer">Slash commands</button></li>
+              <li><button onClick={() => toast("Slash commands in editor", { description: "Type / in any line: /clear /history /crypto /faq /export …" })} className="hover:anon-fg py-2 text-left cursor-pointer">Slash commands</button></li>
               <li><button onClick={() => toggleStatus()} className="hover:anon-fg py-2 text-left cursor-pointer">System status</button></li>
             </ul>
           </div>

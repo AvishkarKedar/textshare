@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Shield, FileText } from "lucide-react";
 import { useAnon } from "@/lib/store";
+import { COMPILER_ENABLED } from "@/lib/flags";
 
 export function PrivacyTermsModals() {
   const s = useAnon();
@@ -32,7 +33,7 @@ export function PrivacyTermsModals() {
 /* Privacy Policy                                                      */
 /* ------------------------------------------------------------------ */
 
-const PRIVACY_SECTIONS: { title: string; body: React.ReactNode }[] = [
+const ALL_PRIVACY_SECTIONS: { title: string; body: React.ReactNode; compiler?: boolean }[] = [
   {
     title: "1. Summary",
     body: (
@@ -117,6 +118,7 @@ const PRIVACY_SECTIONS: { title: string; body: React.ReactNode }[] = [
     ),
   },
   {
+    compiler: true,
     title: "7. The code runner",
     body: (
       <p>
@@ -208,11 +210,15 @@ const PRIVACY_SECTIONS: { title: string; body: React.ReactNode }[] = [
   },
 ];
 
+/* Runner sections hidden while COMPILER_ENABLED is false. */
+const PRIVACY_SECTIONS: { title: string; body: React.ReactNode; compiler?: boolean }[] = ALL_PRIVACY_SECTIONS.filter((s) => COMPILER_ENABLED || !s.compiler);
+
+
 /* ------------------------------------------------------------------ */
 /* Terms of Service                                                    */
 /* ------------------------------------------------------------------ */
 
-const TERMS_SECTIONS: { title: string; body: React.ReactNode }[] = [
+const ALL_TERMS_SECTIONS: { title: string; body: React.ReactNode; compiler?: boolean }[] = [
   {
     title: "1. Acceptance of terms",
     body: (
@@ -227,10 +233,10 @@ const TERMS_SECTIONS: { title: string; body: React.ReactNode }[] = [
     title: "2. What the service is",
     body: (
       <p>
-        anonshare is a live, end-to-end-encrypted collaborative editor and code runner. We forward
-        encrypted bytes between participants, store them temporarily per the room&apos;s TTL, and
-        execute code you explicitly submit in a hardened sandbox. We cannot read your content and
-        claim no license over it: your code and text remain entirely yours.
+        anonshare is a live, end-to-end-encrypted collaborative editor. We forward
+        encrypted bytes between participants and store them temporarily per the room&apos;s TTL.
+        We cannot read your content and claim no license over it: your code and text remain
+        entirely yours.
       </p>
     ),
   },
@@ -288,6 +294,7 @@ const TERMS_SECTIONS: { title: string; body: React.ReactNode }[] = [
     ),
   },
   {
+    compiler: true,
     title: "7. The code runner — use at your own judgment",
     body: (
       <p>
@@ -367,6 +374,10 @@ const TERMS_SECTIONS: { title: string; body: React.ReactNode }[] = [
   },
 ];
 
+/* Runner sections hidden while COMPILER_ENABLED is false. */
+const TERMS_SECTIONS: { title: string; body: React.ReactNode; compiler?: boolean }[] = ALL_TERMS_SECTIONS.filter((s) => COMPILER_ENABLED || !s.compiler);
+
+
 /* ------------------------------------------------------------------ */
 /* Shared modal shell                                                  */
 /* ------------------------------------------------------------------ */
@@ -420,10 +431,10 @@ function LegalModal({
           </div>
           <div className="anon-scroll flex-1 space-y-5 overflow-y-auto p-5 anon-sans text-sm leading-relaxed anon-mut">
             <p className="anon-fg font-medium">{subtitle}</p>
-            {sections.map((s) => (
+            {sections.map((s, i) => (
               <section key={s.title}>
                 <h3 className="anon-fg anon-sans mb-1.5 text-xs font-semibold uppercase tracking-wider">
-                  {s.title}
+                  {i + 1}. {s.title.replace(/^\d+\.\s*/, "")}
                 </h3>
                 {s.body}
               </section>

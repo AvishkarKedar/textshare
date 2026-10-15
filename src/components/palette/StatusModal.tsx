@@ -13,6 +13,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useAnon } from "@/lib/store";
+import { COMPILER_ENABLED } from "@/lib/flags";
 
 interface StatusData {
   ok: boolean;
@@ -125,7 +126,7 @@ export function StatusModal() {
                 {/* live relay metrics */}
                 <div className="hairline bg-[var(--anon-bg)] p-4">
                   <div className="anon-mono mb-2 text-[10px] uppercase tracking-wider anon-dim">live relay metrics (probed now)</div>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className={`grid gap-3 ${COMPILER_ENABLED ? "grid-cols-4" : "grid-cols-3"}`}>
                     <div>
                       <div className="anon-mono text-lg anon-fg">{data.relay.activeRooms}</div>
                       <div className="anon-mono text-[10px] anon-dim">active rooms</div>
@@ -138,15 +139,17 @@ export function StatusModal() {
                       <div className="anon-mono text-lg anon-fg">{data.relay.storedFileChunks}</div>
                       <div className="anon-mono text-[10px] anon-dim">file chunks</div>
                     </div>
-                    <div>
-                      <div className="anon-mono text-lg anon-fg">{data.relay.sandbox === "bwrap-hardened" || data.relay.sandbox === "bubblewrap-hardened" ? "yes" : "std"}</div>
-                      <div className="anon-mono text-[10px] anon-dim">sandbox</div>
-                    </div>
+                    {COMPILER_ENABLED && (
+                      <div>
+                        <div className="anon-mono text-lg anon-fg">{data.relay.sandbox === "bwrap-hardened" || data.relay.sandbox === "bubblewrap-hardened" ? "yes" : "std"}</div>
+                        <div className="anon-mono text-[10px] anon-dim">sandbox</div>
+                      </div>
+                    )}
                   </div>
                   {data.relay.memory && (
                     <div className="anon-mono mt-2 text-[10px] anon-dim">
                       relay memory: {data.relay.memory.rssMb ?? "?"}MB rss · {data.relay.memory.heapUsedMb ?? "?"}MB heap
-                      {data.relay.runnerConcurrency ? ` · runs ${data.relay.runnerConcurrency.activeRuns ?? 0}/${data.relay.runnerConcurrency.maxConcurrent ?? "?"}` : ""}
+                      {COMPILER_ENABLED && data.relay.runnerConcurrency ? ` · runs ${data.relay.runnerConcurrency.activeRuns ?? 0}/${data.relay.runnerConcurrency.maxConcurrent ?? "?"}` : ""}
                     </div>
                   )}
                 </div>
@@ -156,7 +159,7 @@ export function StatusModal() {
                   <MetricCard icon={Server} label="relay" value={data.relay.host} sub={`${data.relay.status} · ${data.relay.runtime}`} color={data.relay.status === "operational" ? "var(--anon-ok)" : "var(--anon-danger)"} />
                   <MetricCard icon={Shield} label="cipher" value={data.crypto.cipher} sub={`${(data.crypto.iterations / 1000).toFixed(0)}k PBKDF2 rounds`} color="var(--anon-ok)" />
                   <MetricCard icon={Activity} label="max peers" value={`${data.rooms.maxConnections}`} sub={`TTL: ${data.rooms.ttlOptions.join(" / ")}`} color="var(--anon-accent)" />
-                  <MetricCard icon={Zap} label="runner" value={`${data.runner.languages} langs`} sub={`${data.runner.supported.slice(0, 4).join(", ")}…`} color="var(--anon-warn)" />
+                  {COMPILER_ENABLED && <MetricCard icon={Zap} label="runner" value={`${data.runner.languages} langs`} sub={`${data.runner.supported.slice(0, 4).join(", ")}…`} color="var(--anon-warn)" />}
                   <MetricCard icon={Globe} label="sync" value="websocket" sub="binary frames · AES-GCM sealed" color="var(--anon-accent)" />
                   <MetricCard icon={Shield} label="auth storage" value="SHA-256" sub="relay never sees raw auth" color="var(--anon-ok)" />
                 </div>
@@ -180,15 +183,17 @@ export function StatusModal() {
                   </div>
                 </div>
 
-                {/* sandbox note */}
-                <div className="hairline bg-[var(--anon-bg)] p-3 flex items-start gap-2">
-                  <Shield className="h-3.5 w-3.5 flex-none mt-0.5" style={{ color: "var(--anon-ok)" }} />
-                  <p className="anon-mono text-[10px] leading-relaxed anon-mut">
-                    runner sandbox: <span className="anon-fg">{data.runner.sandbox}</span> — bubblewrap namespace
-                    (--unshare-all --unshare-net) with prlimit caps, executed only on the self-hosted relay.
-                    No external code-execution API is used.
-                  </p>
-                </div>
+                {/* sandbox note — runner row hidden while COMPILER_ENABLED is false */}
+                {COMPILER_ENABLED && (
+                  <div className="hairline bg-[var(--anon-bg)] p-3 flex items-start gap-2">
+                    <Shield className="h-3.5 w-3.5 flex-none mt-0.5" style={{ color: "var(--anon-ok)" }} />
+                    <p className="anon-mono text-[10px] leading-relaxed anon-mut">
+                      runner sandbox: <span className="anon-fg">{data.runner.sandbox}</span> — bubblewrap namespace
+                      (--unshare-all --unshare-net) with prlimit caps, executed only on the self-hosted relay.
+                      No external code-execution API is used.
+                    </p>
+                  </div>
+                )}
               </>
             )}
 

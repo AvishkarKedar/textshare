@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { detectLanguage, extToLang, langToExt } from '../src/lib/detect'
 import { SHORTCUTS, SLASH_COMMANDS } from '../src/lib/store'
+import { COMPILER_ENABLED } from '../src/lib/flags'
 import { sanitizeName, guestHandle, isNamed, NAME_MAX } from '../src/lib/identity'
 
 describe('language detection', () => {
@@ -74,7 +75,14 @@ describe('shortcut + slash command registry', () => {
     for (const gone of removed) {
       expect(triggers).not.toContain(gone)
     }
-    expect(triggers).toContain('/run')
+    // The compiler surface (/run, /learn) is flag-gated: present only when enabled.
+    if (COMPILER_ENABLED) {
+      expect(triggers).toContain('/run')
+      expect(triggers).toContain('/learn')
+    } else {
+      expect(triggers).not.toContain('/run')
+      expect(triggers).not.toContain('/learn')
+    }
     expect(triggers).toContain('/help')
     expect(triggers).toContain('/goal')
     expect(triggers).toContain('/generative')

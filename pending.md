@@ -3,8 +3,21 @@
 Shared task list for **Avishkar (owner)** and **the agent (Super Z)**.
 Anything done gets moved to the bottom "Completed" section (or deleted) — never silently.
 
-**Last updated:** 2026-10-12 (after v5.6.1: run-on-Wandbox fix, same-origin relay proxy, 24h-TTL live proof)
-**Live state at last check:** `code.avishkark.in` **back online** (owner restored DNS) · Worker relay healthy · `/api/run` fixed via wandbox.org · 24h zero-peer room persistence **empirically verified** (`scripts/verify-room-ttl.mjs` → PASS)
+**Last updated:** 2026-10-15 (compiler features temporarily hidden — see the flag note below)
+**Live state at last check:** `code.avishkark.in` **back online** (owner restored DNS) · Worker relay healthy · 24h zero-peer room persistence **empirically verified** (`scripts/verify-room-ttl.mjs` → PASS)
+
+---
+
+## P0 (owner, 1 line): compiler features are hidden — how to bring them back
+
+All code-execution (runner/compiler) UI is hidden behind a single flag:
+**`src/lib/flags.ts` → `COMPILER_ENABLED = false`** (deployed 2026-10-15, hidden for a viva
+presentation). Hidden surfaces: Run button + ⌘↵, /run and /learn slash commands, their
+command-palette entries, terminal drawer, stdin status-bar chip, teamwork "run" action, runner
+FAQ category, status-modal runner cards, privacy/terms runner sections, and landing copy that
+advertised running code. The underlying execution path (`functions/api/run.ts`, Worker `/run`)
+is untouched. To restore: flip the flag to `true`, run the test suite (the `/run`-related
+assertions are flag-aware), and push.
 
 ---
 

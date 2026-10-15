@@ -1,6 +1,7 @@
 "use client";
 
 import { useAnon } from "@/lib/store";
+import { COMPILER_ENABLED } from "@/lib/flags";
 import { TopBar } from "./TopBar";
 import { TabBar } from "./TabBar";
 import { EditorStage } from "./EditorStage";
@@ -26,7 +27,7 @@ export function AppShell() {
             <EditorStage />
             {s.mdPreviewOpen && <MarkdownPreview />}
           </div>
-          {s.terminalOpen && <TerminalDrawer />}
+          {COMPILER_ENABLED && s.terminalOpen && <TerminalDrawer />}
         </main>
         <ChatSidebar />
       </div>
