@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Full E2E test of the anonshare sync protocol against the LIVE relay
- * (default: textshare-sync.avishkarkedar.workers.dev — override with
- * RELAY=https://relay.avishkark.in), replicating exactly what the browser client does:
+ * (default: https://relay.avishkark.in — override with
+ * RELAY=https://textshare-sync.avishkarkedar.workers.dev), replicating exactly what the browser client does:
  *   - PBKDF2(600k) key derivation  (key + auth)
  *   - room create via POST ?create=1
  *   - 2 WebSocket peers join with ?a=&o=&cid=
@@ -14,7 +14,7 @@
 import crypto from 'node:crypto'
 import { WebSocket } from 'ws'
 
-const RELAY = process.env.RELAY || 'https://textshare-sync.avishkarkedar.workers.dev'
+const RELAY = process.env.RELAY || 'https://relay.avishkark.in'
 const WSS = RELAY.replace(/^http/, 'ws')
 const T_UPDATE = 0, T_AWARE = 1, T_SNAPSHOT = 2, T_SYNCED = 3, T_ERROR = 4,
       T_COMPACT = 5, T_STATE = 6, T_KILLED = 7, T_GRANT = 8, T_P2P = 9

@@ -61,6 +61,20 @@ www variant to resolve (old links, SEO canonicalization), add in CF DNS:
 is fully functional at the bare domain.
 
 ---
+## Relay state — 2026-11-17 (informational — no action needed)
+
+The Oracle VPS relay **relay.avishkark.in is back online and healthy**
+(`/health` → `{"ok":true,"runtime":"vps-node","sandbox":"bwrap-hardened"}`;
+its `/run` executes python in ~28 ms). This deploy flips the client's
+`DEFAULT_RELAY` back to the VPS — the Cloudflare Worker stays the automatic
+fallback. `/api/run` intentionally remains on wandbox.org while the compiler
+UI is hidden; moving execution back onto your own bwrap sandbox when you
+re-enable the compiler means re-pointing the executor in
+`functions/api/run.ts` — and consider requiring a bearer token on the VM's
+`/run` first: it currently answers unauthenticated.
+
+---
+
 ## P0 — ~~URGENT~~ ✅ RESOLVED 2026-09-27 (owner redeployed the VPS relay)
 
 Probed live on 2026-09-23 — every run on `relay.avishkark.in/run` fails:
