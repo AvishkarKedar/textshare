@@ -1626,3 +1626,25 @@ Stage Summary:
 - Replaced with honest alternatives: StatsStrip shows real product principles, StatusModal shows real config, all lists start empty.
 - Added proper favicon: generated minimalist > logo, saved to public/favicon.png, wired into layout.
 - Everything is now REAL or honestly empty. Lint clean. Zero fake data.
+
+---
+Task ID: OPS-1 (Cloudflare Worker deploy fix + full check-and-perfect pass)
+Agent: main (Z.ai Code)
+Task: User reported the Cloudflare Worker build failing; directives: adopt new PAT, check everything, patch/update everything, VM relay back online → make everything perfect.
+
+Work Log:
+- Synced local clone to origin/main (was 6 behind): fast-forwarded to 260f849 — the VM-relay-primary restore (DEFAULT_RELAY=relay.avishkark.in, Worker fallback) was already on the remote, together with the security PRs (root 19→0 vulns, worker wrangler 3.90→4.86 clearing 15 Dependabot alerts, CI SHA-pinning).
+- Diagnosed the Worker deploy failure from the owner's build log: deploy command `npx wrangler deploy upload` is invalid (wrangler treats `upload` as the entry-point file). The fix is dashboard-side (Deploy command → `npx wrangler deploy`); documented in pending.md P2.
+- Validated the worker source locally: `npx wrangler deploy --dry-run` clean under wrangler 4.153.0 (the exact version the CF build used) and 4.163.0 — 51.8 KiB bundle, ROOM/Limiter/Registry Durable Object bindings all resolve.
+- Security/update sweep: npm audit 0 vulnerabilities in root, worker and relay (mini-service is bun-managed, no npm lock). `npm update` refreshed ~35 semver-safe packages (react 19.3.1, next 16.4.6, radix-ui set, tanstack-query, next-intl, lib0…); majors deliberately skipped (prisma 7, framer-motion 14, lucide 1.x, eslint 10, react-day-picker 10). worker wrangler bumped to ^4.163.0; relay lockfile re-resolved (ws 8.21.3).
+- Found and killed a stale `next dev` on :3000 serving an old v5.1-era copy from /home/z/my-project (sandbox boot leftover) that hijacked the first E2E attempt; re-ran the browser E2E against the real production stack (`wrangler pages dev dist` + real functions/).
+- Live probes: code.avishkark.in 200 (landing clean: no runner FAQ, no voice), relay.avishkark.in /health 200, textshare-sync workers.dev /health 200.
+
+Verification:
+- tsc 0 errors · vitest 20/20 · next build clean (static export to dist/)
+- Protocol E2E vs LIVE VM relay (scripts/e2e-live-sync.mjs): 10/10 — create/426, connect+state, E2EE replay, live update decrypt, awareness, grant-edit, file PUT/GET/DELETE, wrong-password rejection, owner delete + T_KILLED.
+- Browser E2E (production build + real Pages Functions, ?relay=relay.avishkark.in): desktop room create → editor "synced"+"e2e", NO Run/Terminal/Voice/Whiteboard buttons (compiler-hide verified in browser); 2-tab join → E2EE text replay, live A<->B sync, sealed chat delivery, presence 2/2, zero page errors. Pixel 7 (412×915): landing + editor NO-OVERFLOW, mobile nav renders, rejoin synced, zero errors.
+
+Stage Summary:
+- Repo fully synced with the remote, 0 vulnerabilities everywhere, all semver-safe updates applied, full gate suite green on the updated tree.
+- The ONLY remaining fix is dashboard-side: the Workers Builds deploy command must be `npx wrangler deploy` (pending.md P2). Everything else — VM relay primary, Worker fallback, site, CI — verified healthy.
