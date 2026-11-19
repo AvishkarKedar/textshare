@@ -34,8 +34,8 @@ interface PagesContext {
 }
 
 const ALLOWED_HOSTS = new Set([
-  "textshare-sync.avishkarkedar.workers.dev", // primary relay (Cloudflare Worker)
-  "relay.avishkark.in", // fallback relay (VPS; kept for when it returns)
+  "relay.avishkark.in", // primary relay (VPS, back online 2026-11)
+  "textshare-sync.avishkarkedar.workers.dev", // fallback relay (Cloudflare Worker)
 ]);
 
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "DELETE"]);

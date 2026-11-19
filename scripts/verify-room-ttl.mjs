@@ -12,9 +12,9 @@
  * at every poll (it must never flip during the test window).
  *
  * Usage: node scripts/verify-room-ttl.mjs [relay-origin]
- *        (default: https://textshare-sync.avishkarkedar.workers.dev)
+ *        (default: https://relay.avishkark.in, the primary VPS relay)
  */
-const RELAY = process.argv[2] || 'https://textshare-sync.avishkarkedar.workers.dev'
+const RELAY = process.argv[2] || 'https://relay.avishkark.in'
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const mkCode = (n = 6) =>
   Array.from({ length: n }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('')

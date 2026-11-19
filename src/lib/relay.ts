@@ -1,6 +1,6 @@
 /**
  * anonshare relay client — speaks the production binary WebSocket protocol
- * (textshare-sync.avishkarkedar.workers.dev / relay.avishkark.in).
+ * (relay.avishkark.in / textshare-sync.avishkarkedar.workers.dev).
  *
  * Wire protocol (first byte = frame type, rest = payload):
  *   T_UPDATE  0  document delta  (persisted & rebroadcast, AES-GCM sealed)
@@ -43,14 +43,15 @@ export const SALT_AUTH = "textshare-auth";
 export const TTLS = ["10m", "1h", "24h"] as const;
 
 /*
- * Relay topology (updated 2026-10): the Oracle VPS that served
- * relay.avishkark.in was terminated, so the Cloudflare Worker relay is now
- * the PRIMARY — rooms connect without a failover delay. The old VPS host is
- * kept as the fallback: if it is ever redeployed (or a new relay is bound to
- * that name) clients will simply keep working either way.
+ * Relay topology (updated 2026-11): the Oracle VPS behind relay.avishkark.in
+ * is back online and is the PRIMARY again — it answers ~3x faster than the
+ * Worker and hosts the hardened runner. The Cloudflare Worker relay
+ * (textshare-sync.avishkarkedar.workers.dev) stays as the fallback: if the
+ * VPS ever disappears again, clients walk the candidate list and rooms
+ * self-heal on the Worker (failover live-verified M-20).
  */
-export const DEFAULT_RELAY = "textshare-sync.avishkarkedar.workers.dev";
-export const FALLBACK_RELAY = "relay.avishkark.in";
+export const DEFAULT_RELAY = "relay.avishkark.in";
+export const FALLBACK_RELAY = "textshare-sync.avishkarkedar.workers.dev";
 
 /**
  * Ordered relay candidates for this environment: the home relay first, then
