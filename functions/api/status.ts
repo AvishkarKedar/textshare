@@ -109,14 +109,14 @@ export async function onRequestGet(): Promise<Response> {
         activeNow: stats?.activeRooms ?? 0,
       },
       runner: {
-        languages: 8,
-        supported: ["python", "javascript", "c", "cpp", "java", "rust", "go", "bash"],
+        languages: 9,
+        supported: ["python", "javascript", "typescript", "c", "cpp", "java", "rust", "go", "bash"],
         stdin: true,
-        pythonPackages: ["numpy", "pandas", "sympy", "matplotlib", "requests", "bs4", "pillow"],
-        sandbox,
-        maxRamMb: 256,
-        timeoutMs: 8_000,
-        note: "self-hosted bubblewrap sandbox on the relay (no external execution API is used)",
+        pythonPackages: [],
+        sandbox: "wandbox.org (public sandbox)",
+        maxRamMb: 0, // not enforced by this edge proxy — upstream public sandbox
+        timeoutMs: 28_000,
+        note: "code executes on the public wandbox.org sandbox via /api/run (compiler UI currently disabled)",
       },
       sync: {
         service: "anonshare-sync",

@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 /**
  * Full E2E test of the anonshare sync protocol against the LIVE relay
- * (default: https://relay.avishkark.in, the primary VPS relay — override
- * with RELAY=https://textshare-sync.avishkarkedar.workers.dev), replicating
- * exactly what the browser client does:
+ * (default: https://relay.avishkark.in — override with
+ * RELAY=https://textshare-sync.avishkarkedar.workers.dev), replicating exactly what the browser client does:
  *   - PBKDF2(600k) key derivation  (key + auth)
  *   - room create via POST ?create=1
  *   - 2 WebSocket peers join with ?a=&o=&cid=

@@ -34,7 +34,7 @@ interface PagesContext {
 }
 
 const ALLOWED_HOSTS = new Set([
-  "relay.avishkark.in", // primary relay (VPS, back online 2026-11)
+  "relay.avishkark.in", // primary relay (Oracle VPS, bwrap-hardened)
   "textshare-sync.avishkarkedar.workers.dev", // fallback relay (Cloudflare Worker)
 ]);
 

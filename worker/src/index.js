@@ -880,7 +880,7 @@ export class Registry {
 
 /* ================================================================ entry */
 
-export default {
+const worker = {
   async fetch(request, env) {
     // CORS preflight — only allowlisted browser origins receive a grant.
     if (request.method === 'OPTIONS') {
@@ -1044,3 +1044,5 @@ async function routeRequest(request, env) {
 
     return env.ROOM.get(env.ROOM.idFromName(code)).fetch(request)
   }
+
+export default worker

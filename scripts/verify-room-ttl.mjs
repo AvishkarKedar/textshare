@@ -12,7 +12,7 @@
  * at every poll (it must never flip during the test window).
  *
  * Usage: node scripts/verify-room-ttl.mjs [relay-origin]
- *        (default: https://relay.avishkark.in, the primary VPS relay)
+ *        (default: https://relay.avishkark.in)
  */
 const RELAY = process.argv[2] || 'https://relay.avishkark.in'
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'

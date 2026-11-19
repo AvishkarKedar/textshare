@@ -4,6 +4,11 @@
 // sandbox existed (the earlier emkc.org Piston API went whitelist-only in
 // Feb 2026; the Oracle VPS sandbox was terminated in Oct 2026).
 //
+// 2026-11: the VPS sync relay (relay.avishkark.in) is back online and its
+// bwrap runner answers /run again — but this endpoint stays on Wandbox while
+// the compiler UI is flag-hidden (no active caller). Re-pointing execution
+// to the VPS sandbox is an owner decision; see pending.md ("Relay state").
+//
 // Security: per-IP best-effort edge rate limit (the authoritative limit lives
 // on Wandbox), server-side validation of language/source/stdin against the
 // supported set, size caps, a 25s hard timeout, and generic errors — no

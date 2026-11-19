@@ -271,34 +271,34 @@ keyboard:
 ## The code runner
 
 Execution flows `runCode()` → `POST /api/run` (Pages edge function, which
-validates language/source/stdin sizes and rate-limits per IP) →
-`POST https://relay.avishkark.in/run` on the VPS → a fresh temp workspace per
-run → `prlimit` + `bubblewrap` (unshared everything, **no network**, read-only
-`/usr` `/lib` `/bin` `/etc`, tmpfs `/tmp`, `--die-with-parent`).
+validates language/source/stdin sizes and rate-limits per IP) → the public
+[wandbox.org](https://wandbox.org) sandbox. Each language runs on a pinned
+compiler (cpython 3.12, node 20, TypeScript 5, gcc 13, go 1.23, rust 1.82,
+OpenJDK 22); when Wandbox retires a pin, the newest matching compiler is
+resolved automatically at run time. The private VPS bwrap runner
+(`prlimit` + `bubblewrap`, unshared everything, **no network**) is currently
+NOT in the execution path — the VPS relay is back online, and moving
+execution back onto its sandbox is an owner decision (see `pending.md`).
 
-| Language | Accepted names | Toolchain | Notes |
+| Language | Accepted names | Toolchain (wandbox.org) | Notes |
 |---|---|---|---|
-| Python | `python`, `py` | `python3` | stdlib plus the bootstrapped bundle (see `PY_BOOTSTRAP_PACKAGES`); `MPLBACKEND=Agg` for headless matplotlib |
-| JavaScript | `javascript`, `js`, `node`, `typescript`, `ts` | `node` (`--max-old-space-size=256`) | TS is accepted and executed as JS |
-| C | `c` | `gcc -O2` | C++-only headers/`std::` auto-route to g++ (checked on client, edge, and relay) |
-| C++ | `cpp`, `c++` | `g++ -O2 -std=c++20` | |
-| Go | `go`, `golang` | `go run` | |
-| Rust | `rust`, `rs` | `rustc -O` | |
-| bash | `bash`, `sh` | `bash` | |
-| Java | `java` | `javac` then `java` | matches any top-level class declaration, not just `public class`; `-Xmx128m -XX:+UseSerialGC` |
+| Python | `python`, `py` | cpython 3.12 | stdlib only — no third-party packages on the public runner |
+| JavaScript | `javascript`, `js`, `node`, `typescript`, `ts` | node 20 / TypeScript 5 | TypeScript compiles and runs natively |
+| C | `c` | gcc 13 | C++-only headers/`std::` auto-route to g++ (checked on client and edge) |
+| C++ | `cpp`, `c++` | g++ 13 | |
+| Go | `go`, `golang` | go 1.23 | |
+| Rust | `rust`, `rs` | rustc 1.82 | |
+| bash | `bash`, `sh` | bash | |
+| Java | `java` | OpenJDK 22 | a `public class` is auto-renamed to Wandbox's `prog` convention |
 
 **stdin is supported in every language.** The terminal drawer has a dedicated
 input box; input is piped to the process and stdin is closed (EOF) when the
-box is empty, so a blocking `input()` fails fast instead of hanging. Runs are
-cached 15 seconds per identical (language, code, stdin) triple.
+box is empty, so a blocking `input()` fails fast instead of hanging.
 
-**Runner limits:** 8 s execution (10 s for Java runs; compile steps 10–14 s),
-256 KB source, 64 KB stdin, ~100 KB captured output, 4 concurrent
-runs with queueing, 20 runs per IP per minute, per-language memory caps
-(RLIMIT_DATA for VA-hungry runtimes — JVM, node, Go, rustc; RLIMIT_AS for the
-rest). Anything else returns an honest `400 language_not_supported` listing
-the supported set — there is no silent fallback to a public execution API
-(the old Piston fallback was removed when that API became whitelist-only).
+**Runner limits:** 28 s per compile+run (Wandbox ceiling; the client's own
+watchdog fires at 45 s), 256 KB source, 64 KB stdin, 20 runs per IP per
+minute. Unsupported input returns an honest `400 language_not_supported`
+listing the supported set.
 
 **Java deployment caveat:** the JVM needs the split Debian/Ubuntu JDK config
 directories bound into the sandbox, so `relay/server.js` explicitly binds
@@ -405,7 +405,7 @@ How the pieces find each other:
 - In dev, `next.config.ts` rewrites `/api/run`, `/api/status`, `/api/crypto`,
   and `/api/generate` to the shim on `127.0.0.1:8788`, which mirrors the Pages
   function contracts and proxies `/run` to `RELAY_URL` (default
-  `https://relay.avishkark.in`). The rewrites are dev-only — the production
+  `http://127.0.0.1:8787`, the local relay). The rewrites are dev-only — the production
   build is a pure static export. The shim does not mirror `/api/council`;
   that one only works against a deployed Pages project.
 - The runner uses bubblewrap + prlimit when `/usr/bin/bwrap` and

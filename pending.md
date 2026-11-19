@@ -3,8 +3,8 @@
 Shared task list for **Avishkar (owner)** and **the agent (Super Z)**.
 Anything done gets moved to the bottom "Completed" section (or deleted) — never silently.
 
-**Last updated:** 2026-10-15 (compiler features temporarily hidden — see the flag note below)
-**Live state at last check:** `code.avishkark.in` **back online** (owner restored DNS) · Worker relay healthy · 24h zero-peer room persistence **empirically verified** (`scripts/verify-room-ttl.mjs` → PASS)
+**Last updated:** 2026-11-17 (security sweep + dep refresh + VM relay primary — see relay-state note below)
+**Live state at last check:** `code.avishkark.in` up · **`relay.avishkark.in` (VM) primary + healthy** · Worker fallback healthy · `npm audit` **0 vulnerabilities** (root / worker / relay) · compiler still hidden behind `COMPILER_ENABLED=false`
 
 ---
 
@@ -36,18 +36,27 @@ PAT provided in chat and used to push. > **SECURITY REMINDER:** the classic toke
 
 ---
 
-## P2 (owner, ~2 min): `npx wrangler deploy` in `worker/` — two source changes are staged
+## P2 (owner, ~1 min): fix the Workers Builds deploy command — Worker deploy is failing
 
-The Worker **source** in this repo has two small changes that are NOT live yet (the agent has
-no Cloudflare credentials in its sandbox — `wrangler whoami` = not authenticated):
+The Cloudflare build (2026-11-16 19:12 UTC) fails with:
+`✘ [ERROR] The entry-point file at "upload" was not found.`
 
-1. `POST /run` now answers an honest `runner_moved` 503 (execution moved to `/api/run` on
-   Pages, which runs on wandbox.org). The old message pointed at the terminated VPS.
-2. The `426 expected_websocket` body now includes `ok: true` (VPS-relay symmetry, purely
-   cosmetic — the client checks only the status).
+**Cause:** the Worker project's **Deploy command** in the Cloudflare dashboard is set to
+`npx wrangler deploy upload` — wrangler reads `upload` as the entry-point script name.
+The Worker source itself is fine: validated locally with `npx wrangler deploy --dry-run`
+under wrangler 4.153.0 (the exact version the CF build used) and 4.163.0 — clean 51.8 KiB
+bundle, all three Durable Object bindings (ROOM / Limiter / Registry) resolve.
 
-Both are deployed with one command: `cd worker && npx wrangler deploy`. Zero client impact
-if you skip it; the signaling Worker already in production is healthy either way.
+**Fix (dashboard, ~1 min):**
+1. Cloudflare dashboard → Workers & Pages → **textshare-sync** → **Settings → Build**.
+2. Deploy command: replace `npx wrangler deploy upload` with **`npx wrangler deploy`**.
+3. Save, then **Retry deployment** (or push any commit).
+
+Once it deploys, the two staged worker changes (honest `runner_moved` 503 on `/run`;
+`ok: true` in the 426 body) go live. Until then the already-deployed Worker keeps serving
+signaling fine — the app is unaffected (the VM relay is primary now, the Worker is only
+the fallback). Root directory in the build settings should stay `worker/` and the build
+command can stay empty (plain-JS worker, no build step).
 
 ---
 
@@ -61,6 +70,20 @@ www variant to resolve (old links, SEO canonicalization), add in CF DNS:
 is fully functional at the bare domain.
 
 ---
+## Relay state — 2026-11-17 (informational — no action needed)
+
+The Oracle VPS relay **relay.avishkark.in is back online and healthy**
+(`/health` → `{"ok":true,"runtime":"vps-node","sandbox":"bwrap-hardened"}`;
+its `/run` executes python in ~28 ms). This deploy flips the client's
+`DEFAULT_RELAY` back to the VPS — the Cloudflare Worker stays the automatic
+fallback. `/api/run` intentionally remains on wandbox.org while the compiler
+UI is hidden; moving execution back onto your own bwrap sandbox when you
+re-enable the compiler means re-pointing the executor in
+`functions/api/run.ts` — and consider requiring a bearer token on the VM's
+`/run` first: it currently answers unauthenticated.
+
+---
+
 ## P0 — ~~URGENT~~ ✅ RESOLVED 2026-09-27 (owner redeployed the VPS relay)
 
 Probed live on 2026-09-23 — every run on `relay.avishkark.in/run` fails:
