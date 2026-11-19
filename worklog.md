@@ -1626,3 +1626,26 @@ Stage Summary:
 - Replaced with honest alternatives: StatsStrip shows real product principles, StatusModal shows real config, all lists start empty.
 - Added proper favicon: generated minimalist > logo, saved to public/favicon.png, wired into layout.
 - Everything is now REAL or honestly empty. Lint clean. Zero fake data.
+
+---
+Task ID: SESSION-2026-11-19
+Agent: main (z.ai)
+Task: VPS relay back online → restore it as primary; security patch pass; Worker deploy fix; push 47 commits with fresh PAT
+
+Work Log:
+- VPS relay liveness (relay.avishkark.in): DNS → Cloudflare-proxied IPs, root 200 (0.63s), /room/ZZZZZZ/exists 200, join on missing room → 404 no_room (correct), code.avishkark.in back to 200 (earlier P0 NXDOMAIN resolved).
+- Full protocol E2E against live VPS: scripts/e2e-live-sync.mjs → 10/10 (create, dual-peer join+replay, sealed T_UPDATE decrypt, awareness, T_GRANT, file PUT/GET/DELETE, wrong-password reject, owner delete + T_KILLED).
+- Relay topology flip (src/lib/relay.ts): DEFAULT_RELAY=relay.avishkark.in (VPS primary again, ~3x faster RTT), FALLBACK_RELAY=textshare-sync.avishkarkedar.workers.dev. Proxy allow-list + script defaults reordered; status.ts/admin already VPS-primary.
+- Security pass — npm audit 26 vulns (3 crit / 9 high) → 0:
+  - Removed unused prod deps @mdxeditor/editor + react-syntax-highlighter (zero imports; dragged high-sev js-yaml + prismjs chains).
+  - vitest 2.1.9 → 5.1.1 (critical tinypool RCE, @vitest/mocker, esbuild/vite/vite-node chains); vitest.config.js → .mjs.
+  - sharp 0.34.3 → 0.35.5 (libvips/libheif CVEs); in-range fixes: zod, prisma/deepmerge-ts, minimatch, source-map-js.
+  - worker: wrangler 3.114 → 4.165, deploy dry-run verified (51.78 KiB, 3 DO bindings).
+- Zero-crash gates: tsc 0 errors · vitest 20/20 · next build clean (Next 16.4.6) · browser E2E desktop 1280x800 + Pixel 7 (room 438RGD created on live VPS via ?relay= override: create POST 426, exists peers:1, editor synced+e2e, chat delivered, no overflow 412==412, zero page errors).
+- Cloudflare Worker deploy failure diagnosed: dashboard Deploy command "npx wrangler deploy upload" — wrangler treats "upload" as the positional entry-point path (no such file). Repo side is healthy (wrangler.toml main=src/index.js, dry-run OK). FIX = dashboard → textshare-sync Worker → Settings → Build → Deploy command → "npx wrangler deploy".
+- Pushed all commits with fresh PAT (45 stale + 2 new: 264f0a9 relay flip, f5843c1 security).
+
+Stage Summary:
+- VPS is primary again (live-verified 10/10 + browser E2E both viewports), Worker failover intact.
+- Vulnerabilities 26 → 0; two dead prod deps removed; toolchain current (vitest 5, sharp 0.35, wrangler 4).
+- Remaining operator action: change the Worker dashboard Deploy command to "npx wrangler deploy" so the stale Worker (5 unpushed commits) redeploys.
