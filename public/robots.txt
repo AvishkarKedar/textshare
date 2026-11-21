@@ -22,5 +22,5 @@ Allow: /
 User-agent: *
 Allow: /
 
-Sitemap: https://code.avishkark.in/sitemap.xml
-Host: https://code.avishkark.in
+Sitemap: https://code.avishkarkedar.com/sitemap.xml
+Host: https://code.avishkarkedar.com

@@ -35,7 +35,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://code.avishkark.in"),
+  metadataBase: new URL("https://code.avishkarkedar.com"),
   title: {
     default: "AnonShare — Live Code & Text Sharing, End-to-End Encrypted",
     template: "%s | AnonShare",
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
   description:
     "Share code and text live with anyone in an end-to-end-encrypted room. 6-character codes, live cursors, multi-file editing, chat, HTML preview, zero registration.",
   applicationName: "AnonShare",
-  authors: [{ name: "Avishkar Kedar", url: "https://avishkark.in" }],
+  authors: [{ name: "Avishkar Kedar", url: "https://portfolio.avishkarkedar.com" }],
   generator: "Next.js",
   keywords: [
     "AnonShare",
@@ -82,7 +82,7 @@ export const metadata: Metadata = {
     telephone: false,
   },
   alternates: {
-    canonical: "https://code.avishkark.in/",
+    canonical: "https://code.avishkarkedar.com/",
   },
   icons: {
     icon: [
@@ -99,7 +99,7 @@ export const metadata: Metadata = {
     title: "AnonShare — Live Code & Text Sharing, End-to-End Encrypted",
     description:
       "Share code and text live in an end-to-end-encrypted room. 6-character codes, live cursors, chat and file sharing, zero registration.",
-    url: "https://code.avishkark.in",
+    url: "https://code.avishkarkedar.com",
     siteName: "AnonShare",
     images: [
       {
@@ -139,7 +139,7 @@ const jsonLd = [
     "@type": "WebApplication",
     "name": "AnonShare",
     "alternateName": ["anonshare", "Anon Share", "AnonShare IDE", "anonshare code", "AnonShare live code sharing"],
-    "url": "https://code.avishkark.in",
+    "url": "https://code.avishkarkedar.com",
     "description": "AnonShare is a live code and text sharing platform — an ultra-fast, zero-knowledge, end-to-end encrypted collaborative code editor and scratchpad. Share 6-character room codes instantly with live multi-cursor CRDT sync, encrypted file sharing, chat, and zero registration.",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Any (Web Browser)",
@@ -155,20 +155,20 @@ const jsonLd = [
     "author": {
       "@type": "Person",
       "name": "Avishkar Kedar",
-      "url": "https://avishkark.in",
+      "url": "https://portfolio.avishkarkedar.com",
     },
     "creator": {
       "@type": "Person",
       "name": "Avishkar Kedar",
-      "url": "https://avishkark.in",
+      "url": "https://portfolio.avishkarkedar.com",
     },
     "publisher": {
       "@type": "Person",
       "name": "Avishkar Kedar",
-      "url": "https://avishkark.in",
+      "url": "https://portfolio.avishkarkedar.com",
     },
-    "image": "https://code.avishkark.in/og.png",
-    "screenshot": "https://code.avishkark.in/og.png",
+    "image": "https://code.avishkarkedar.com/og.png",
+    "screenshot": "https://code.avishkarkedar.com/og.png",
     "featureList": [
       "End-to-End Encryption with AES-GCM-256 and PBKDF2-SHA256 (600k rounds)",
       "Instant 6-Character Ephemeral Room Codes",
@@ -185,12 +185,12 @@ const jsonLd = [
     "@type": "WebSite",
     "name": "AnonShare",
     "alternateName": ["anonshare", "Anon Share"],
-    "url": "https://code.avishkark.in",
+    "url": "https://code.avishkarkedar.com",
     "description": "Live, end-to-end encrypted text and code sharing in your browser.",
     "publisher": {
       "@type": "Person",
       "name": "Avishkar Kedar",
-      "url": "https://avishkark.in",
+      "url": "https://portfolio.avishkarkedar.com",
     },
   },
   {
