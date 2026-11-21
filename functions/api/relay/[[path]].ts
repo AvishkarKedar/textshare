@@ -34,7 +34,8 @@ interface PagesContext {
 }
 
 const ALLOWED_HOSTS = new Set([
-  "relay.avishkark.in", // primary relay (Oracle VPS, bwrap-hardened)
+  "relay.avishkarkedar.com", // canonical primary relay (Oracle VPS via CF Tunnel)
+  "relay.avishkark.in", // legacy mirror relay (Oracle VPS, bwrap-hardened)
   "textshare-sync.avishkarkedar.workers.dev", // fallback relay (Cloudflare Worker)
 ]);
 

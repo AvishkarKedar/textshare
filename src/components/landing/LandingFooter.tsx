@@ -70,7 +70,7 @@ export function LandingFooter() {
 
         <div className="hairline-t mt-8 flex flex-col items-start justify-between gap-2 pt-6 sm:flex-row sm:items-center">
           <p className="anon-mono text-[11px] anon-mut">
-            © {new Date().getFullYear()} anonshare · MIT · built by <a href="https://avishkark.in" target="_blank" rel="noopener" className="anon-accent hover:underline">Avishkar Kedar</a>
+            © {new Date().getFullYear()} anonshare · MIT · built by <a href="https://avishkarkedar.com" target="_blank" rel="noopener" className="anon-accent hover:underline">Avishkar Kedar</a>
           </p>
           <p className="anon-mono text-[11px] anon-mut">
             <a href="mailto:avishkarkedar+text@gmail.com" className="hover:anon-fg">avishkarkedar+text@gmail.com</a>

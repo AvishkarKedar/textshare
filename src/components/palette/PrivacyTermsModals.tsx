@@ -138,7 +138,7 @@ const ALL_PRIVACY_SECTIONS: { title: string; body: React.ReactNode; compiler?: b
     title: "8. Third parties",
     body: (
       <p>
-        The hosted service at code.avishkark.in is served through Cloudflare Pages (static asset
+        The hosted service at code.avishkarkedar.com is served through Cloudflare Pages (static asset
         delivery) and the operator&apos;s own relay server. If the primary relay becomes
         unreachable, clients automatically fail over to a backup relay hosted on Cloudflare
         Workers — that path carries the same end-to-end-encrypted payloads, so Cloudflare sees

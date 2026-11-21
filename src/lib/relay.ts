@@ -49,7 +49,8 @@ export const TTLS = ["10m", "1h", "24h"] as const;
  * Cloudflare Worker relay stays as the fallback: if the VPS is ever
  * unreachable, clients fail over to it automatically.
  */
-export const DEFAULT_RELAY = "relay.avishkark.in";
+export const DEFAULT_RELAY = "relay.avishkarkedar.com";
+export const LEGACY_RELAY = "relay.avishkark.in";
 export const FALLBACK_RELAY = "textshare-sync.avishkarkedar.workers.dev";
 
 /**
@@ -61,6 +62,7 @@ export const FALLBACK_RELAY = "textshare-sync.avishkarkedar.workers.dev";
 export function relayCandidates(home?: string): string[] {
   const first = home || relayHost();
   const list = [first];
+  if (LEGACY_RELAY && !list.includes(LEGACY_RELAY)) list.push(LEGACY_RELAY);
   if (FALLBACK_RELAY && !list.includes(FALLBACK_RELAY)) list.push(FALLBACK_RELAY);
   return list;
 }

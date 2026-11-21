@@ -16,7 +16,7 @@ export function InviteModal() {
 
   if (!s.inviteOpen) return null;
 
-  const baseUrl = typeof window !== "undefined" ? `${window.location.origin}/` : "https://code.avishkark.in/";
+  const baseUrl = typeof window !== "undefined" ? `${window.location.origin}/` : "https://code.avishkarkedar.com/";
   const link = `${baseUrl}?join=${s.roomCode}${role === "view" ? "&p=1" : ""}`;
   // the relay actually serving this room (falls back to the default topology)
   const relayHostShown = getSession()?.info.host || DEFAULT_RELAY;
