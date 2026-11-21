@@ -123,8 +123,9 @@ async function main() {
   r = await j(`${RELAY}/room/${code}/files/livef1`, { method: "DELETE", headers: { Authorization: "Bearer liveauth" } });
   check("relay file DELETE endpoint reachable", r.status !== 0, `status ${r.status} (200 = new code deployed, 404 = old code, bug fixed in repo)`);
 
-  // admin state on production — OLD code: leaked default password still valid
-  r = await j(`${RELAY}/admin/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: "Avishkar@44332297768" }) });
+  // admin state on production — OLD code: leaked default password check
+  const testPassword = process.env.TEST_ADMIN_PASSWORD || "placeholder_test_credential";
+  r = await j(`${RELAY}/admin/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: testPassword }) });
   if (r.status === 200) {
     check("⚠️  PRODUCTION relay still accepts the LEAKED password (old code running — redeploy required!)", false, "token issued");
   } else if (r.status === 503) {

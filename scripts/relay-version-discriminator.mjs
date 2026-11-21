@@ -10,7 +10,7 @@ const RELAY = 'https://relay.avishkark.in'
 const CODE = 'VRFY' + crypto.randomBytes(2).toString('hex').toUpperCase() // e.g. VRFY3F9A
 const AUTH = crypto.randomBytes(16).toString('hex')
 const OWNER = crypto.randomBytes(16).toString('hex')
-const LEAKED = 'Avishkar@44332297768'
+const LEAKED = process.env.TEST_LEAKED_PASSWORD || 'placeholder_test_credential'
 
 const results = []
 function report(name, pass, detail) {
