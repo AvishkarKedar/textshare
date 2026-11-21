@@ -19,8 +19,8 @@ interface PagesContext {
   next: () => Promise<Response>;
 }
 
-const CANONICAL_HOST = "code.avishkark.in";
-const WWW_HOST = "www.code.avishkark.in";
+const CANONICAL_HOST = "code.avishkarkedar.com";
+const LEGACY_HOSTS = ["code.avishkark.in", "www.code.avishkark.in", "www.code.avishkarkedar.com"];
 
 export async function onRequest(context: PagesContext): Promise<Response> {
   const req = context.request;
@@ -30,7 +30,8 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     (req.method === "GET" || req.method === "HEAD") &&
     !req.headers.get("upgrade");
 
-  if (url.hostname === WWW_HOST && isSafeNavigation) {
+  // 301 Permanent Redirect legacy .avishkark.in and www hosts to canonical code.avishkarkedar.com
+  if ((LEGACY_HOSTS.includes(url.hostname.toLowerCase()) || url.hostname.toLowerCase().endsWith('avishkark.in')) && isSafeNavigation) {
     const target = new URL(req.url);
     target.hostname = CANONICAL_HOST;
     return Response.redirect(target.toString(), 301);
